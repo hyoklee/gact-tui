@@ -65,6 +65,16 @@ const statusPresentation: Record<
     icon: LoaderCircleIcon,
     className: 'text-info-foreground dark:text-info border-info/30 bg-info/10',
   },
+  pause_requested: {
+    label: 'Pause requested',
+    icon: PauseCircleIcon,
+    className: 'text-muted-foreground border-border bg-muted/50',
+  },
+  paused: {
+    label: 'Paused',
+    icon: PauseCircleIcon,
+    className: 'text-muted-foreground border-border bg-muted/50',
+  },
   waiting_permission: {
     label: 'Permission needed',
     icon: ShieldQuestionIcon,
@@ -177,7 +187,11 @@ export function ClioStatus({
         )}
         role="status"
         title={
-          suppressNativeTitle ? undefined : detail ? `${accessibleLabel}: ${detail}` : accessibleLabel
+          suppressNativeTitle
+            ? undefined
+            : detail
+              ? `${accessibleLabel}: ${detail}`
+              : accessibleLabel
         }
       >
         <Icon

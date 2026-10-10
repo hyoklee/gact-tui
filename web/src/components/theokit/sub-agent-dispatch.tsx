@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils';
 export type SubAgentState =
   | 'spawning'
   | 'running'
+  | 'pause_requested'
+  | 'paused'
   | 'completed'
   | 'failed'
   | 'cancelled'
@@ -35,6 +37,11 @@ const STATE_CONFIG: Record<SubAgentState, { label: string; class: string }> = {
     class: 'border-primary/40 bg-primary/10 text-primary',
   },
   running: { label: 'Running', class: 'border-info/40 bg-info/10 text-info-foreground' },
+  pause_requested: {
+    label: 'Pause requested',
+    class: 'border-border bg-muted text-muted-foreground',
+  },
+  paused: { label: 'Paused', class: 'border-border bg-muted text-muted-foreground' },
   completed: { label: 'Completed', class: 'border-success/40 bg-success/10 text-success' },
   failed: { label: 'Failed', class: 'border-destructive/40 bg-destructive/10 text-destructive' },
   cancelled: { label: 'Cancelled', class: 'border-border bg-muted text-muted-foreground' },
@@ -99,7 +106,7 @@ const SubAgentDispatch = forwardRef<HTMLElement, SubAgentDispatchProps>(
           </div>
         ) : null}
 
-        {isLive && onCancel ? (
+        {(isLive || run.state === 'paused' || run.state === 'pause_requested') && onCancel ? (
           <footer className="flex justify-end">
             <button
               className="rounded-md border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

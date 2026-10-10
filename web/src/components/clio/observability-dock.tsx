@@ -86,6 +86,7 @@ export function ClioObservabilityView({
   onOpenResource,
   onOpenSubagent,
   onCancelTask,
+  onControlTask,
   executionProvenance,
   provenanceProviders,
   artifactProvenanceProvider,
@@ -339,6 +340,7 @@ export function ClioObservabilityView({
             />
             <ClioEvidenceView
               onCancelTask={onCancelTask}
+              onControlTask={onControlTask}
               artifacts={artifacts}
               contextFiles={contextFiles}
               diffs={diffs}

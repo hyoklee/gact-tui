@@ -76,6 +76,7 @@ export interface ClioEvidenceViewProps {
   messages: readonly Message[];
   processes: readonly AsyncProcess[];
   onCancelTask?: (task: AsyncProcess) => Promise<void>;
+  onControlTask?: (task: AsyncProcess, action: 'pause' | 'resume' | 'restart') => Promise<void>;
   interactions?: readonly PendingInteraction[];
   runs?: readonly Run[];
   subagents?: readonly SubagentRun[];
@@ -227,7 +228,11 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
             value="background"
             count={backgroundProcesses.length}
           >
-            <AsyncTaskList processes={backgroundProcesses} onCancelTask={props.onCancelTask} />
+            <AsyncTaskList
+              processes={backgroundProcesses}
+              onCancelTask={props.onCancelTask}
+              onControlTask={props.onControlTask}
+            />
           </EvidenceSection>
         ) : null}
         {files.length ? (

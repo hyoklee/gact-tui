@@ -223,6 +223,8 @@ function sessionStateLabel(state: Session['state']): string {
     {
       queued: 'Queued',
       running: 'Working now',
+      pause_requested: 'Pause requested',
+      paused: 'Paused',
       waiting_permission: 'Waiting for approval',
       waiting_user: 'Waiting for you',
       completed: 'Completed',

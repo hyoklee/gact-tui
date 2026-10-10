@@ -53,6 +53,7 @@ export interface ClioObservabilityDockProps {
   interactions?: readonly PendingInteraction[];
   processes: readonly AsyncProcess[];
   onCancelTask?: (task: AsyncProcess) => Promise<void>;
+  onControlTask?: (task: AsyncProcess, action: 'pause' | 'resume' | 'restart') => Promise<void>;
   tasks: readonly Task[];
   tools: readonly ToolInvocation[];
   runs: readonly Run[];

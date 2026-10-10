@@ -10,6 +10,22 @@ const cancellationReply = z.object({
 
 /** Shared task controls use their original owner and report per-handle failures. */
 export class TaskRepository extends ResponseFeedbackRepository {
+  public async controlSubagent(
+    sessionId: string,
+    target: string,
+    action: 'pause' | 'resume' | 'restart',
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await this.transport.request({
+      method: 'POST',
+      path: `/v1/sessions/${encodeURIComponent(sessionId)}/agent-controls/${encodeURIComponent(target)}/${action}`,
+      body: { fresh: false },
+      decode: (value) =>
+        z.object({ handle: z.string(), session_id: z.string(), status: z.string() }).parse(value),
+      signal,
+    });
+  }
+
   public async cancelTasks(
     sessionId: string,
     tasks: string[],

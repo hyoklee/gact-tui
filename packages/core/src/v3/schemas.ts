@@ -103,6 +103,8 @@ export const workspaceSchema = z.object({
 export const runStateSchema = forwardCompatibleEnum([
   'queued',
   'running',
+  'pause_requested',
+  'paused',
   'waiting_permission',
   'waiting_user',
   'completed',

@@ -9,6 +9,8 @@ import type { CapabilityNegotiation } from './capability-domain.js';
 import type { PendingCompaction } from './compaction-domain.js';
 import type { VariantRun } from './variant-domain.js';
 import type { UsageSnapshot } from './usage-domain.js';
+import type { RunState } from './run-domain.js';
+export type { RunState } from './run-domain.js';
 
 export type { ToolPresentation, ToolPresentationBlock } from './tool-presentation-domain.js';
 
@@ -25,16 +27,6 @@ export interface TransportGap {
   reason: string;
   received_at: string;
 }
-export type RunState =
-  | 'queued'
-  | 'running'
-  | 'waiting_permission'
-  | 'waiting_user'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
-  | 'interrupted'
-  | 'unknown';
 export type ToolState = WireValue<
   'pending' | 'running' | 'succeeded' | 'failed' | 'denied' | 'cancelled'
 >;

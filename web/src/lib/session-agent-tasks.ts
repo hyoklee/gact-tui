@@ -10,6 +10,8 @@ import type { AgentTaskRecord, RunState, SubagentRun } from '@clio/core/v3';
 const TASK_STATE: Record<string, RunState> = {
   queued: 'queued',
   running: 'running',
+  pause_requested: 'pause_requested',
+  paused: 'paused',
   working: 'running',
   waiting: 'running',
   input_required: 'waiting_user',

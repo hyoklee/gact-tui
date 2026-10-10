@@ -56,6 +56,7 @@ export function SessionEvidenceSummary({
   | 'onOpenWork'
   | 'onOpenActivity'
   | 'onCancelTask'
+  | 'onControlTask'
 > & {
   outputs: readonly Artifact[];
   files: readonly EvidenceFile[];
@@ -173,7 +174,11 @@ export function SessionEvidenceSummary({
           value="background"
           count={backgroundProcesses.length}
         >
-          <AsyncTaskList processes={backgroundProcesses} onCancelTask={actions.onCancelTask} />
+          <AsyncTaskList
+            processes={backgroundProcesses}
+            onCancelTask={actions.onCancelTask}
+            onControlTask={actions.onControlTask}
+          />
         </EvidenceSection>
       ) : null}
       {files.length ? (
