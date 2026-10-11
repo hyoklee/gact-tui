@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import { knowledgeSnapshotGeneratedSchema } from '../generated/clio-schemas/knowledge-snapshot.schema.js';
+import { knowledgeGraphSnapshotGeneratedSchema } from '../generated/clio-schemas/knowledge-graph-snapshot.schema.js';
 import { knowledgeNoteGeneratedSchema } from '../generated/clio-schemas/knowledge-note.schema.js';
 import { knowledgeLinkGeneratedSchema } from '../generated/clio-schemas/knowledge-link.schema.js';
 import { workspaceResourceSchema } from './composer-schemas.js';
 
 export const knowledgeSnapshotSchema = knowledgeSnapshotGeneratedSchema;
+export const knowledgeGraphSnapshotSchema = knowledgeGraphSnapshotGeneratedSchema;
 export type KnowledgeSnapshot = z.infer<typeof knowledgeSnapshotSchema>;
 export type KnowledgeNote = KnowledgeSnapshot['notes'][number];
 export const knowledgeOpenSchema = z.object({

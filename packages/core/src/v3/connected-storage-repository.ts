@@ -15,6 +15,7 @@ import {
 import { workspaceResourceSchema } from './composer-schemas.js';
 import {
   knowledgeSnapshotSchema,
+  knowledgeGraphSnapshotSchema,
   knowledgeOpenSchema,
   knowledgeSyncSchema,
 } from './knowledge-contract.js';
@@ -32,6 +33,23 @@ const storageSignInSchema = z.object({
 
 /** Trusted setup and approved data on the connected CLIO, never the desktop implicitly. */
 export class ConnectedStorageRepository extends A2uiRepository {
+  /** Full topology crosses file pages, while note bytes remain on demand. */
+  public knowledgeGraph(
+    workspaceId: string,
+    sourceId: string,
+    options: { query?: string; focus?: string; attachments?: boolean } = {},
+    signal?: AbortSignal,
+  ) {
+    const query = new URLSearchParams(
+      Object.entries(options).map(([key, value]) => [key, String(value)]),
+    );
+    return this.transport.request({
+      method: 'GET',
+      path: `${sourcePath(workspaceId, sourceId)}/knowledge/graph?${query}`,
+      signal,
+      decode: (value) => knowledgeGraphSnapshotSchema.parse(value),
+    });
+  }
   public knowledgeSnapshot(
     workspaceId: string,
     sourceId: string,

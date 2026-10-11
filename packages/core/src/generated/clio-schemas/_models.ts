@@ -288,6 +288,11 @@ export type Selector = string;
 export type Source2 = string;
 export type Status = 'resolved' | 'unresolved' | 'ambiguous' | 'external';
 export type Target = string;
+/**
+ * @maxItems 20000
+ */
+export type Links = KnowledgeLink[];
+export type NextOffset = number | null;
 export type Aliases1 = string[];
 export type Blocks = string[];
 export type Excerpt = string;
@@ -298,12 +303,7 @@ export type Revision2 = string;
 export type Tags = string[];
 export type Title1 = string;
 /**
- * @maxItems 2000
- */
-export type Links = KnowledgeLink[];
-export type NextOffset = number | null;
-/**
- * @maxItems 500
+ * @maxItems 5000
  */
 export type Notes = KnowledgeNote[];
 export type Offset = number;
@@ -314,6 +314,23 @@ export type State = 'ready' | 'indexing' | 'failed';
 export type Total = number;
 export type Truncated = boolean;
 export type Warnings = string[];
+/**
+ * @maxItems 2000
+ */
+export type Links1 = KnowledgeLink[];
+export type NextOffset1 = number | null;
+/**
+ * @maxItems 500
+ */
+export type Notes1 = KnowledgeNote[];
+export type Offset1 = number;
+export type RelationshipsTruncated1 = boolean;
+export type Revision4 = string;
+export type SourceId1 = string;
+export type State1 = 'ready' | 'indexing' | 'failed';
+export type Total1 = number;
+export type Truncated1 = boolean;
+export type Warnings1 = string[];
 /**
  * Closed discriminated union of the 15 GACT 0.3 message-block types.
  */
@@ -604,7 +621,7 @@ export type Url = string;
 /**
  * The links reduced out of `plain`, in order.
  */
-export type Links1 = DescriptionLink[];
+export type Links2 = DescriptionLink[];
 /**
  * The text with each markdown link reduced to its label.
  */
@@ -639,7 +656,7 @@ export type Precision = 'exact' | 'rounded';
 /**
  * Every parameter: the slider value.
  */
-export type Total1 = number | null;
+export type Total2 = number | null;
 /**
  * Every source that states this value; the first is the winning one.
  *
@@ -729,7 +746,7 @@ export type Generated = ProvEdge[];
  * Whether provenance was observed under exclusive or contended custody.
  */
 export type TransformKind = 'ordinary' | 'contended';
-export type Notes1 = {
+export type Notes2 = {
   [k: string]: unknown | undefined;
 }[];
 /**
@@ -769,6 +786,7 @@ export interface ClioSchemaRegistry {
   HostStorageLocations?: HostStorageLocations;
   IdentityEvidence?: IdentityEvidence;
   Instrument?: Instrument;
+  KnowledgeGraphSnapshot?: KnowledgeGraphSnapshot;
   KnowledgeLink?: KnowledgeLink;
   KnowledgeNote?: KnowledgeNote;
   KnowledgeSnapshot?: KnowledgeSnapshot;
@@ -1281,6 +1299,22 @@ export interface Args {
   [k: string]: unknown | undefined;
 }
 /**
+ * A whole-source topology overview, independent of paginated file/search reads.
+ */
+export interface KnowledgeGraphSnapshot {
+  links: Links;
+  next_offset?: NextOffset;
+  notes: Notes;
+  offset?: Offset;
+  relationships_truncated?: RelationshipsTruncated;
+  revision: Revision3;
+  source_id: SourceId;
+  state?: State;
+  total: Total;
+  truncated?: Truncated;
+  warnings?: Warnings;
+}
+/**
  * An explicit link or embed; unresolved and ambiguous targets stay explicit.
  */
 export interface KnowledgeLink {
@@ -1309,17 +1343,17 @@ export interface KnowledgeNote {
  * A bounded source view used by graph, list, reader, and agent operations.
  */
 export interface KnowledgeSnapshot {
-  links: Links;
-  next_offset?: NextOffset;
-  notes: Notes;
-  offset?: Offset;
-  relationships_truncated?: RelationshipsTruncated;
-  revision: Revision3;
-  source_id: SourceId;
-  state?: State;
-  total: Total;
-  truncated?: Truncated;
-  warnings?: Warnings;
+  links: Links1;
+  next_offset?: NextOffset1;
+  notes: Notes1;
+  offset?: Offset1;
+  relationships_truncated?: RelationshipsTruncated1;
+  revision: Revision4;
+  source_id: SourceId1;
+  state?: State1;
+  total: Total1;
+  truncated?: Truncated1;
+  warnings?: Warnings1;
 }
 /**
  * Assistant or user prose.
@@ -1672,7 +1706,7 @@ export interface DescriptionFact {
  * A description in its raw form and as plain text for display.
  */
 export interface DescriptionValue {
-  links?: Links1;
+  links?: Links2;
   plain: Plain;
   text: Text5;
 }
@@ -1698,7 +1732,7 @@ export interface ParametersValue {
   experts_active: ExpertsActive;
   experts_total: ExpertsTotal;
   precision: Precision;
-  total: Total1;
+  total: Total2;
 }
 /**
  * What the model costs: the endpoint's own price first, a catalog list price otherwise.
@@ -1790,7 +1824,7 @@ export interface TransformRecord {
   generated?: Generated;
   instrument?: Instrument;
   kind?: TransformKind;
-  notes?: Notes1;
+  notes?: Notes2;
   replay?: ReplayContract;
   replay_reason?: ReplayReason;
   session_id?: SessionId1;
