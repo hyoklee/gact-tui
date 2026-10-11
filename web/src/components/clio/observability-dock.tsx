@@ -36,7 +36,7 @@ import {
   type ObservabilityActivityItem,
 } from './observability-activity';
 import { ClioEvidenceView } from './observability-evidence';
-import { ClioProcessLanes } from './observability-processes';
+import { ObservabilityWork } from './observability-work';
 import { ClioStatus } from './status';
 import { getToolActivityTitle, getToolStatus, getToolSummary } from './tool-presentation';
 import type { SubagentOpenTarget } from './subagent-card';
@@ -95,6 +95,9 @@ export function ClioObservabilityView({
   onProvenanceProviderChange,
   resources,
   sessionId,
+  sessions,
+  familyProvenance,
+  familyProvenancePending,
   requestedView,
   interactions = [],
 }: ClioObservabilityDockProps) {
@@ -316,7 +319,13 @@ export function ClioObservabilityView({
               label="Background work"
               pending={processesPending}
             />
-            <ClioProcessLanes
+            <ObservabilityWork
+              familyProvenance={familyProvenance}
+              familyProvenancePending={familyProvenancePending}
+              sessionId={sessionId}
+              sessions={sessions}
+              artifacts={artifacts}
+              onOpenArtifact={onOpenArtifact}
               executionProvenance={executionProvenance}
               messages={messages}
               onOpenSubagent={onOpenSubagent}

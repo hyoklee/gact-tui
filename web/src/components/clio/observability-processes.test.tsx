@@ -20,6 +20,44 @@ function asyncProcess(overrides: Partial<AsyncProcess> = {}): AsyncProcess {
 }
 
 describe('ClioProcessLanes row identity', () => {
+  it('connects a recorded parent turn to its child bar without inventing timing dependencies', () => {
+    const props = {
+      runs: [
+        {
+          id: 'turn-parent',
+          session_id: 'parent',
+          state: 'completed' as const,
+          started_at: '2026-09-01T10:00:00.000Z',
+          completed_at: '2026-09-01T10:01:00.000Z',
+        },
+      ],
+      processes: [
+        asyncProcess({
+          title: 'Calibration reviewer',
+          parent_turn_id: 'turn-parent',
+          created_at: '2026-09-01T10:00:10.000Z',
+          updated_at: '2026-09-01T10:00:50.000Z',
+          live_state: 'completed',
+        }),
+      ],
+    };
+    const view = render(<ClioProcessLanes {...props} />);
+    expect(view.container.querySelectorAll('[data-relationship="parent-activity"]')).toHaveLength(
+      1,
+    );
+    const edge = view.container.querySelector('[data-relationship="parent-activity"]')!;
+    expect(edge.getAttribute('data-source-id')).toBe('event:turn-parent');
+    expect(edge.querySelector('path')?.getAttribute('d')).toContain(' Q ');
+    view.rerender(
+      <ClioProcessLanes
+        {...props}
+        processes={[{ ...props.processes[0]!, parent_turn_id: undefined }]}
+      />,
+    );
+    expect(view.container.querySelectorAll('[data-relationship="parent-activity"]')).toHaveLength(
+      0,
+    );
+  });
   it('names a row by its title rather than the task token', () => {
     render(<ClioProcessLanes processes={[asyncProcess({ title: 'Evidence researcher' })]} />);
 

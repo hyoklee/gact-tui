@@ -10,6 +10,7 @@ import type {
   PendingInteraction,
   Run,
   RunState,
+  Session,
   SessionDiff,
   SubagentRun,
   Task,
@@ -45,6 +46,9 @@ import type { SubagentOpenTarget } from './subagent-card';
 import type { ObservabilityView } from './observability-view-storage';
 
 export interface ClioObservabilityDockProps {
+  sessions?: readonly Session[];
+  familyProvenance?: ExecutionProvenanceResult;
+  familyProvenancePending?: boolean;
   artifacts: readonly Artifact[];
   contextFiles: readonly ContextFile[];
   contextFrames: readonly ContextFrame[];

@@ -14,6 +14,7 @@ import { ClioCompactionProgress } from './conversation-summarization';
 import { ClioTurnPreparation } from './turn-preparation';
 import { placeCompactions } from './conversation-compaction-placement';
 import { conversationModelBoundaries } from './conversation-model-boundaries';
+import { ConversationForkCheckpoint } from './conversation-fork-checkpoint';
 import { OpenQuestionsTracker } from './open-questions-tracker';
 import { ClioTranscriptMinimap } from './transcript-minimap';
 import { useAttentionHighlights } from '@/hooks/use-attention-highlights';
@@ -455,12 +456,22 @@ function ConversationBody({
             </Alert>
           </div>
         ) : messages.length === 0 ? (
-          <ConversationEmptyState
-            className="h-full"
-            description="Send a message to begin. Live reasoning, tools, approvals, and artifacts will stay in causal order here."
-            icon={<GitBranchIcon className="size-7" />}
-            title="This session has no messages"
-          />
+          <>
+            {entities.forkOrigin?.message_count === 0 ? (
+              <div className="mx-auto max-w-4xl px-5 lg:px-8">
+                <ConversationForkCheckpoint
+                  origin={entities.forkOrigin}
+                  workspaceId={entities.workspaceId}
+                />
+              </div>
+            ) : null}
+            <ConversationEmptyState
+              className="h-full"
+              description="Send a message to begin. Live reasoning, tools, approvals, and artifacts will stay in causal order here."
+              icon={<GitBranchIcon className="size-7" />}
+              title="This session has no messages"
+            />
+          </>
         ) : (
           <div
             ref={(node) => {

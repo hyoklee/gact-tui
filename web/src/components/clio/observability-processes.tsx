@@ -141,7 +141,7 @@ export function ClioProcessLanes({
         collapsedGroups={collapsed}
         onCollapsedGroupsChange={(ids) => setCollapsedState({ key: ganttKey, ids })}
         defaultScale="day"
-        dependencyLines={false}
+        dependencyLines
         events={model.events}
         infiniteScroll={false}
         initialCenter={center}
@@ -337,6 +337,7 @@ function executionSpans({
         status: process.live_state,
         timing: 'exact',
         subagentId: process.id,
+        parentTurnId: process.parent_turn_id,
         depth: process.task_path?.length ?? process.depth ?? (process.kind === 'agent' ? 1 : 0),
       };
     })

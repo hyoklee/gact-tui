@@ -36,6 +36,7 @@ import { useRequestedSessionLookup } from './use-requested-session-lookup';
 import { useSessionAgentTasks } from './use-session-agent-tasks';
 import { useSessionContext } from './use-session-context';
 import { useExecutionProvenance } from './use-execution-provenance';
+import { conversationFamily } from '@/components/clio/conversation-relationships-model';
 import { useProviderCatalog } from './use-provider-catalog';
 import { useSessionLiveStream } from './use-session-live-stream';
 import { useVariantRunHydration } from './use-variant-run-hydration';
@@ -394,6 +395,11 @@ export function useWorkspaceData({
   );
   const sessionObservability = useSessionObservability(sessionId);
   const executionProvenance = useExecutionProvenance(sessionId);
+  const family = useMemo(
+    () => conversationFamily(hierarchySessions, sessionId),
+    [hierarchySessions, sessionId],
+  );
+  const familyExecutionProvenance = useExecutionProvenance(family.sessions[0]?.id ?? sessionId);
   const contextObservability = useSessionObservability(contextTargetId);
   const { hideDotFiles } = useAppearancePreferences();
   const workspaceFiles = useQuery({
@@ -576,6 +582,13 @@ export function useWorkspaceData({
     contextTargetOptions,
     entities,
     executionProvenance,
+    familyObservability: {
+      sessions: hierarchySessions,
+      familyProvenance: familyExecutionProvenance.execution.data,
+      familyProvenancePending:
+        familyExecutionProvenance.providers.isPending ||
+        familyExecutionProvenance.execution.isFetching,
+    },
     interactionSessionIds,
     interactions,
     // Reads that actually failed to list responses. A failed background-root

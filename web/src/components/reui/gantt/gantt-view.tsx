@@ -23,6 +23,7 @@ import {
   type GanttColumn,
 } from "@/components/reui/gantt/gantt"
 import { GanttBar } from "@/components/reui/gantt/gantt-bar"
+import { relationGeometry, type RelationObstacle } from "./gantt-relation-geometry"
 import {
   cancelActiveGanttGestures,
   markGestureEnd,
@@ -348,6 +349,7 @@ const EMPTY_ID_SET: ReadonlySet<string> = new Set()
 
 /** One finish-to-start arrow, both anchors in track rem coordinates. */
 interface DependencyEdge {
+  relation?: { line: string; arrow: string }
   key: string
   /** Predecessor and dependent event ids, so a gesture can re-anchor its own
    * endpoints live. */
@@ -1203,6 +1205,8 @@ function GanttView({
     }
     const anchors = new Map<string, { endX: number; y: number }>()
     const pending: Pending[] = []
+    const parents: { id: string; parentId: string; at: number; x: number; y: number }[] = []
+    const obstacles: RelationObstacle[] = []
     let topRem = 0
     for (const row of rows) {
       const bars = rowBars.get(row.resource.id)
@@ -1219,6 +1223,16 @@ function GanttView({
           const startX = ((segment.startMin ?? 0) / totalMin) * trackRemWidth
           const endX = ((segment.endMin ?? 0) / totalMin) * trackRemWidth
           anchors.set(occ.eventId, { endX, y })
+          const milestone = occ.start.getTime() === occ.end.getTime()
+          // The milestone body is the rotated size-2.5 diamond, not its wider hit target.
+          const half = milestone ? Math.SQRT2 * 0.625 / 2 : laneHeightRem / 2
+          const visualStart = milestone ? startX - half : startX
+          obstacles.push({ id: occ.eventId, left: visualStart, right: milestone ? startX + half : endX,
+            top: y - half, bottom: y + half })
+          if (occ.event.parentActivity) {
+            parents.push({ id: occ.eventId, parentId: occ.event.parentActivity.eventId,
+              at: occ.event.parentActivity.at.getTime(), x: visualStart, y })
+          }
           if (occ.event.dependencies?.length) {
             pending.push({
               id: occ.eventId,
@@ -1231,8 +1245,17 @@ function GanttView({
       }
       topRem += bars?.heightRem ?? minRowRem
     }
-    if (pending.length === 0) return none
     const edges: DependencyEdge[] = []
+    for (const item of parents) {
+      const parent = obstacles.find((box) => box.id === item.parentId)
+      if (!parent || parent.id === item.id) continue
+      const x = ((item.at - rangeStartMs) / 60000 / totalMin) * trackRemWidth
+      if (x < parent.left || x > parent.right) continue
+      const y = item.y >= parent.bottom ? parent.bottom : parent.top
+      const relation = relationGeometry({ x, y }, { x: item.x, y: item.y }, obstacles, parent.id, item.id)
+      if (relation) edges.push({ key: `parent:${parent.id}->${item.id}`, fromId: parent.id,
+        toId: item.id, fromX: x, fromY: y, toX: item.x, toY: item.y, relation })
+    }
     for (const item of pending) {
       for (const depId of item.dependencies) {
         if (depId === item.id) continue
@@ -2989,8 +3012,10 @@ const GanttDependencyLayer = memo(function GanttDependencyLayer({
     <svg
       aria-hidden
       data-slot="gantt-dependencies"
-      // w-full, NOT the track's rem width: rows fill the pane when the
-      // zoomed track is narrower (min-w-full), and bars position as a
+      // Like the rows, fill the pane AND retain the track's minimum width.
+      // Otherwise a scrolled, zoomed track scales SVG paths to the viewport
+      // while bars still use the full axis, separating their anchors.
+      // Bars position as a
       // percentage of that STRETCHED box - so the viewBox mapping must
       // stretch with them or every arrow drifts off its bar. The
       // non-uniform scale is neutralized on strokes below; arrowheads
@@ -2999,7 +3024,7 @@ const GanttDependencyLayer = memo(function GanttDependencyLayer({
         "text-muted-foreground/70 pointer-events-none absolute start-0 top-0 w-full overflow-visible rtl:-scale-x-100",
         viewConfig.classNames?.dependencies
       )}
-      style={{ height: `${totalRem}rem` }}
+      style={{ height: `${totalRem}rem`, minWidth: `${trackRemWidth}rem` }}
       viewBox={`0 0 ${trackRemWidth} ${totalRem}`}
       preserveAspectRatio="none"
     >
@@ -3016,7 +3041,7 @@ const GanttDependencyLayer = memo(function GanttDependencyLayer({
           dragged && edge.toId === dragLink.eventId
             ? liveX(dragLink.startMs)
             : edge.toX
-        const geometry = buildDependencyPath(
+        const geometry = edge.relation ?? buildDependencyPath(
           { x: fromX, y: edge.fromY },
           { x: toX, y: edge.toY },
           {
@@ -3030,6 +3055,9 @@ const GanttDependencyLayer = memo(function GanttDependencyLayer({
           <g
             key={edge.key}
             data-slot="gantt-dependency"
+            data-relationship={edge.relation ? 'parent-activity' : 'finish-to-start'}
+            data-source-id={edge.fromId}
+            data-target-id={edge.toId}
             data-dragging={dragged || undefined}
             // in-flight edges stay SOLID - they still describe a real link -
             // and drop to a lower tone, arrowhead included, while the
@@ -3044,9 +3072,11 @@ const GanttDependencyLayer = memo(function GanttDependencyLayer({
               // view's 1px gridlines; a viewBox-unit width would fatten
               // vertical runs whenever the track stretches
               strokeWidth={1.5}
+              strokeDasharray={edge.relation ? '4 3' : undefined}
               vectorEffect="non-scaling-stroke"
             />
             <path d={geometry.arrow} fill="currentColor" />
+            {edge.relation ? <circle cx={edge.fromX} cy={edge.fromY} r={0.11} fill="currentColor" /> : null}
           </g>
         )
       })}

@@ -110,6 +110,8 @@ interface GanttEvent<TData = unknown> {
    * stays consumer territory (canDropEvent/onEventUpdate).
    */
   dependencies?: GanttBarId[]
+  /** Recorded parent activity at a timestamp inside its bar; does not imply finish-to-start. */
+  parentActivity?: { eventId: GanttBarId; at: Date }
   data?: TData
 }
 
