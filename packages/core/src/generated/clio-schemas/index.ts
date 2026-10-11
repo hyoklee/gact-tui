@@ -5,6 +5,7 @@
  */
 
 export * from './_models';
+export * from './knowledge-graph-snapshot.schema.js';
 export * from './knowledge-note.schema.js';
 export * from './knowledge-link.schema.js';
 export * from './knowledge-snapshot.schema.js';
