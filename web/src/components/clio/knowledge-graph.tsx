@@ -40,6 +40,9 @@ export function KnowledgeGraph({
   onSelect: (path: string) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
+  const arranged = useRef<KnowledgeGraphLayout | undefined>(undefined);
+  const automaticFraming = useRef(true);
+  const measured = useRef<GraphSize>({ width: 0, height: 0 });
   const [size, setSize] = useState<GraphSize>({ width: 0, height: 0 });
   const [camera, setCamera] = useState<GraphCamera>({ x: 0, y: 0, scale: 1 });
   const [isolated, setIsolated] = useState(true);
@@ -57,12 +60,15 @@ export function KnowledgeGraph({
   const graph = layout?.topology === topology ? layout.graph : undefined;
   const error = layout?.topology === topology ? layout.error : undefined;
   useEffect(() => {
+    arranged.current = undefined;
     const worker = new Worker(new URL('../../lib/knowledge-graph.worker.ts', import.meta.url), {
       type: 'module',
     });
     worker.onmessage = (event: MessageEvent<{ graph?: KnowledgeGraphLayout; error?: string }>) => {
       setLayout({ topology, ...event.data });
       if (event.data.graph && host.current) {
+        arranged.current = event.data.graph;
+        automaticFraming.current = true;
         setCamera(
           fittedCamera(event.data.graph, {
             width: host.current.clientWidth,
@@ -79,20 +85,25 @@ export function KnowledgeGraph({
   useEffect(() => {
     const observer = new ResizeObserver(([entry]) => {
       const next = { width: entry.contentRect.width, height: entry.contentRect.height };
-      setSize((previous) => {
-        if (next.width === previous.width && next.height === previous.height) return previous;
+      const previous = measured.current;
+      if (next.width === previous.width && next.height === previous.height) return;
+      measured.current = next;
+      setSize(next);
+      if (automaticFraming.current && arranged.current) {
+        setCamera(fittedCamera(arranged.current, next));
+      } else {
         setCamera((current) => ({
           ...current,
           x: current.x + (next.width - previous.width) / 2,
           y: current.y + (next.height - previous.height) / 2,
         }));
-        return next;
-      });
+      }
     });
     observer.observe(host.current!);
     return () => observer.disconnect();
   }, []);
   const fit = useCallback(() => {
+    automaticFraming.current = true;
     if (graph) setCamera(fittedCamera(graph, size));
   }, [graph, size]);
   const active = hover || selected;
@@ -116,7 +127,8 @@ export function KnowledgeGraph({
     return () => cancelAnimationFrame(frame);
   }, [active, graph, size]);
   const zoom = useCallback(
-    (factor: number, x = size.width / 2, y = size.height / 2) =>
+    (factor: number, x = size.width / 2, y = size.height / 2) => {
+      automaticFraming.current = false;
       setCamera((current) => {
         const scale = Math.min(5, Math.max(0.04, current.scale * factor));
         return {
@@ -124,7 +136,8 @@ export function KnowledgeGraph({
           x: x - ((x - current.x) * scale) / current.scale,
           y: y - ((y - current.y) * scale) / current.scale,
         };
-      }),
+      });
+    },
     [size],
   );
   useEffect(() => {
@@ -186,6 +199,7 @@ export function KnowledgeGraph({
             }}
             onPointerMove={(event) => {
               if (!drag.current) return;
+              automaticFraming.current = false;
               setCamera({
                 ...drag.current.origin,
                 x: drag.current.origin.x + event.clientX - drag.current.x,
