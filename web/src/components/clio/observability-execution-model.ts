@@ -15,6 +15,7 @@ export interface ProcessSpan {
   status: ClioStatusValue;
   timing: 'exact' | 'observed';
   subagentId?: string;
+  parentTurnId?: string;
   depth: number;
 }
 
@@ -76,6 +77,13 @@ export function executionGantt(
         color: span.state === 'failed' ? 'var(--destructive)' : lane.color,
         data: { span },
         readOnly: true,
+        parentActivity:
+          span.parentTurnId &&
+          lanes.some((parent) =>
+            parent.spans.some((candidate) => candidate.id === span.parentTurnId),
+          )
+            ? { eventId: `event:${span.parentTurnId}`, at: new Date(span.start) }
+            : undefined,
         resourceId: span.kind === 'tool' ? laneResourceIds.get(lane.id) : `owner:${lane.owner}`,
       }),
     ),

@@ -44,6 +44,7 @@ import { MessageMarkButton } from './message-mark-button';
 import { messageToolCallCounts } from './message-tool-call-counts';
 import { ConversationModelCheckpoint } from './conversation-model-boundary';
 import { modelBoundariesEqual } from './conversation-model-boundaries';
+import { ConversationForkCheckpoint } from './conversation-fork-checkpoint';
 
 export const ConversationMessageRow = memo(function ConversationMessageRow({
   message,
@@ -207,6 +208,12 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
       style={virtualized ? { transform: `translateY(${start ?? 0}px)` } : undefined}
       tabIndex={-1}
     >
+      {entities.forkOrigin?.message_count === 0 && index === 0 ? (
+        <ConversationForkCheckpoint
+          origin={entities.forkOrigin}
+          workspaceId={entities.workspaceId}
+        />
+      ) : null}
       {modelBoundary ? <ConversationModelCheckpoint boundary={modelBoundary} /> : null}
       <m.div
         animate={{ opacity: 1 }}
@@ -389,6 +396,12 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
           ) : null}
         </Message>
       </m.div>
+      {entities.forkOrigin?.message_id === message.id ? (
+        <ConversationForkCheckpoint
+          origin={entities.forkOrigin}
+          workspaceId={entities.workspaceId}
+        />
+      ) : null}
     </div>
   );
 }, conversationMessageRowPropsEqual);
@@ -494,6 +507,7 @@ export function conversationMessageRowPropsEqual(
     left.mcpAppResponse !== right.mcpAppResponse ||
     left.messageCompactions !== right.messageCompactions ||
     !modelBoundariesEqual(left.modelBoundary, right.modelBoundary) ||
+    left.forkOrigin !== right.forkOrigin ||
     left.attentionData !== right.attentionData ||
     !routedInteractionsEqual(left, right, messageEntityRefs(left.message).tools) ||
     left.onOpenArtifact !== right.onOpenArtifact ||

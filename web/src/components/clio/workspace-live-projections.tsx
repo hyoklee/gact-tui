@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { useLiveStore } from '@/store/live-store';
 import { useTaskCancellation } from '@/hooks/use-task-cancellation';
 import { useMessageMarks } from '@/hooks/use-message-marks';
+import { conversationForkOrigin } from './conversation-fork-origin';
 import { ClioConversation, type ClioConversationProps } from './conversation';
 import { ClioObservabilityDock, ClioObservabilityView } from './observability-dock';
 import { WorkspaceStatusStrip } from './workspace-route-surfaces';
@@ -46,6 +47,7 @@ export function WorkspaceLiveConversation({
 }: LiveConversationProps) {
   const session = useLiveStore((state) => state.entities.sessions[sessionId]);
   const messageMarks = useMessageMarks(session, props.workspaceId ?? '');
+  const forkOrigin = useMemo(() => conversationForkOrigin(session), [session]);
   const infrastructure = useLiveStore((state) => state.entities.infrastructure);
   const activeTurnId = useLiveStore((state) => state.entities.active_turns[sessionId]);
   const activeTurnResponded = useLiveStore((state) =>
@@ -112,6 +114,7 @@ export function WorkspaceLiveConversation({
       {...entities}
       {...props}
       {...messageMarks}
+      forkOrigin={forkOrigin}
       messages={messages}
       preparation={{ activeTurnId, activeTurnResponded, dependencies, sessionState }}
     />

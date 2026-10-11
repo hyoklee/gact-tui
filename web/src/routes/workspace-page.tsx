@@ -101,6 +101,7 @@ export function WorkspacePage() {
     contextTargetOptions,
     entities,
     executionProvenance,
+    familyObservability,
     interactions,
     interactionCapabilityError,
     interactionsError,
@@ -500,6 +501,7 @@ export function WorkspacePage() {
         <ClioAppShell
           toolbarActions={
             <WorkspaceLiveObservabilityDock
+              {...familyObservability}
               toolbar
               surfaceRef={showcaseSurfaceRef}
               workspaceId={workspaceId}
@@ -631,6 +633,7 @@ export function WorkspacePage() {
               sessionId={sessionId}
               sessionView={
                 <WorkspaceLiveObservabilityView
+                  {...familyObservability}
                   requestedView={requestedView}
                   artifacts={artifactEvidence}
                   artifactProvenanceProvider={executionProvenance.providers.data?.artifact}
