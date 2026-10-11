@@ -16,7 +16,7 @@ export function KnowledgeGraph({
 }) {
   const graph = useMemo(() => {
     const dag = new graphlib.Graph()
-      .setGraph({ rankdir: 'LR', nodesep: 24, ranksep: 60 })
+      .setGraph({ rankdir: 'TB', nodesep: 32, ranksep: 60 })
       .setDefaultEdgeLabel(() => ({}));
     for (const note of snapshot.notes) dag.setNode(note.path, { width: 180, height: 48 });
     const edges: Edge[] = snapshot.links
@@ -37,8 +37,8 @@ export function KnowledgeGraph({
         data: { label: note.title },
         position: { x: position.x - 90, y: position.y - 24 },
         selected: selected === note.path,
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
+        sourcePosition: Position.Bottom,
+        targetPosition: Position.Top,
         ariaLabel: `Open ${note.path}`,
         style: {
           width: 180,

@@ -148,7 +148,8 @@ export function ConnectedSourceForm({
               </Field>
               <p className="text-xs text-muted-foreground">
                 Notes, tags, aliases and authored links form a knowledge source. Starts read only.
-                Hidden folders and Obsidian settings are excluded.
+                Select the whole vault or a folder inside it. Only that folder is available to
+                knowledge tools. Hidden folders and Obsidian settings are excluded.
               </p>
               {configuration.obsidian_connection === 'headless_sync' && (
                 <div className="space-y-2">
@@ -157,7 +158,8 @@ export function ConnectedSourceForm({
                     <code>ob login</code>, then{' '}
                     <code>ob sync-setup --vault &lt;name&gt; --path &lt;copy&gt;</code> privately in
                     a terminal. Select that copy below. Requires Obsidian Sync. Use one sync client
-                    per copy.
+                    per copy. You can select a folder inside the copy; the official client still
+                    syncs the enclosing vault, while knowledge access stays in the selected folder.
                   </p>
                   <Field>
                     <FieldLabel htmlFor="vault-sync-mode">Sync direction</FieldLabel>
@@ -254,7 +256,9 @@ export function ConnectedSourceForm({
                     hostLabel={
                       provider.id === 'sftp' ? sshFolder?.label || 'selected SSH host' : hostLabel
                     }
-                    label={provider.id === 'obsidian' ? 'Vault folder' : 'Source folder'}
+                    label={
+                      provider.id === 'obsidian' ? 'Vault or folder inside it' : 'Source folder'
+                    }
                     triggerLabel="Choose folder"
                     startPath={provider.id === 'sftp' ? sshFolder?.startPath : browseStartPath}
                     path={root}
