@@ -22,11 +22,12 @@ describe('ClioMessageHistoryActions', () => {
     const onRewind = vi.fn().mockResolvedValue(undefined);
 
     render(<ClioMessageHistoryActions onRewind={onRewind} />);
+    expect(screen.queryByRole('button', { name: 'Branch from here' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Rewind to here' }));
 
     expect(onRewind).not.toHaveBeenCalled();
     expect(screen.getByRole('alertdialog')).toHaveTextContent(
-      'permanently remove every message after this point',
+      'Files and artifacts already created or edited are kept.',
     );
     await user.click(screen.getByRole('button', { name: 'Remove later messages' }));
     expect(onRewind).toHaveBeenCalledOnce();

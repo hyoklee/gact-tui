@@ -53,7 +53,7 @@ import { useWorkspaceTerminalActions } from '@/hooks/use-workspace-terminal-acti
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { buildSessionAttentionMap } from '@/lib/session-attention';
 import { navigateComposerReferenceOrToast } from '@/lib/composer-reference-navigation';
-import { isManagedChildSession, showsBaseAgent } from '@/lib/session-state';
+import { canForkSession, isManagedChildSession, showsBaseAgent } from '@/lib/session-state';
 import { useDesktopTitleSync } from '@/hooks/use-desktop-title-sync';
 import { openExternalUrlOrToast } from '@/tauri/external-url';
 import { useObservabilityNavigation } from '@/hooks/use-observability-navigation';
@@ -753,7 +753,9 @@ export function WorkspacePage() {
                           ? sessionHistory.fork.variables
                           : undefined
                       }
-                      onForkFromMessage={sessionHistory.fork.mutateAsync}
+                      onForkFromMessage={
+                        canForkSession(session) ? sessionHistory.fork.mutateAsync : undefined
+                      }
                       onOpenSubagent={openSubagent}
                       onOpenWorkflow={openWorkflow}
                       onRewindToMessage={sessionHistory.rewind.mutateAsync}
