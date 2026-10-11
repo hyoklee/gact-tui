@@ -159,7 +159,14 @@ export function KnowledgeSourceView({
         <>
           <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2 text-xs text-muted-foreground">
             <span>
-              {snapshot.data.total} {view === 'graph' ? 'notes' : 'items'}
+              {snapshot.data.total}{' '}
+              {view === 'graph' && !attachments
+                ? snapshot.data.total === 1
+                  ? 'note'
+                  : 'notes'
+                : snapshot.data.total === 1
+                  ? 'item'
+                  : 'items'}
             </span>
             {view === 'graph' && (
               <label className="flex cursor-pointer items-center gap-1.5">
@@ -328,6 +335,7 @@ export function KnowledgeSourceView({
                               <Button
                                 variant="link"
                                 size="sm"
+                                className="h-auto max-w-full whitespace-normal break-all text-left"
                                 onClick={() =>
                                   select(link.source === selected ? link.target : link.source)
                                 }
