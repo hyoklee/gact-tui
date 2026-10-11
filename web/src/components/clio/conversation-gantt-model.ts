@@ -2,6 +2,7 @@ import type { ExecutionProvenanceResult, Session } from '@clio/core/v3';
 import type { GanttEvent, GanttResource } from '@/components/reui/gantt/gantt-types';
 import { conversationFamily } from './conversation-relationships-model';
 import { conversationForkOrigin } from './conversation-fork-origin';
+import { isManagedChildSession } from '@/lib/session-state';
 
 export interface ConversationGanttData {
   session: Session;
@@ -45,9 +46,41 @@ export function conversationGantt(
           ? 'var(--destructive)'
           : session.id === sessionId
             ? 'var(--primary)'
-            : 'var(--color-chart-2)',
+            : isManagedChildSession(session)
+              ? 'var(--color-chart-3)'
+              : 'var(--color-chart-2)',
       data: { session, kind: 'turn', status: span.status },
     });
+  }
+  for (const edge of family.edges.filter((edge) => edge.kind === 'delegation')) {
+    const child = byId.get(edge.target)!;
+    const raw = child.metadata?.['delegation_origin'];
+    if (!raw || typeof raw !== 'object') continue;
+    const task = raw as Record<string, unknown>;
+    if (
+      task['session_id'] !== edge.source ||
+      typeof task['turn_id'] !== 'string' ||
+      typeof task['created_at'] !== 'string'
+    )
+      continue;
+    const created = Date.parse(task['created_at']);
+    const parentSpan = provenance?.spans.find(
+      (span) =>
+        (span.owner_session_id || span.session_id) === edge.source &&
+        span.event_type === 'turn.started' &&
+        span.attributes?.['turn_id'] === task['turn_id'],
+    );
+    const parent = events.find((event) => event.id === `turn:${parentSpan?.id}`);
+    const first = events
+      .filter(
+        (event) =>
+          event.resourceId === child.id &&
+          event.data?.kind === 'turn' &&
+          event.start.getTime() >= created,
+      )
+      .sort((a, b) => a.start.getTime() - b.start.getTime())[0];
+    if (parent && first && created >= parent.start.getTime() && created <= parent.end.getTime())
+      first.parentActivity = { eventId: parent.id, at: new Date(created), kind: 'delegation' };
   }
   for (const edge of family.edges.filter((edge) => edge.kind === 'branch')) {
     const child = byId.get(edge.target)!;
@@ -74,7 +107,7 @@ export function conversationGantt(
           event.start.getTime() >= created,
       )
       .sort((a, b) => a.start.getTime() - b.start.getTime())[0];
-    if (first) first.parentActivity = { eventId: pointId, at: new Date(created) };
+    if (first) first.parentActivity = { eventId: pointId, at: new Date(created), kind: 'fork' };
     else
       events.push({
         id: `branch:${child.id}`,
@@ -84,7 +117,7 @@ export function conversationGantt(
         end: new Date(created),
         color: 'var(--primary)',
         readOnly: true,
-        parentActivity: { eventId: pointId, at: new Date(created) },
+        parentActivity: { eventId: pointId, at: new Date(created), kind: 'fork' },
         data: { session: child, kind: 'fork', status: 'completed' },
       });
   }

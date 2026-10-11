@@ -111,7 +111,7 @@ interface GanttEvent<TData = unknown> {
    */
   dependencies?: GanttBarId[]
   /** Recorded parent activity at a timestamp inside its bar; does not imply finish-to-start. */
-  parentActivity?: { eventId: GanttBarId; at: Date }
+  parentActivity?: { eventId: GanttBarId; at: Date; kind?: "fork" | "delegation" }
   data?: TData
 }
 

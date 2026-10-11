@@ -9,6 +9,9 @@ afterEach(() => {
   cleanup();
   sessionStorage.clear();
 });
+vi.mock('@/hooks/use-conversation-preview', () => ({
+  useConversationPreview: () => ({ messages: [], outputs: [], pending: false }),
+}));
 // JSDOM has no graph measurements. Keep node interactions real here; the live
 // browser suite separately checks the actual ReactFlow renderer and edge anchors.
 vi.mock('@xyflow/react', () => ({
@@ -75,7 +78,7 @@ describe('Gantt and Relationships switch', () => {
       'href',
       '/workspaces/workspace/sessions/branch',
     );
-    expect(inspector).toHaveTextContent('Independent continuation');
+    expect(inspector).toHaveTextContent('Independent conversation');
     fireEvent.click(screen.getByRole('button', { name: 'Switch to Gantt' }));
     expect(
       screen.queryByRole('region', { name: 'Conversation relationships' }),
@@ -86,7 +89,7 @@ describe('Gantt and Relationships switch', () => {
       'true',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Select Check residuals' }));
-    expect(inspector).toHaveTextContent('Work owned by its parent agent.');
+    expect(inspector).toHaveTextContent('Subagent · parent owned');
     expect(screen.queryByRole('button', { name: /Branch from/ })).not.toBeInTheDocument();
     mounted.unmount();
     render(content);

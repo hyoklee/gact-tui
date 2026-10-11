@@ -1,6 +1,6 @@
 import type { ClioObservabilityDockProps } from './observability-dock-shell';
 import { useState } from 'react';
-import { ChartNoAxesGanttIcon, GitForkIcon } from 'lucide-react';
+import { ArrowLeftRightIcon, GitForkIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConversationRelationships } from './conversation-relationships';
 import { ClioProcessLanes } from './observability-processes';
@@ -29,50 +29,56 @@ export function ObservabilityWork(
 ) {
   const [{ view, details, selectedId }, update] = useConversationWorkState(props.sessionId ?? '');
   const [relationshipsOpened, setRelationshipsOpened] = useState(view === 'relationships');
-  const hasFamily = conversationFamily(props.sessions ?? [], props.sessionId ?? '').sessions.some(
-    (session) => session.session_kind === 'branch',
-  );
+  const hasFamily =
+    conversationFamily(props.sessions ?? [], props.sessionId ?? '').sessions.length > 1;
   const relationships = view === 'relationships';
+  const header = (
+    <div
+      data-slot="conversation-work-header"
+      className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b px-3 py-2"
+    >
+      <h3 className="text-xs font-semibold">Conversations &amp; delegated work</h3>
+      <div className="flex items-center gap-1">
+        {!relationships && hasFamily ? (
+          <Button size="sm" variant="ghost" onClick={() => update({ details: !details })}>
+            {details ? 'Family' : 'Execution details'}
+          </Button>
+        ) : null}
+        <Button
+          size="sm"
+          variant="outline"
+          aria-label={relationships ? 'Switch to Gantt' : 'Switch to Relationships'}
+          onClick={() => {
+            setRelationshipsOpened(true);
+            update({ view: relationships ? 'gantt' : 'relationships' });
+          }}
+        >
+          <GitForkIcon />
+          Relationships
+          <ArrowLeftRightIcon />
+        </Button>
+      </div>
+    </div>
+  );
   return (
     <div className="@container min-w-0">
-      <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          {relationships
-            ? 'Conversation ancestry and ownership'
-            : hasFamily && !details
-              ? 'Recorded activity across the conversation family'
-              : 'Recorded execution · latest turn'}
-        </p>
-        <div className="flex items-center gap-1">
-          {!relationships && hasFamily ? (
-            <Button size="sm" variant="ghost" onClick={() => update({ details: !details })}>
-              {details ? 'Conversation family' : 'Execution details'}
-            </Button>
-          ) : null}
-          <Button
-            size="sm"
-            variant="ghost"
-            aria-label={relationships ? 'Switch to Gantt' : 'Switch to Relationships'}
-            onClick={() => {
-              setRelationshipsOpened(true);
-              update({ view: relationships ? 'gantt' : 'relationships' });
-            }}
-          >
-            {relationships ? <ChartNoAxesGanttIcon /> : <GitForkIcon />}
-            {relationships ? 'Gantt' : 'Relationships'}
-          </Button>
-        </div>
-      </div>
       <div hidden={relationships}>
         {hasFamily && !details ? (
           <ConversationGantt
+            header={header}
+            selectedId={selectedId}
+            onSelect={(selectedId) => update({ selectedId })}
+            onOpenArtifact={props.onOpenArtifact}
             sessions={props.sessions ?? []}
             sessionId={props.sessionId ?? ''}
             provenance={props.familyProvenance}
             pending={props.familyProvenancePending}
           />
         ) : (
-          <ClioProcessLanes {...props} />
+          <>
+            {header}
+            <ClioProcessLanes {...props} />
+          </>
         )}
       </div>
       {relationshipsOpened ? (
@@ -80,7 +86,7 @@ export function ObservabilityWork(
           <ConversationRelationships
             sessions={props.sessions ?? []}
             sessionId={props.sessionId ?? ''}
-            artifacts={props.artifacts}
+            header={header}
             onOpenArtifact={props.onOpenArtifact}
             selectedId={selectedId}
             onSelect={(selectedId) => update({ selectedId })}

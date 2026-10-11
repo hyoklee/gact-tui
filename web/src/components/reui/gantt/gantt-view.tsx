@@ -350,6 +350,7 @@ const EMPTY_ID_SET: ReadonlySet<string> = new Set()
 /** One finish-to-start arrow, both anchors in track rem coordinates. */
 interface DependencyEdge {
   relation?: { line: string; arrow: string }
+  relationKind?: "fork" | "delegation"
   key: string
   /** Predecessor and dependent event ids, so a gesture can re-anchor its own
    * endpoints live. */
@@ -1205,7 +1206,7 @@ function GanttView({
     }
     const anchors = new Map<string, { endX: number; y: number }>()
     const pending: Pending[] = []
-    const parents: { id: string; parentId: string; at: number; x: number; y: number }[] = []
+    const parents: { id: string; parentId: string; at: number; x: number; y: number; kind?: "fork" | "delegation" }[] = []
     const obstacles: RelationObstacle[] = []
     let topRem = 0
     for (const row of rows) {
@@ -1231,7 +1232,7 @@ function GanttView({
             top: y - half, bottom: y + half })
           if (occ.event.parentActivity) {
             parents.push({ id: occ.eventId, parentId: occ.event.parentActivity.eventId,
-              at: occ.event.parentActivity.at.getTime(), x: visualStart, y })
+              at: occ.event.parentActivity.at.getTime(), x: visualStart, y, kind: occ.event.parentActivity.kind })
           }
           if (occ.event.dependencies?.length) {
             pending.push({
@@ -1254,7 +1255,7 @@ function GanttView({
       const y = item.y >= parent.bottom ? parent.bottom : parent.top
       const relation = relationGeometry({ x, y }, { x: item.x, y: item.y }, obstacles, parent.id, item.id)
       if (relation) edges.push({ key: `parent:${parent.id}->${item.id}`, fromId: parent.id,
-        toId: item.id, fromX: x, fromY: y, toX: item.x, toY: item.y, relation })
+        toId: item.id, fromX: x, fromY: y, toX: item.x, toY: item.y, relation, relationKind: item.kind })
     }
     for (const item of pending) {
       for (const depId of item.dependencies) {
@@ -2415,7 +2416,7 @@ function GanttView({
                 data-today={unit.isToday || undefined}
                 data-off={unit.isOff || undefined}
                 className={cn(
-                  "flex min-w-0 items-center justify-center truncate px-1.5 text-center",
+                  "flex min-w-0 items-center justify-center px-1.5 text-center",
                   "text-muted-foreground",
                   unit.isToday && "text-primary font-medium"
                 )}
@@ -2423,11 +2424,11 @@ function GanttView({
               >
                 {/* today reads as a soft pill, not just tinted text */}
                 {unit.isToday ? (
-                  <span className="bg-primary/10 truncate rounded-full px-1.5 py-px">
+                  <span data-slot="gantt-axis-unit-label" className="bg-primary/10 sticky start-1.5 end-1.5 max-w-full truncate rounded-full px-1.5 py-px">
                     {unit.label}
                   </span>
                 ) : (
-                  unit.label
+                  <span data-slot="gantt-axis-unit-label" className="sticky start-1.5 end-1.5 max-w-full truncate">{unit.label}</span>
                 )}
               </div>
             ))}
@@ -3058,6 +3059,7 @@ const GanttDependencyLayer = memo(function GanttDependencyLayer({
             data-relationship={edge.relation ? 'parent-activity' : 'finish-to-start'}
             data-source-id={edge.fromId}
             data-target-id={edge.toId}
+            data-relation-kind={edge.relationKind}
             data-dragging={dragged || undefined}
             // in-flight edges stay SOLID - they still describe a real link -
             // and drop to a lower tone, arrowhead included, while the
@@ -3072,7 +3074,7 @@ const GanttDependencyLayer = memo(function GanttDependencyLayer({
               // view's 1px gridlines; a viewBox-unit width would fatten
               // vertical runs whenever the track stretches
               strokeWidth={1.5}
-              strokeDasharray={edge.relation ? '4 3' : undefined}
+              strokeDasharray={edge.relation && edge.relationKind !== 'fork' ? '4 3' : undefined}
               vectorEffect="non-scaling-stroke"
             />
             <path d={geometry.arrow} fill="currentColor" />

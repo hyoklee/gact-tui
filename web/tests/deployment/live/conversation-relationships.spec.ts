@@ -15,7 +15,11 @@ test('fork checkpoint, family Gantt, relationship navigation and output lineage'
   const state = JSON.parse(await readFile(statePath!, 'utf8')) as {
     workspace: string;
     sessions: Record<string, string>;
+    reference_state?: string;
   };
+  const reference = state.reference_state
+    ? (JSON.parse(await readFile(state.reference_state, 'utf8')) as typeof state)
+    : state;
   await mkdir(path.join(out!, 'originals'), { recursive: true });
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -45,7 +49,9 @@ test('fork checkpoint, family Gantt, relationship navigation and output lineage'
         clip: { x: 248, y: 0, width: 1192, height: 840 },
       });
   };
-  await page.goto(`/workspaces/${state.workspace}/sessions/${state.sessions['Offset comparison']}`);
+  await page.goto(
+    `/workspaces/${reference.workspace}/sessions/${reference.sessions['Offset comparison']}`,
+  );
   await expect(page.getByRole('combobox', { name: /^Ask .+ to investigate/ })).toBeVisible();
   const log = page.getByRole('log', { name: 'Conversation' });
   await log.evaluate((element) => element.scrollTo({ top: 0, behavior: 'instant' }));
@@ -58,7 +64,7 @@ test('fork checkpoint, family Gantt, relationship navigation and output lineage'
     /#message-/,
   );
   await page.goto(
-    `/workspaces/${state.workspace}/sessions/${state.sessions['Offset sensitivity']}`,
+    `/workspaces/${reference.workspace}/sessions/${reference.sessions['Offset sensitivity']}`,
   );
   await expect(checkpoint.getByRole('link', { name: 'Offset comparison' })).toBeVisible();
   await checkpoint.scrollIntoViewIfNeeded();
@@ -69,14 +75,15 @@ test('fork checkpoint, family Gantt, relationship navigation and output lineage'
   await page.goto(`/workspaces/${state.workspace}/sessions/${state.sessions['Offset comparison']}`);
   await checkpoint.scrollIntoViewIfNeeded();
   await expect(checkpoint).toHaveCount(1);
+  await page.goto(`/workspaces/${state.workspace}/sessions/${state.sessions['Offset comparison']}`);
   await page.getByRole('button', { name: /^Evidence layout:/ }).click();
   await page.getByRole('button', { name: 'Open full details', exact: true }).click();
   await page.getByRole('button', { name: 'Maximize canvas', exact: true }).click();
   await page.getByRole('tab', { name: 'Gantt', exact: true }).click();
   const gantt = page.getByRole('region', { name: 'Conversation family Gantt' });
   await expect(gantt).toBeVisible();
-  await expect(gantt.locator('[data-event-id^="turn:"]')).toHaveCount(6, { timeout: 15000 });
-  await expect(gantt.locator('[data-relationship="parent-activity"]')).toHaveCount(3);
+  await expect(gantt.locator('[data-event-id^="turn:"]')).toHaveCount(8, { timeout: 15000 });
+  await expect(gantt.locator('[data-relationship="parent-activity"]')).toHaveCount(4);
   const ganttAnchors = await gantt.evaluate((element) =>
     [...element.querySelectorAll<SVGGElement>('[data-relationship="parent-activity"]')].map(
       (edge) => {
@@ -135,11 +142,37 @@ test('fork checkpoint, family Gantt, relationship navigation and output lineage'
     });
   });
   expect(visibleRows, 'Every conversation activity row fits the chart').toBe(true);
+  await expect(
+    gantt.getByRole('link', { name: 'Open user fork: Offset comparison' }),
+  ).toHaveAttribute('href', new RegExp(state.sessions['Offset comparison']));
+  await expect(gantt.getByRole('link', { name: 'Open subagent: Calibration check' })).toBeVisible();
+  await expect(gantt.locator('[data-relation-kind="fork"] path[stroke-dasharray]')).toHaveCount(0);
+  await expect(
+    gantt.locator('[data-relation-kind="delegation"] path[stroke-dasharray]'),
+  ).toHaveCount(1);
+  const timingResponse = await page.request.get(
+    endpoint +
+      '/v1/sessions/' +
+      state.sessions['baseline'] +
+      '/provenance/execution?provider=native&include_children=true&limit=10000',
+  );
+  const timing = (await timingResponse.json()) as {
+    spans: { id: string; owner_session_id: string; event_type: string }[];
+  };
+  const flaggedTurn = timing.spans.find(
+    (span) =>
+      span.owner_session_id === state.sessions['Flagged reading comparison'] &&
+      span.event_type === 'turn.started',
+  )!;
+  await gantt.locator('[data-event-id="turn:' + flaggedTurn.id + '"]').click();
+  await expect(page.getByRole('complementary', { name: 'Selected conversation' })).toContainText(
+    '11',
+  );
   await capture('docs-conversation-family-gantt', '[aria-label="Conversation family Gantt"]');
   await page.getByRole('button', { name: 'Switch to Relationships' }).click();
   const graph = page.getByRole('region', { name: 'Conversation relationship graph' });
-  await expect(graph.locator('.react-flow__node')).toHaveCount(4);
-  await expect(graph.locator('.react-flow__edge')).toHaveCount(3);
+  await expect(graph.locator('.react-flow__node')).toHaveCount(5);
+  await expect(graph.locator('.react-flow__edge')).toHaveCount(4);
   await page.getByRole('button', { name: 'Select Offset sensitivity' }).click();
   const inspector = page.getByRole('complementary', { name: 'Selected conversation' });
   await expect(
@@ -153,9 +186,7 @@ test('fork checkpoint, family Gantt, relationship navigation and output lineage'
     'true',
   );
   await page.getByRole('button', { name: 'Select Offset comparison' }).click();
-  await expect(
-    inspector.getByRole('button', { name: 'calibration-offset.md', exact: true }),
-  ).toBeVisible();
+
   const graphAnchors = await graph.evaluate((element) =>
     [...element.querySelectorAll<SVGGElement>('.react-flow__edge')].map((edge) => {
       const [sourceId, targetId] = edge.getAttribute('data-id')!.split(':');
@@ -174,8 +205,8 @@ test('fork checkpoint, family Gantt, relationship navigation and output lineage'
       return {
         sourceId,
         targetId,
-        sourceGap: Math.hypot(a.x - source.right, a.y - (source.top + source.height / 2)),
-        targetGap: Math.hypot(b.x - target.left, b.y - (target.top + target.height / 2)),
+        sourceGap: Math.hypot(a.x - (source.left + source.width / 2), a.y - source.bottom),
+        targetGap: Math.hypot(b.x - (target.left + target.width / 2), b.y - target.top),
       };
     }),
   );
@@ -183,7 +214,33 @@ test('fork checkpoint, family Gantt, relationship navigation and output lineage'
     graphAnchors.every((anchor) => anchor.sourceGap < 4 && anchor.targetGap < 4),
     JSON.stringify(graphAnchors),
   ).toBe(true);
+  await page.getByRole('button', { name: 'Select Offset sensitivity' }).click();
+  await expect(inspector.getByLabel('Conversation preview')).toContainText('14');
+  await expect(inspector.getByLabel('Conversation preview')).toContainText('17');
+  const columns = await page
+    .getByRole('region', { name: 'Conversation relationships' })
+    .evaluate((element) => {
+      const header = element
+        .querySelector('[data-slot="conversation-work-header"]')!
+        .getBoundingClientRect();
+      const inspector = element.querySelector('aside')!.getBoundingClientRect();
+      return {
+        topGap: Math.abs(header.top - inspector.top),
+        overlap: header.right > inspector.left + 1,
+      };
+    });
+  expect(columns.topGap).toBeLessThan(2);
+  expect(columns.overlap).toBe(false);
+  await page.getByRole('button', { name: 'Select Flagged reading comparison' }).click();
+  await expect(inspector.getByLabel('Conversation preview')).toContainText('11');
   await capture('docs-conversation-relationships', '[aria-label="Conversation relationships"]');
+  await page.getByRole('button', { name: 'Select Calibration check' }).click();
+  await expect(inspector).toContainText('Subagent');
+  await expect(inspector.getByRole('link', { name: 'Open subagent', exact: true })).toHaveAttribute(
+    'href',
+    new RegExp(state.sessions['Calibration check']),
+  );
+  await page.getByRole('button', { name: 'Select Offset comparison' }).click();
   for (const width of [1024, 736, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(page.getByRole('button', { name: 'Switch to Gantt' })).toBeVisible();
@@ -210,6 +267,15 @@ test('fork checkpoint, family Gantt, relationship navigation and output lineage'
     await page.screenshot({ path: path.join(out!, `relationships-${width}.png`) });
   }
   await page.setViewportSize({ width: 1440, height: 940 });
+  await page.goto(
+    `/workspaces/${reference.workspace}/sessions/${reference.sessions['Offset comparison']}`,
+  );
+  await page.getByRole('button', { name: /^Evidence layout:/ }).click();
+  await page.getByRole('button', { name: 'Open full details', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gantt', exact: true }).click();
+  const toRelationships = page.getByRole('button', { name: 'Switch to Relationships' });
+  if (await toRelationships.isVisible()) await toRelationships.click();
+  await page.getByRole('button', { name: 'Select Offset comparison' }).click();
   await inspector.getByRole('button', { name: 'calibration-offset.md', exact: true }).click();
   const maximize = page.getByRole('button', { name: 'Maximize canvas', exact: true });
   if (await maximize.isVisible()) await maximize.click();
@@ -226,10 +292,19 @@ test('fork checkpoint, family Gantt, relationship navigation and output lineage'
   await page.getByRole('tab', { name: 'Observability', exact: true }).click();
   await page.getByRole('button', { name: 'Select Offset sensitivity' }).click();
   await inspector.getByRole('link', { name: 'Open conversation', exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/sessions/${state.sessions['Offset sensitivity']}$`));
+  await expect(page).toHaveURL(
+    new RegExp(`/sessions/${reference.sessions['Offset sensitivity']}$`),
+  );
   await expect(page.getByRole('combobox', { name: /^Ask .+ to investigate/ })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('combobox', { name: /^Ask .+ to investigate/ })).toBeVisible();
+  await page.getByRole('button', { name: /^Evidence layout:/ }).click();
+  await page.getByRole('button', { name: 'Open full details', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gantt', exact: true }).click();
+  const switchBack = page.getByRole('button', { name: 'Switch to Gantt' });
+  if (await switchBack.isVisible()) await switchBack.click();
+  await page.getByRole('link', { name: 'Open user fork: Offset comparison', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/sessions/${reference.sessions['Offset comparison']}$`));
   expect(pageErrors).toEqual([]);
   await writeFile(
     path.join(out!, 'browser-verdict.json'),
