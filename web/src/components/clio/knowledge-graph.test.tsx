@@ -118,7 +118,7 @@ it('keeps initial framing visible when a reader narrows the canvas, preserving m
   expect(zoomed.scale).toBeGreaterThan(fitted.scale);
   act(() => resize(500, 600));
   expect(camera().scale).toBe(zoomed.scale);
-  fireEvent.click(screen.getByRole('button', { name: 'Fit', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Fit' }));
   expect(camera().scale).not.toBe(zoomed.scale);
 });
 
