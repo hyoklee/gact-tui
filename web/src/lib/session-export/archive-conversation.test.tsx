@@ -67,6 +67,7 @@ it('uses native activity controls with the loaded skill and failed command at th
       <ArchiveConnectionProvider>
         <ArchiveConversation
           sessionId="s"
+          metadata={{ message_marks: { m: true } }}
           view={view}
           snapshot={{ responses: {}, sessions: {}, tables: {}, failures: [] }}
           onOpenFile={() => undefined}
@@ -76,6 +77,8 @@ it('uses native activity controls with the loaded skill and failed command at th
     </QueryClientProvider>,
   );
   const user = userEvent.setup();
+  expect(screen.getByLabelText('Marked message')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Unmark message' })).not.toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: /^Activity:/ }));
   await user.click(screen.getByRole('button', { name: 'Show result for Load skill' }));
   const skillDetails = await screen.findByRole('region', { name: 'Load skill: Result' });

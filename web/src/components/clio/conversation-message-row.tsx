@@ -2,6 +2,7 @@ import type { PendingInteraction, Message as DomainMessage } from '@clio/core/v3
 import {
   AlertTriangleIcon,
   BotIcon,
+  BookmarkIcon,
   CopyIcon,
   Globe2Icon,
   LoaderCircleIcon,
@@ -39,6 +40,7 @@ import { TranscriptContentPicker } from './transcript-content-picker';
 import { useAttentionEvidenceTarget } from '@/hooks/use-attention-evidence-target';
 import { MessageCompletionFooter } from './message-completion-footer';
 import { ResponseRating } from './response-rating';
+import { MessageMarkButton } from './message-mark-button';
 import { messageToolCallCounts } from './message-tool-call-counts';
 import { ConversationModelCheckpoint } from './conversation-model-boundary';
 import { modelBoundariesEqual } from './conversation-model-boundaries';
@@ -159,6 +161,13 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
       ) : null}
       <TranscriptContentPicker sessionId={message.session_id} messageId={message.id} />
       <ResponseRating message={message} active={active} />
+      {entities.onMarkMessage ? (
+        <MessageMarkButton
+          marked={entities.markedMessageIds?.has(message.id) ?? false}
+          pending={entities.markingMessageId !== undefined}
+          onMark={(marked) => entities.onMarkMessage!(message.id, marked)}
+        />
+      ) : null}
       <ClioMessageHistoryActions
         forking={entities.forkingMessageId === message.id}
         onFork={
@@ -220,6 +229,13 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
                     ? 'System'
                     : 'Unknown sender'}
             </span>
+            {entities.markedMessageIds?.has(message.id) ? (
+              <BookmarkIcon
+                aria-label="Marked message"
+                className="size-3 text-muted-foreground"
+                fill="currentColor"
+              />
+            ) : null}
             {message.role !== 'assistant' ? (
               <time className="font-mono text-[0.625rem]" dateTime={message.created_at}>
                 {new Date(message.created_at).toLocaleTimeString([], {
@@ -460,6 +476,10 @@ export function conversationMessageRowPropsEqual(
     left.measureElement !== right.measureElement ||
     left.virtualized !== right.virtualized ||
     left.forkingMessageId !== right.forkingMessageId ||
+    left.markingMessageId !== right.markingMessageId ||
+    (left.markedMessageIds?.has(left.message.id) ?? false) !==
+      (right.markedMessageIds?.has(right.message.id) ?? false) ||
+    left.onMarkMessage !== right.onMarkMessage ||
     left.rewindingMessageId !== right.rewindingMessageId ||
     left.retryingMessageId !== right.retryingMessageId ||
     left.cancellingPendingMessageId !== right.cancellingPendingMessageId ||

@@ -645,7 +645,10 @@ test('renders dense flat-NDP semantics with accessible interactions', async ({
   await expect(firstRailLandmark).toBeVisible();
   await firstRailLandmark.hover();
   const railPreview = page.locator('[data-slot="hover-card-content"]');
-  await expect(railPreview.locator('[data-streamdown="strong"]')).toContainText('evidence ledger');
+  const railPreviewTitle = railPreview.locator('p.font-semibold');
+  await expect(railPreviewTitle).toHaveText('Sanitized evidence ledger entry 1.');
+  await expect(railPreviewTitle).toHaveCSS('font-weight', '600');
+  await expect(railPreview).toContainText('Sanitized evidence ledger entry 2.');
   await expect(railPreview.getByText(/\*\*evidence ledger\*\*/)).toHaveCount(0);
   await expect
     .poll(() => conversation.evaluate((element) => element.scrollTop))
@@ -892,8 +895,11 @@ test('keeps navigation and workspace canvas accessible on mobile with reduced mo
   expect(await outline.locator('[data-index]').count()).toBeLessThan(30);
   const finalOutlineRow = outline.locator('[data-index="999"]');
   await expect(finalOutlineRow).toBeVisible();
-  await expect(finalOutlineRow.locator('p')).toHaveCSS('white-space', 'nowrap');
-  expect((await finalOutlineRow.boundingBox())?.height ?? 0).toBeLessThanOrEqual(36);
+  await expect(finalOutlineRow.locator('p.font-semibold > span')).toHaveCSS(
+    'white-space',
+    'nowrap',
+  );
+  expect((await finalOutlineRow.boundingBox())?.height).toBe(72);
   const outlineBounds = await outline.boundingBox();
   expect(outlineBounds).not.toBeNull();
   if (outlineBounds) {
@@ -925,11 +931,18 @@ test('keeps navigation and workspace canvas accessible on mobile with reduced mo
     name: 'Jump to user message 1',
   });
   await expect(firstOutlineItem).toBeVisible();
-  await expect(outline.locator('[data-streamdown="strong"]')).toContainText('evidence ledger');
+  const firstOutlineTitle = outline
+    .locator('p.font-semibold')
+    .filter({ hasText: 'Sanitized evidence ledger entry 1.' });
+  await expect(firstOutlineTitle).toHaveCSS('font-weight', '600');
+  await expect(outline.locator('[data-index="0"]')).toContainText(
+    'Sanitized evidence ledger entry 2.',
+  );
   await expect(outline.getByText(/\*\*evidence ledger\*\*/)).toHaveCount(0);
   await firstOutlineItem.hover();
   const firstMessagePreview = page.getByRole('region', { name: 'user message 1 preview' });
   await expect(firstMessagePreview).toContainText('Sanitized evidence ledger entry 1.');
+  await expect(firstMessagePreview).toContainText('Sanitized evidence ledger entry 2.');
   await firstOutlineItem.click();
   await expect(firstMessagePreview).toHaveCount(0);
   await expect(outline).toHaveCount(0);
