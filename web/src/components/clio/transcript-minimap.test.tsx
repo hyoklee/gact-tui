@@ -11,14 +11,14 @@ const virtual = vi.hoisted(() => ({
 }));
 
 vi.mock('@tanstack/react-virtual', () => ({
-  useVirtualizer: ({ count }: { count: number }) => ({
-    getTotalSize: () => count * 11,
+  useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: () => number }) => ({
+    getTotalSize: () => count * estimateSize(),
     getVirtualItems: () =>
       Array.from({ length: Math.min(count, virtual.mountedRows) }, (_, index) => ({
         index,
         key: index,
-        size: 11,
-        start: index * 11,
+        size: estimateSize(),
+        start: index * estimateSize(),
       })),
     scrollToIndex: virtual.scrollToIndex,
   }),
