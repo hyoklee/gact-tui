@@ -13,6 +13,11 @@ import {
   type GlobusDestination,
 } from './connected-storage-contract.js';
 import { workspaceResourceSchema } from './composer-schemas.js';
+import {
+  knowledgeSnapshotSchema,
+  knowledgeOpenSchema,
+  knowledgeSyncSchema,
+} from './knowledge-contract.js';
 
 const root = (workspaceId: string) => `/v1/workspaces/${encodeURIComponent(workspaceId)}/sources`;
 const sourcePath = (workspaceId: string, sourceId: string) =>
@@ -27,6 +32,44 @@ const storageSignInSchema = z.object({
 
 /** Trusted setup and approved data on the connected CLIO, never the desktop implicitly. */
 export class ConnectedStorageRepository extends A2uiRepository {
+  public knowledgeSnapshot(
+    workspaceId: string,
+    sourceId: string,
+    options: { query?: string; focus?: string; offset?: number; limit?: number } = {},
+    signal?: AbortSignal,
+  ) {
+    const query = new URLSearchParams(
+      Object.entries(options).map(([key, value]) => [key, String(value)]),
+    );
+    return this.transport.request({
+      method: 'GET',
+      path: `${sourcePath(workspaceId, sourceId)}/knowledge?${query}`,
+      signal,
+      decode: (value) => knowledgeSnapshotSchema.parse(value),
+    });
+  }
+  public knowledgeOpen(
+    workspaceId: string,
+    sourceId: string,
+    path: string,
+    revision = '',
+    signal?: AbortSignal,
+  ) {
+    return this.transport.request({
+      method: 'POST',
+      path: `${sourcePath(workspaceId, sourceId)}/knowledge/open`,
+      body: { path, revision },
+      signal,
+      decode: (value) => knowledgeOpenSchema.parse(value),
+    });
+  }
+  public knowledgeSync(workspaceId: string, sourceId: string, action?: 'start' | 'stop') {
+    return this.transport.request({
+      method: action ? 'POST' : 'GET',
+      path: `${sourcePath(workspaceId, sourceId)}/knowledge/sync${action ? `/${action}` : ''}`,
+      decode: (value) => knowledgeSyncSchema.parse(value),
+    });
+  }
   public githubRevisions(
     url: string,
     kind: 'branch' | 'tag' | 'commit',
