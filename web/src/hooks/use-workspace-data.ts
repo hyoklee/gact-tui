@@ -399,7 +399,10 @@ export function useWorkspaceData({
     () => conversationFamily(hierarchySessions, sessionId),
     [hierarchySessions, sessionId],
   );
-  const familyExecutionProvenance = useExecutionProvenance(family.sessions[0]?.id ?? sessionId);
+  const familyExecutionProvenance = useExecutionProvenance(
+    family.sessions[0]?.id ?? sessionId,
+    executionProvenance.provider,
+  );
   const contextObservability = useSessionObservability(contextTargetId);
   const { hideDotFiles } = useAppearancePreferences();
   const workspaceFiles = useQuery({

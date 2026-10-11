@@ -11,7 +11,7 @@ import { useConnectionSettings } from '@/providers/connection-provider';
 import { useRepository } from './use-repository';
 
 /** Owns provider discovery and the selected session execution-provenance snapshot. */
-export function useExecutionProvenance(sessionId: string) {
+export function useExecutionProvenance(sessionId: string, inheritedProvider?: string) {
   const repository = useRepository();
   const { settings } = useConnectionSettings();
   const [requestedProvider, setRequestedProvider] = useState<string>();
@@ -20,7 +20,7 @@ export function useExecutionProvenance(sessionId: string) {
     queryFn: ({ signal }) => repository.provenanceProviders(signal),
   });
   const provider = selectProvenanceProvider(
-    requestedProvider,
+    requestedProvider ?? inheritedProvider,
     providers.data?.default_provider,
     providers.data?.providers,
   );
