@@ -343,12 +343,13 @@ for (const layout of [
           )
           .toBe('0');
         await expect(canvas.getByText('Render PDF preview', { exact: true })).toBeVisible();
-        const sourceNode = canvas.locator('.react-flow__node').filter({ hasText: name }).first();
-        const previewNode = canvas
-          .locator('.react-flow__node')
-          .filter({ hasText: `${name}.v1.pdf` });
+        const graph = canvas.getByRole('region', { name: 'Artifact lineage graph', exact: true });
+        const sourceNode = graph.getByTestId(`rf__node-${sourceId}`);
+        const previewNode = graph.getByTestId(`rf__node-${pdfId}`);
         await expect(sourceNode).toBeVisible();
         await expect(previewNode).toBeVisible();
+        await expect(sourceNode).toContainText(name);
+        await expect(previewNode).toContainText(`${name}.v1.pdf`);
         const sourceBounds = await sourceNode.boundingBox();
         const previewBounds = await previewNode.boundingBox();
         expect(sourceBounds!.x).toBeLessThan(previewBounds!.x);

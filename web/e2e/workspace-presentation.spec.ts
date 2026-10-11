@@ -91,7 +91,7 @@ test('a narrow image pane keeps every action reachable in one bounded toolbar', 
   await toolbar.getByRole('tab', { name: 'Lineage', exact: true }).click();
   await expect(canvas.getByRole('tabpanel', { name: 'Lineage', exact: true })).toBeVisible();
   await expect(
-    canvas.getByRole('img', { name: 'Artifact lineage graph', exact: true }),
+    canvas.getByRole('region', { name: 'Artifact lineage graph', exact: true }),
   ).toBeVisible();
   await expect(canvas.getByText('Research execution', { exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('artifact-lineage-only.png'), fullPage: true });
