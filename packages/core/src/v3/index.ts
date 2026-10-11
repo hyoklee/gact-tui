@@ -40,6 +40,7 @@ export * from './composer-conflicts.js';
 export * from './composer-decoding.js';
 export * from './composer-domain.js';
 export * from './connected-storage-contract.js';
+export * from './knowledge-contract.js';
 export * from './connected-storage-repository.js';
 export * from './model-acquisition-contract.js';
 export * from './composer-schemas.js';

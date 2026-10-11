@@ -53,7 +53,9 @@ export function ConnectedSourceForm({
         provider: provider.id,
         label:
           label.trim() ||
-          (provider.id === 'local' || (provider.id === 'sftp' && inTauri())
+          (provider.id === 'local' ||
+          provider.id === 'obsidian' ||
+          (provider.id === 'sftp' && inTauri())
             ? root
                 .trim()
                 .replace(/[/\\]+$/, '')
@@ -77,7 +79,11 @@ export function ConnectedSourceForm({
       <Input
         form={formId}
         id={`source-${key}`}
-        value={configuration[key] ?? ''}
+        value={
+          Array.isArray(configuration[key])
+            ? configuration[key].join(', ')
+            : (configuration[key] ?? '')
+        }
         placeholder={placeholder}
         onChange={(e) => setConfiguration((previous) => ({ ...previous, [key]: e.target.value }))}
       />
@@ -119,6 +125,62 @@ export function ConnectedSourceForm({
                 This source has data or transfer history. Its folder identifies that evidence. You
                 can rename it, or connect another folder as a new source.
               </InfoTip>
+            </div>
+          )}
+          {provider.id === 'obsidian' && (
+            <div className="space-y-3 text-sm">
+              <Field>
+                <FieldLabel htmlFor="vault-connection">Vault connection</FieldLabel>
+                <select
+                  id="vault-connection"
+                  className="w-full rounded-md border bg-background p-2"
+                  value={configuration.obsidian_connection ?? 'local_vault'}
+                  onChange={(event) =>
+                    setConfiguration((previous) => ({
+                      ...previous,
+                      obsidian_connection: event.target.value as 'local_vault' | 'headless_sync',
+                    }))
+                  }
+                >
+                  <option value="local_vault">Vault on this host</option>
+                  <option value="headless_sync">Obsidian Headless Sync copy</option>
+                </select>
+              </Field>
+              <p className="text-xs text-muted-foreground">
+                Notes, tags, aliases and authored links form a knowledge source. Starts read only.
+                Hidden folders and Obsidian settings are excluded.
+              </p>
+              {configuration.obsidian_connection === 'headless_sync' && (
+                <div className="space-y-2">
+                  <p>
+                    Set up a dedicated copy on {hostLabel} with the official client: run{' '}
+                    <code>ob login</code>, then{' '}
+                    <code>ob sync-setup --vault &lt;name&gt; --path &lt;copy&gt;</code> privately in
+                    a terminal. Select that copy below. Requires Obsidian Sync. Use one sync client
+                    per copy.
+                  </p>
+                  <Field>
+                    <FieldLabel htmlFor="vault-sync-mode">Sync direction</FieldLabel>
+                    <select
+                      id="vault-sync-mode"
+                      className="w-full rounded-md border bg-background p-2"
+                      value={configuration.obsidian_sync_mode ?? 'pull-only'}
+                      onChange={(event) =>
+                        setConfiguration((previous) => ({
+                          ...previous,
+                          obsidian_sync_mode: event.target.value as 'pull-only' | 'bidirectional',
+                        }))
+                      }
+                    >
+                      <option value="pull-only">Download remote changes</option>
+                      <option value="bidirectional">Sync changes both ways</option>
+                    </select>
+                  </Field>
+                  <p className="text-xs text-muted-foreground">
+                    Sync direction is separate from permission for the agent to edit notes.
+                  </p>
+                </div>
+              )}
             </div>
           )}
           {provider.id === 'sftp' && (
@@ -183,14 +245,16 @@ export function ConnectedSourceForm({
                   }
                 />
               )}
-              {(provider.id === 'local' || provider.id === 'sftp') && (
+              {(provider.id === 'local' ||
+                provider.id === 'sftp' ||
+                provider.id === 'obsidian') && (
                 <div className="flex min-w-0 w-full items-center gap-3 rounded-md border p-2">
                   <HostPathPicker
                     targetId={provider.id === 'sftp' ? configuration.target_id || '' : 'local'}
                     hostLabel={
                       provider.id === 'sftp' ? sshFolder?.label || 'selected SSH host' : hostLabel
                     }
-                    label="Source folder"
+                    label={provider.id === 'obsidian' ? 'Vault folder' : 'Source folder'}
                     triggerLabel="Choose folder"
                     startPath={provider.id === 'sftp' ? sshFolder?.startPath : browseStartPath}
                     path={root}
@@ -233,7 +297,9 @@ export function ConnectedSourceForm({
             />
           )}
           <p className="text-xs text-muted-foreground">
-            Choose Download or Link and how edits are handled after connecting.
+            {provider.id === 'obsidian'
+              ? 'Connect this vault as a knowledge source. Notes open in the graph, file list, and reader.'
+              : 'Choose Download or Link and how edits are handled after connecting.'}
           </p>
         </fieldset>
       </fieldset>
@@ -258,7 +324,8 @@ export function ConnectedSourceForm({
           disabled={
             connect.isPending ||
             (provider.id === 'github' && !githubRevisionValid) ||
-            ((provider.id === 'local' || provider.id === 'sftp') && !root.trim())
+            ((provider.id === 'local' || provider.id === 'sftp' || provider.id === 'obsidian') &&
+              !root.trim())
           }
         >
           {connect.isPending
@@ -267,7 +334,9 @@ export function ConnectedSourceForm({
               : 'Connecting…'
             : source
               ? 'Save changes'
-              : 'Connect folder'}
+              : provider.id === 'obsidian'
+                ? 'Connect vault'
+                : 'Connect folder'}
         </Button>
       </form>
     </div>
