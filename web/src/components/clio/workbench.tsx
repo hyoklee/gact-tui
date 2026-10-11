@@ -142,7 +142,15 @@ function restoredWorkbenchState(
     if (!parsed || typeof parsed !== 'object')
       return { tabs: [defaultTab], activeTabId: defaultTab.id };
     const record = parsed as Record<string, unknown>;
-    const storedTabs = Array.isArray(record.tabs) ? record.tabs.filter(isWorkbenchTab) : [];
+    const storedTabs = Array.isArray(record.tabs)
+      ? record.tabs
+          .filter(isWorkbenchTab)
+          .map((tab) =>
+            tab.kind === 'knowledge'
+              ? { ...tab, label: tab.label.replace(/ · Knowledge$/, '') }
+              : tab,
+          )
+      : [];
     const tabs = storedTabs.length ? storedTabs : [defaultTab];
     const requestedActive = typeof record.activeTabId === 'string' ? record.activeTabId : '';
     return {
@@ -343,7 +351,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
               id: `knowledge:${request.sourceId}`,
               kind: 'knowledge',
               sourceId: request.sourceId,
-              label: `${request.label} · Knowledge`,
+              label: request.label,
               workspaceId,
             });
             return;

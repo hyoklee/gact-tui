@@ -7,6 +7,7 @@ import { KNOWLEDGE_ATTACH_EVENT } from '@/lib/knowledge-navigation';
 
 const repository = vi.hoisted(() => ({
   knowledgeSnapshot: vi.fn(),
+  knowledgeGraph: vi.fn(),
   connectedSources: vi.fn(),
   knowledgeOpen: vi.fn(),
   knowledgeSync: vi.fn(),
@@ -82,6 +83,9 @@ beforeEach(() => {
       link_revision: 'link1',
     }),
   );
+  repository.knowledgeGraph.mockImplementation((...args: unknown[]) =>
+    repository.knowledgeSnapshot(...args),
+  );
 });
 
 function renderView() {
@@ -113,8 +117,26 @@ it('keeps selection across graph/list, follows authored links and attaches the c
   window.removeEventListener(KNOWLEDGE_ATTACH_EVENT, attached);
   await user.click(screen.getByRole('button', { name: 'Explore links' }));
   await waitFor(() =>
-    expect(repository.knowledgeSnapshot.mock.calls.at(-1)?.[2]).toMatchObject({ focus: 'b.md' }),
+    expect(repository.knowledgeGraph.mock.calls.at(-1)?.[2]).toMatchObject({ focus: 'b.md' }),
   );
+});
+
+it('uses full topology for Graph and bounded pages for Files, and can close the reader', async () => {
+  renderView();
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'Graph a.md' }));
+  expect(repository.knowledgeGraph.mock.calls[0][2]).toEqual({
+    query: '',
+    focus: '',
+    attachments: false,
+  });
+  await user.click(screen.getByRole('button', { name: 'Close note' }));
+  expect(screen.queryByLabelText('Knowledge reader')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Files' }));
+  await waitFor(() =>
+    expect(repository.knowledgeSnapshot.mock.calls.at(-1)?.[2]).toMatchObject({ offset: 0 }),
+  );
+  expect(screen.queryByRole('button', { name: 'Previous' })).not.toBeInTheDocument();
 });
 
 it('shows index and reader failures without fabricating note contents', async () => {

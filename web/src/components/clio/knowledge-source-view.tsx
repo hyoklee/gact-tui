@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { useRepository } from '@/hooks/use-repository';
 import { useConnectionSettings } from '@/providers/connection-provider';
@@ -22,6 +23,7 @@ export function KnowledgeSourceView({
   const { settings } = useConnectionSettings();
   const scope = connectionScope(settings);
   const [view, setView] = useState<'graph' | 'list'>('graph');
+  const [attachments, setAttachments] = useState(false);
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   useEffect(() => {
@@ -33,9 +35,21 @@ export function KnowledgeSourceView({
   const [offset, setOffset] = useState(0);
   const [attached, setAttached] = useState('');
   const snapshot = useQuery({
-    queryKey: ['knowledge', scope, workspaceId, sourceId, search, focus, offset],
+    queryKey: ['knowledge', scope, workspaceId, sourceId, view, search, focus, offset, attachments],
     queryFn: ({ signal }) =>
-      repository.knowledgeSnapshot(workspaceId, sourceId, { query: search, focus, offset }, signal),
+      view === 'graph'
+        ? repository.knowledgeGraph(
+            workspaceId,
+            sourceId,
+            { query: search, focus, attachments },
+            signal,
+          )
+        : repository.knowledgeSnapshot(
+            workspaceId,
+            sourceId,
+            { query: search, focus, offset },
+            signal,
+          ),
   });
   const sources = useQuery({
     queryKey: ['knowledge-source', scope, workspaceId, sourceId],
@@ -144,14 +158,28 @@ export function KnowledgeSourceView({
       {snapshot.data && (
         <>
           <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2 text-xs text-muted-foreground">
-            <span>{snapshot.data.total} items · Index ready</span>
+            <span>
+              {snapshot.data.total} {view === 'graph' ? 'notes' : 'items'}
+            </span>
+            {view === 'graph' && (
+              <label className="flex cursor-pointer items-center gap-1.5">
+                <Checkbox
+                  checked={attachments}
+                  onCheckedChange={(value) => setAttachments(value === true)}
+                />
+                Attachments
+              </label>
+            )}
             {snapshot.data.relationships_truncated && (
               <span>Relationship limit reached; explore a note neighborhood.</span>
             )}
             {snapshot.data.truncated && (
               <span>
-                Showing {offset + 1}–{offset + snapshot.data.notes.length}. Search or explore a note
-                neighborhood.
+                Showing{' '}
+                {view === 'graph'
+                  ? snapshot.data.notes.length
+                  : `${offset + 1}–${offset + snapshot.data.notes.length}`}
+                . Search, select a folder, or explore a note's links to narrow this view.
               </span>
             )}
             {focus && (
@@ -160,28 +188,33 @@ export function KnowledgeSourceView({
                 variant="ghost"
                 onClick={() => {
                   setFocus('');
+                  setQuery('');
                   setOffset(0);
                 }}
               >
-                Show vault
+                All notes
               </Button>
             )}
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={!offset}
-              onClick={() => setOffset(Math.max(0, offset - 200))}
-            >
-              Previous
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={snapshot.data.next_offset == null}
-              onClick={() => setOffset(snapshot.data!.next_offset!)}
-            >
-              Next
-            </Button>
+            {view === 'list' && (offset > 0 || snapshot.data.next_offset != null) && (
+              <>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={!offset}
+                  onClick={() => setOffset(Math.max(0, offset - 200))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={snapshot.data.next_offset == null}
+                  onClick={() => setOffset(snapshot.data!.next_offset!)}
+                >
+                  Next
+                </Button>
+              </>
+            )}
           </div>
           {(snapshot.data.warnings?.length ?? 0) > 0 && (
             <details className="px-3 text-xs">
@@ -191,8 +224,10 @@ export function KnowledgeSourceView({
               ))}
             </details>
           )}
-          <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto @3xl:grid-cols-2">
-            <div className="min-h-80 min-w-0 border-r">
+          <div
+            className={`grid min-h-0 flex-1 grid-cols-1 overflow-auto ${selected ? '@3xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.8fr)]' : ''}`}
+          >
+            <div className={`min-h-80 min-w-0 ${selected ? 'border-r' : ''}`}>
               {view === 'graph' ? (
                 <KnowledgeGraph snapshot={snapshot.data} selected={selected} onSelect={select} />
               ) : (
@@ -218,95 +253,104 @@ export function KnowledgeSourceView({
                 </ul>
               )}
             </div>
-            <div
-              className="flex min-h-80 min-w-0 flex-col overflow-auto p-3"
-              aria-label="Knowledge reader"
-            >
-              {!selected && (
-                <p className="m-auto text-sm text-muted-foreground">
-                  Select a note to read it and follow its links.
-                </p>
-              )}
-              {note.isFetching && selected && <p role="status">Opening note…</p>}
-              {note.data && (
-                <>
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <h3 className="w-full min-w-0 break-words font-medium @3xl:w-auto @3xl:flex-1">
-                      {note.data.note.title}
-                    </h3>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setFocus(selected);
-                        setQuery('');
-                        setOffset(0);
-                      }}
-                    >
-                      Explore links
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        window.dispatchEvent(
-                          new CustomEvent<KnowledgeAttachRequest>(KNOWLEDGE_ATTACH_EVENT, {
-                            detail: { scope, workspaceId, resource: note.data.resource },
-                          }),
-                        );
-                        setAttached(selected);
-                      }}
-                    >
-                      {attached === selected ? 'Added to chat' : 'Attach note'}
-                    </Button>
-                  </div>
-                  <p className="mb-2 break-all text-xs text-muted-foreground">
-                    {note.data.note.path} · Captured revision {note.data.note.revision.slice(0, 12)}
+            {selected && (
+              <div
+                className="flex min-h-80 min-w-0 flex-col overflow-auto p-3"
+                aria-label="Knowledge reader"
+              >
+                {!selected && (
+                  <p className="m-auto text-sm text-muted-foreground">
+                    Select a note to read it and follow its links.
                   </p>
-                  <div className="min-h-64 flex-1">
-                    {note.data.note.kind === 'attachment' ? (
-                      <WorkspaceResourceCarousel
-                        resource={note.data.resource}
-                        resources={[note.data.resource]}
-                        workspaceId={workspaceId}
-                      />
-                    ) : (
-                      <MarkdownFilePreview name={note.data.note.title} content={note.data.text} />
-                    )}
-                  </div>
-                  <details className="mt-3 text-sm" open>
-                    <summary>Links and backlinks</summary>
-                    {note.data.relationships_truncated && (
-                      <p>More relationships are available. Use Explore links and pagination.</p>
-                    )}
-                    <ul>
-                      {note.data.links.map((link, index) => (
-                        <li key={index} className="py-1">
-                          {link.status === 'resolved' ? (
-                            <Button
-                              variant="link"
-                              size="sm"
-                              onClick={() =>
-                                select(link.source === selected ? link.target : link.source)
-                              }
-                            >
-                              {link.source === selected
-                                ? `→ ${link.target}${link.selector ? `#${link.selector}` : ''}`
-                                : `← ${link.source}`}
-                              {link.kind === 'embed' ? ' (embed)' : ''}
-                            </Button>
-                          ) : (
-                            <span className="break-all text-muted-foreground">
-                              {link.target} · {link.status}
-                              {link.candidates?.length ? `: ${link.candidates.join(', ')}` : ''}
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                </>
-              )}
-            </div>
+                )}
+                {note.isFetching && selected && <p role="status">Opening note…</p>}
+                {note.data && (
+                  <>
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setFocus(selected);
+                          setView('graph');
+                          setQuery('');
+                          setOffset(0);
+                        }}
+                      >
+                        Explore links
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          window.dispatchEvent(
+                            new CustomEvent<KnowledgeAttachRequest>(KNOWLEDGE_ATTACH_EVENT, {
+                              detail: { scope, workspaceId, resource: note.data.resource },
+                            }),
+                          );
+                          setAttached(selected);
+                        }}
+                      >
+                        {attached === selected ? 'Added to chat' : 'Attach note'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="ml-auto"
+                        onClick={() => select('')}
+                      >
+                        Close note
+                      </Button>
+                    </div>
+                    <p className="mb-2 break-all text-xs text-muted-foreground">
+                      {note.data.note.path} · Captured revision{' '}
+                      {note.data.note.revision.slice(0, 12)}
+                    </p>
+                    <div className="min-h-64 flex-1">
+                      {note.data.note.kind === 'attachment' ? (
+                        <WorkspaceResourceCarousel
+                          resource={note.data.resource}
+                          resources={[note.data.resource]}
+                          workspaceId={workspaceId}
+                        />
+                      ) : (
+                        <MarkdownFilePreview name={note.data.note.title} content={note.data.text} />
+                      )}
+                    </div>
+                    <details className="mt-3 text-sm" open>
+                      <summary>Links and backlinks</summary>
+                      {note.data.relationships_truncated && (
+                        <p>More relationships are available. Use Explore links and pagination.</p>
+                      )}
+                      <ul>
+                        {note.data.links.map((link, index) => (
+                          <li key={index} className="py-1">
+                            {link.status === 'resolved' ? (
+                              <Button
+                                variant="link"
+                                size="sm"
+                                onClick={() =>
+                                  select(link.source === selected ? link.target : link.source)
+                                }
+                              >
+                                {link.source === selected
+                                  ? `→ ${link.target}${link.selector ? `#${link.selector}` : ''}`
+                                  : `← ${link.source}`}
+                                {link.kind === 'embed' ? ' (embed)' : ''}
+                              </Button>
+                            ) : (
+                              <span className="break-all text-muted-foreground">
+                                {link.target} · {link.status}
+                                {link.candidates?.length ? `: ${link.candidates.join(', ')}` : ''}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}
