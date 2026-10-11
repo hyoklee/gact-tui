@@ -157,8 +157,8 @@ export function ConnectedSourceForm({
                     Set up a dedicated copy on {hostLabel} with the official client: run{' '}
                     <code>ob login</code>, then{' '}
                     <code>ob sync-setup --vault &lt;name&gt; --path &lt;copy&gt;</code> privately in
-                    a terminal. Select that copy below. Requires Obsidian Sync. Use one sync client
-                    per copy. You can select a folder inside the copy; the official client still
+                    a terminal. Select that copy below. Requires Obsidian Sync. Use one sync method
+                    per device. You can select a folder inside the copy; the official client still
                     syncs the enclosing vault, while knowledge access stays in the selected folder.
                   </p>
                   <Field>
