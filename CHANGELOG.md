@@ -6,6 +6,13 @@ UI aren't tracked.
 
 ## Unreleased
 
+### Added
+
+- Connect Obsidian vaults as knowledge sources with a dedicated graph/files tab,
+  shared note selection, search, links/backlinks, and a reader. Attach captured
+  note revisions to chat, reopen knowledge from Sources, and see read/edit access
+  separately from optional official Headless Sync status and controls.
+
 ### Fixed
 
 - Windows installation explicitly requests backend protected execution setup,

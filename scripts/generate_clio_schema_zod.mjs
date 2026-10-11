@@ -6,6 +6,24 @@ import { jsonSchemaToZod } from 'json-schema-to-zod';
 
 const contracts = [
   {
+    file: 'knowledge_note.json',
+    output: 'knowledge-note.schema.ts',
+    schema: 'knowledgeNoteGeneratedSchema',
+    type: 'KnowledgeNote',
+  },
+  {
+    file: 'knowledge_link.json',
+    output: 'knowledge-link.schema.ts',
+    schema: 'knowledgeLinkGeneratedSchema',
+    type: 'KnowledgeLink',
+  },
+  {
+    file: 'knowledge_snapshot.json',
+    output: 'knowledge-snapshot.schema.ts',
+    schema: 'knowledgeSnapshotGeneratedSchema',
+    type: 'KnowledgeSnapshot',
+  },
+  {
     file: 'attention_evidence_inspection.json',
     output: 'attention-evidence-inspection.schema.ts',
     schema: 'attentionEvidenceInspectionGeneratedSchema',

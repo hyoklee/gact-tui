@@ -46,6 +46,8 @@ import { useComposerDraft } from '@/hooks/use-composer-draft';
 import { useAddToChatSelectionAction } from '@/hooks/use-add-to-chat-selection-action';
 import { useReferenceThisSelectionAction } from '@/hooks/use-reference-this-selection-action';
 import { useWorkbenchNavigation } from '@/hooks/use-workbench-navigation';
+import { useKnowledgeAttachment } from '@/hooks/use-knowledge-attachment';
+import { useWorkspaceResourceMap } from '@/hooks/use-workspace-resource-map';
 import { useRequestedWorkflow } from '@/hooks/use-requested-workflow';
 import { useContextTargetSelection } from '@/hooks/use-context-target-selection';
 import { useWorkspaceNavigationActions } from '@/hooks/use-workspace-navigation-actions';
@@ -67,6 +69,7 @@ export function WorkspacePage() {
   const repository = useRepository();
   const a2uiCatalog = useA2uiCatalogRegistry(sessionId);
   const composerDraft = useComposerDraft(sessionId, { persist: true, endpoint: settings.endpoint });
+  useKnowledgeAttachment(workspaceId, composerDraft);
   const [composerFocusKey, setComposerFocusKey] = useState(0);
   const focusComposerForAnswer = useCallback(() => setComposerFocusKey((key) => key + 1), []);
   useAddToChatSelectionAction(composerDraft, focusComposerForAnswer);
@@ -192,13 +195,7 @@ export function WorkspacePage() {
     workspace: activeWorkspace?.display_name,
   });
   useRequestedWorkflow(searchParams.get('workflow'), tools, openWorkflow);
-  const workspaceResourceEntities = useMemo(
-    () =>
-      Object.fromEntries(
-        (workspaceResources.data ?? []).map((resource) => [resource.id, resource]),
-      ),
-    [workspaceResources.data],
-  );
+  const workspaceResourceEntities = useWorkspaceResourceMap(workspaceResources.data);
   const openComposerReference = useCallback(
     async (reference: WorkspaceReference) => {
       await navigateComposerReferenceOrToast({

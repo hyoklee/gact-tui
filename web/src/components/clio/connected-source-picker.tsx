@@ -1,5 +1,6 @@
 import { vocab } from '@/lib/brand-vocabulary';
 import { connectionScope } from '@/lib/connection-scope';
+import { openKnowledge } from '@/lib/knowledge-navigation';
 import { connectionIsLocal } from '@/lib/connection';
 import { queryKeys } from '@/lib/query-keys';
 import type { ConnectedSourceState, SourceProvider, WorkspaceReference } from '@clio/core/v3';
@@ -350,6 +351,10 @@ export function ConnectedSourceContents({
             setProvider(undefined);
             setEditing(undefined);
             onChanged?.();
+            if (connected.source_kind === 'knowledge') {
+              openKnowledge(connectionScope(settings), workspaceId, connected);
+              onDiscard();
+            }
           }}
         />
       </>
@@ -358,6 +363,16 @@ export function ConnectedSourceContents({
     return (
       <>
         {toolbar(source)}
+        {source.source_kind === 'knowledge' && source.connected && (
+          <Button
+            onClick={() => {
+              openKnowledge(connectionScope(settings), workspaceId, source);
+              onDiscard();
+            }}
+          >
+            Open knowledge
+          </Button>
+        )}
         <ConnectedSourceDetail
           key={source.id}
           workspaceId={workspaceId}
@@ -442,7 +457,9 @@ export function ConnectedSourceContents({
                         {row.id === 'local' ? `Use a folder on ${hostLabel}` : row.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {row.id === 'local' ? (
+                        {row.id === 'obsidian' ? (
+                          'Local vault or Headless Sync copy'
+                        ) : row.id === 'local' ? (
                           'Choose data already on this machine'
                         ) : row.authentication === 'browser' ? (
                           row.authenticated ? (

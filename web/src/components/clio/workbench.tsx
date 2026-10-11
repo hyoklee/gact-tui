@@ -91,6 +91,7 @@ export interface ClioWorkbenchProps {
 }
 
 export type ClioWorkbenchOpenRequest =
+  | { kind: 'knowledge'; sourceId: string; label: string }
   | { kind: 'workspace-file'; path: string }
   | { kind: 'diff'; diff: SessionDiff }
   | { kind: 'artifact'; artifact: ArtifactEntity }
@@ -181,6 +182,7 @@ const canvasResourceTabs = {
 } satisfies Record<CanvasResourceKind, WorkbenchTab>;
 
 const workbenchTabIcons = {
+  knowledge: BoxesIcon,
   work: ActivityIcon,
   session: ActivityIcon,
   files: FolderIcon,
@@ -336,6 +338,15 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
     const openRequest = useCallback(
       (request: ClioWorkbenchOpenRequest) => {
         switch (request.kind) {
+          case 'knowledge':
+            openTab({
+              id: `knowledge:${request.sourceId}`,
+              kind: 'knowledge',
+              sourceId: request.sourceId,
+              label: `${request.label} · Knowledge`,
+              workspaceId,
+            });
+            return;
           case 'workspace-file':
             openTab({
               id: `workspace-file:${request.path}`,
