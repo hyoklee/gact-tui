@@ -56,6 +56,9 @@ export interface ClioConversationProps {
   onActionCardAction?: (action: ActionCardAction) => void | Promise<unknown>;
   onForkFromMessage?: (messageId: string) => void | Promise<unknown>;
   forkingMessageId?: string;
+  markedMessageIds?: ReadonlySet<string>;
+  markingMessageId?: string;
+  onMarkMessage?: (messageId: string, marked: boolean) => Promise<void>;
   onRewindToMessage?: (messageId: string) => void | Promise<unknown>;
   rewindingMessageId?: string;
   onRetryMessage?: (messageId: string) => void | Promise<unknown>;

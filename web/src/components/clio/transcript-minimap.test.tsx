@@ -65,8 +65,32 @@ function manyMessages(count: number): Message[] {
 }
 
 describe('ClioTranscriptMinimap', () => {
-  // Generous budget: this is the first assertion in the file that waits for the
-  // code-split markdown chunk to load.
+  it('marks through a hover preview without jumping, and jumps to the original index in the marked list', async () => {
+    const user = userEvent.setup();
+    const onJump = vi.fn();
+    const onMarkMessage = vi.fn().mockResolvedValue(undefined);
+    const props = {
+      activeIndex: 0,
+      messages: manyMessages(5),
+      onJump,
+      onMarkMessage,
+      visible: true,
+    };
+    const { rerender } = render(<ClioTranscriptMinimap {...props} />);
+    await user.hover(screen.getByRole('button', { name: 'Jump to user message 4' }));
+    const preview = await screen.findByRole('region', { name: 'user message 4 preview' });
+    await user.click(within(preview).getByRole('button', { name: 'Mark message' }));
+    expect(onMarkMessage).toHaveBeenCalledWith('message_3', true);
+    expect(onJump).not.toHaveBeenCalled();
+    rerender(<ClioTranscriptMinimap {...props} markedMessageIds={new Set(['message_3'])} />);
+    await user.unhover(preview);
+    await user.click(screen.getByRole('button', { name: 'Open marked messages (1)' }));
+    const list = within(screen.getByRole('dialog', { name: 'Marked messages' }));
+    expect(list.queryByRole('button', { name: 'Jump to user message 1' })).not.toBeInTheDocument();
+    await user.click(list.getByRole('button', { name: 'Jump to user message 4' }));
+    expect(onJump).toHaveBeenCalledWith(3);
+  });
+
   it('uses a compact outline on narrow conversations', { timeout: 20_000 }, async () => {
     const user = userEvent.setup();
     const onJump = vi.fn();
@@ -78,8 +102,8 @@ describe('ClioTranscriptMinimap', () => {
     const outline = within(screen.getByRole('dialog', { name: 'Transcript outline' }));
     expect(
       await outline.findByText(
-        'three stations',
-        { selector: '[data-streamdown="strong"]' },
+        'Compare the three stations with the complete provenance record.',
+        { selector: '.font-semibold .truncate' },
         { timeout: 15_000 },
       ),
     ).toBeVisible();
@@ -98,7 +122,6 @@ describe('ClioTranscriptMinimap', () => {
     expect(screen.queryByRole('dialog', { name: 'Transcript outline' })).not.toBeInTheDocument();
   });
 
-  // This case also runs alone during focused review, so allow the cold markdown chunk to load.
   it(
     'offers one landmark per message without repeating transcript prose in the rail',
     { timeout: 20_000 },
@@ -125,8 +148,8 @@ describe('ClioTranscriptMinimap', () => {
       await user.hover(inactiveLandmark);
       expect(
         await screen.findByText(
-          'three stations',
-          { selector: '[data-streamdown="strong"]' },
+          'Compare the three stations with the complete provenance record.',
+          { selector: '.font-semibold' },
           { timeout: 15_000 },
         ),
       ).toBeVisible();

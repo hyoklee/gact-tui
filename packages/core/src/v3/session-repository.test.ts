@@ -3,6 +3,30 @@ import { ClioRepository } from './repository.js';
 import { RecordingTransport } from './recording-transport.test-helper.js';
 
 describe('ClioRepository session contract', () => {
+  it('sends per-message mark deltas alongside other metadata and preserves returned marks', async () => {
+    const transport = new RecordingTransport([
+      {
+        id: 's',
+        workspace_id: 'ws',
+        title: 'Review',
+        state: 'completed',
+        created_at: '',
+        updated_at: '',
+        metadata: { message_marks: { m: true } },
+      },
+    ]);
+    const repository = new ClioRepository(transport);
+    const session = await repository.updateSession('s', {
+      pinned: true,
+      message_marks: { m: true, old: false },
+    });
+    expect(transport.requests[0]).toMatchObject({
+      method: 'PATCH',
+      path: '/v1/sessions/s',
+      body: { metadata: { pinned: true, message_marks: { m: true, old: false } } },
+    });
+    expect(session.metadata?.message_marks).toEqual({ m: true });
+  });
   it('reads one child with a workspace guard and decodes its current route', async () => {
     const transport = new RecordingTransport([
       {

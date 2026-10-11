@@ -1,4 +1,5 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render as renderUi, screen } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Artifact, A2UISurface, PendingCompaction } from '@clio/core/v3';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +10,7 @@ const mocks = vi.hoisted(() => ({
     compactions: {} as Record<string, PendingCompaction>,
     infrastructure: {},
     messages: {},
+    sessions: {},
     subagents: {},
     surfaces: {},
     tasks: {},
@@ -77,6 +79,14 @@ import {
   WorkspaceLiveObservabilityDock,
   WorkspaceLiveObservabilityView,
 } from './workspace-live-projections';
+
+function render(ui: ReactElement) {
+  return renderUi(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+    ),
+  });
+}
 
 describe('WorkspaceLiveConversation', () => {
   it('passes the active session identity to the compact work inventory', () => {

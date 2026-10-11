@@ -357,6 +357,9 @@ function ConversationBody({
             activeIndex={activeMessageIndex}
             attention={entities.attentionData}
             messages={messages}
+            markedMessageIds={entities.markedMessageIds}
+            markingMessageId={entities.markingMessageId}
+            onMarkMessage={entities.onMarkMessage}
             onJump={jumpToMessage}
             visible={minimapVisible}
             maxMarkerWidth={minimapMarkerWidth}
