@@ -124,3 +124,15 @@ it('shows index and reader failures without fabricating note contents', async ()
   expect(await screen.findByRole('alert')).toHaveTextContent('Source disconnected');
   expect(screen.queryByRole('article')).not.toBeInTheDocument();
 });
+
+it('recovers source information and the reader after a service reconnect', async () => {
+  repository.connectedSources.mockRejectedValueOnce(new Error('Service disconnected'));
+  renderView();
+  const user = userEvent.setup();
+  expect(await screen.findByRole('alert')).toHaveTextContent('Service disconnected');
+  await user.click(screen.getByRole('button', { name: 'Graph a.md' }));
+  expect(await screen.findByText('Content of a.md')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Refresh' }));
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  expect(screen.getByText('Content of a.md')).toBeInTheDocument();
+});

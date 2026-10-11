@@ -1,6 +1,6 @@
 import type { KnowledgeSnapshot } from '@clio/core/v3';
 import { graphlib, layout } from '@dagrejs/dagre';
-import { Background, Controls, ReactFlow, type Edge, type Node } from '@xyflow/react';
+import { Background, Controls, Position, ReactFlow, type Edge, type Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useMemo } from 'react';
 
@@ -37,6 +37,8 @@ export function KnowledgeGraph({
         data: { label: note.title },
         position: { x: position.x - 90, y: position.y - 24 },
         selected: selected === note.path,
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
         ariaLabel: `Open ${note.path}`,
         style: {
           width: 180,
@@ -65,7 +67,10 @@ export function KnowledgeGraph({
         proOptions={{ hideAttribution: true }}
       >
         <Background color="var(--border)" />
-        <Controls showInteractive={false} />
+        <Controls
+          showInteractive={false}
+          className="[&>button]:border-border [&>button]:bg-background [&>button]:text-foreground [&>button:hover]:bg-muted"
+        />
       </ReactFlow>
     </div>
   );

@@ -99,8 +99,10 @@ export function KnowledgeSourceView({
         <Button
           size="sm"
           variant="outline"
-          onClick={() => {
-            void snapshot.refetch();
+          onClick={async () => {
+            await Promise.all([snapshot.refetch(), sources.refetch()]);
+            if (selected) await note.refetch();
+            if (source?.connection === 'headless_sync') await sync.refetch();
           }}
         >
           Refresh
@@ -229,7 +231,9 @@ export function KnowledgeSourceView({
               {note.data && (
                 <>
                   <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <h3 className="min-w-0 flex-1 break-all font-medium">{note.data.note.title}</h3>
+                    <h3 className="w-full min-w-0 break-words font-medium @3xl:w-auto @3xl:flex-1">
+                      {note.data.note.title}
+                    </h3>
                     <Button
                       size="sm"
                       variant="outline"
