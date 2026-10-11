@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sessionMetadataPatch, type SessionUpdateInput } from './session-metadata-patch.js';
 import { agentTaskRecordSchema } from './agent-task-domain.js';
 import type {
   Artifact,
@@ -221,17 +222,7 @@ export class ClioRepository extends TaskRepository {
 
   public updateSession(
     sessionId: string,
-    input: {
-      title?: string;
-      pinned?: boolean;
-      archived?: boolean;
-      mode?: Session['mode'];
-      edit_mode?: Session['edit_mode'];
-      routing_mode?: Session['routing_mode'];
-      approval_mode?: Session['approval_mode'];
-      provider_id?: string;
-      model_id?: string;
-    },
+    input: SessionUpdateInput,
     signal?: AbortSignal,
   ): Promise<Session> {
     return this.transport.request({
@@ -239,7 +230,7 @@ export class ClioRepository extends TaskRepository {
       path: `/v1/sessions/${encodeURIComponent(sessionId)}`,
       body: {
         ...(input.title === undefined ? {} : { title: input.title }),
-        ...(input.pinned === undefined ? {} : { metadata: { pinned: input.pinned } }),
+        ...sessionMetadataPatch(input),
         ...(input.archived === undefined ? {} : { archived: input.archived }),
         ...(input.mode === undefined ? {} : { mode: input.mode }),
         ...(input.edit_mode === undefined ? {} : { edit_mode: input.edit_mode }),
