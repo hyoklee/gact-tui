@@ -74,6 +74,12 @@ it('requires confirmation before creating a linked successor', async () => {
   expect(screen.getByRole('alertdialog')).toHaveTextContent(
     'Accepted operations will not be replayed',
   );
+  expect(screen.getByRole('alertdialog')).toHaveTextContent(task.title);
+  expect(screen.queryByRole('region', { name: 'Task assignment' })).toBeNull();
+  await userEvent.click(screen.getByRole('button', { name: 'View assignment' }));
+  expect(screen.getByRole('region', { name: 'Task assignment' }).textContent).toBe(
+    task.description,
+  );
   await userEvent.click(screen.getByRole('button', { name: 'Keep this run' }));
   expect(control).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole('button', { name: `restart Subagent: ${task.title}` }));

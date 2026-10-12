@@ -1,8 +1,9 @@
 import type { AsyncProcess, SubagentRun } from '@clio/core/v3';
-import { PauseIcon, PlayIcon } from 'lucide-react';
+import { ChevronRightIcon, PauseIcon, PlayIcon } from 'lucide-react';
 import { CloseIcon, RetryIcon } from '@/lib/icon-vocabulary';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -181,22 +182,14 @@ export function AsyncTaskList({
         <AlertDialogContent layer="task-confirmation" className="flex flex-col overflow-hidden">
           <AlertDialogHeader className="shrink-0">
             <AlertDialogTitle>Cancel this task?</AlertDialogTitle>
+            <p className="text-sm font-medium [overflow-wrap:anywhere]">{selected?.title}</p>
             <AlertDialogDescription>
               {selected?.task_kind === 'Subagent' || selected?.kind === 'agent'
                 ? 'This also cancels all descendant agents, downloads and shell processes.'
                 : 'Cancellation is requested from its owner and may take time to finish.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div
-            role="region"
-            aria-label="Task assignment"
-            tabIndex={0}
-            className="min-h-0 max-h-[50dvh] overflow-y-auto rounded-md border p-2"
-          >
-            <p className="break-words text-sm [overflow-wrap:anywhere]">
-              {selected?.description || selected?.title}
-            </p>
-          </div>
+          <TaskAssignmentDisclosure assignment={selected?.description || selected?.title} />
           <AlertDialogFooter className="shrink-0">
             <AlertDialogCancel>Keep running</AlertDialogCancel>
             <AlertDialogAction onClick={() => void confirm()}>Cancel task</AlertDialogAction>
@@ -212,21 +205,13 @@ export function AsyncTaskList({
         <AlertDialogContent layer="task-confirmation" className="flex flex-col overflow-hidden">
           <AlertDialogHeader className="shrink-0">
             <AlertDialogTitle>Restart this subagent?</AlertDialogTitle>
+            <p className="text-sm font-medium [overflow-wrap:anywhere]">{restart?.title}</p>
             <AlertDialogDescription>
               Create a linked new run with retained context. Accepted operations will not be
               replayed.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div
-            role="region"
-            aria-label="Task assignment"
-            tabIndex={0}
-            className="min-h-0 max-h-[50dvh] overflow-y-auto rounded-md border p-2"
-          >
-            <p className="break-words text-sm [overflow-wrap:anywhere]">
-              {restart?.description || restart?.title}
-            </p>
-          </div>
+          <TaskAssignmentDisclosure assignment={restart?.description || restart?.title} />
           <AlertDialogFooter className="shrink-0">
             <AlertDialogCancel>Keep this run</AlertDialogCancel>
             <AlertDialogAction
@@ -240,5 +225,32 @@ export function AsyncTaskList({
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+/** Keep confirmation readable while retaining the complete original assignment. */
+function TaskAssignmentDisclosure({ assignment }: { assignment?: string }) {
+  return (
+    <Collapsible className="min-h-0 overflow-y-auto">
+      <CollapsibleTrigger asChild>
+        <Button variant="ghost" size="sm" className="group/assignment px-0 text-muted-foreground">
+          <ChevronRightIcon
+            aria-hidden="true"
+            className="size-3.5 transition-transform group-data-[state=open]/assignment:rotate-90"
+          />
+          View assignment
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div
+          role="region"
+          aria-label="Task assignment"
+          tabIndex={0}
+          className="mt-2 max-h-[35dvh] overflow-y-auto text-sm whitespace-pre-wrap [overflow-wrap:anywhere]"
+        >
+          {assignment}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

@@ -149,6 +149,9 @@ it('reports cancellation failure and permits a deliberate retry without expandin
   render(<AsyncTaskList processes={[task]} onCancelTask={cancel} />);
   for (const attempt of [1, 2]) {
     await user.click(screen.getByRole('button', { name: 'Cancel Subagent: Worker #1' }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(task.title);
+    expect(screen.queryByRole('region', { name: 'Task assignment' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'View assignment' }));
     expect(
       within(screen.getByRole('alertdialog')).getByRole('region', { name: 'Task assignment' })
         .textContent,

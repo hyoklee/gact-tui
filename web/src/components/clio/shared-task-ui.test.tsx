@@ -73,6 +73,9 @@ it.each(['MCP', 'Subagent'] as const)(
     );
     const name = `Cancel ${kind}: ${task.title}`;
     await user.click(screen.getByRole('button', { name }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(task.title);
+    expect(screen.queryByRole('region', { name: 'Task assignment' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'View assignment' }));
     expect(screen.getByRole('region', { name: 'Task assignment' })).toHaveTextContent(
       task.description!,
     );
@@ -241,6 +244,9 @@ it.each([
       'all descendant agents, downloads and shell processes',
     );
     expect(cancel).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(task.title);
+    expect(screen.queryByRole('region', { name: 'Task assignment' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'View assignment' }));
     expect(screen.getByRole('region', { name: 'Task assignment' }).textContent).toBe(description);
     await user.click(screen.getByRole('button', { name: 'Keep running' }));
     expect(cancel).not.toHaveBeenCalled();
