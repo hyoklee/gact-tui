@@ -356,9 +356,8 @@ function SpotterWatcherLine({
       type="button"
     >
       <ShieldCheckIcon aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
-      <span className="truncate">
-        SPOTTER review started · {busy ? 'reviewing this session' : 'watching this session'}
-      </span>
+      <span className="shrink-0 text-foreground">SPOTTER review started</span>
+      <span className="truncate">{busy ? 'reviewing this session' : 'watching this session'}</span>
     </button>
   );
 }
