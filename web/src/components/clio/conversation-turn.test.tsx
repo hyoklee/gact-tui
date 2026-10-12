@@ -1,7 +1,7 @@
 import type { ClioRepository, PendingInteraction, Task, ToolInvocation } from '@clio/core/v3';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter } from 'react-router-dom';
 // The plan review renders Markdown through a React.lazy boundary. Importing the
 // Markdown module graph (streamdown + math + cjk plugins) here loads it while the
 // file is collected, which has no timeout, so the lazy boundary resolves from the
