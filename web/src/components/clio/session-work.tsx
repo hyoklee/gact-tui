@@ -198,7 +198,7 @@ function WorkSection({
         aria-label={title}
         className={cn(
           'group/work-section flex min-h-0 min-w-0 flex-col border-b last:border-b-0',
-          hasContent && 'data-[state=open]:flex-1',
+          hasContent && 'shrink-0',
         )}
       >
         {/* The WAI-ARIA disclosure pattern nests an accordion trigger in a
@@ -221,11 +221,11 @@ function WorkSection({
             </Button>
           </CollapsibleTrigger>
         </h3>
-        <CollapsibleContent className="min-h-0 flex-1 overflow-hidden">
+        <CollapsibleContent className="min-h-0 overflow-hidden">
           <ScrollArea
-            className="h-full min-h-0"
+            className="max-h-[32rem] min-h-0"
             data-slot="work-section-scroll"
-            viewportProps={{ className: 'pr-3' }}
+            viewportProps={{ className: 'max-h-[32rem] pr-3' }}
           >
             <div className="flex min-w-0 flex-col gap-2 pb-3">{children}</div>
           </ScrollArea>
@@ -381,7 +381,7 @@ export function SessionWorkView({ sessionId }: { sessionId: string }) {
   const activeScheduleCount = schedules.data?.schedules.length ?? 0;
   return (
     <div
-      className="flex h-full min-h-0 min-w-0 flex-col px-4 text-sm leading-6 [overflow-wrap:anywhere]"
+      className="flex h-full min-h-0 min-w-0 flex-col overflow-y-auto px-4 text-sm leading-6 [overflow-wrap:anywhere]"
       aria-label="Session work"
     >
       <WorkSection
