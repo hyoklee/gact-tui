@@ -34,7 +34,7 @@ export function EvidenceSection({
           </span>
         </span>
       </AccordionTrigger>
-      <AccordionContent>
+      <AccordionContent className="h-auto">
         <div
           className={
             compact
