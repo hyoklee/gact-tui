@@ -1,7 +1,7 @@
 import type { AgentBlueprintReference, Session } from '@clio/core/v3';
 import { ArrowLeftIcon, GitBranchIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { showsBaseAgent } from '@/lib/session-state';
+import { canForkSession, showsBaseAgent } from '@/lib/session-state';
 import { inTauri } from '@/lib/transport/tauri-runtime';
 import { ClioSessionActions } from './session-actions';
 import { ClioDownloadsButton } from './downloads-button';
@@ -94,7 +94,7 @@ export function ClioSessionContextBar({
         disabled={!session || actionsPending}
         management={management}
         onCompact={onCompact}
-        onFork={onFork}
+        onFork={canForkSession(session) ? onFork : undefined}
         onOpenSystemTerminal={onOpenSystemTerminal}
         onShare={onShare}
         onUndo={onUndo}

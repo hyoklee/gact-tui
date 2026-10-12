@@ -86,6 +86,7 @@ function QuestionDialogBody({
       <QuestionResponse
         interaction={interaction}
         showOwner={false}
+        showFullPrompt
         disabled={pending}
         responseError={error}
         onResponse={async (row, response) => {

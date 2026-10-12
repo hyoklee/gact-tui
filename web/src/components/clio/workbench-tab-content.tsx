@@ -21,6 +21,9 @@ import {
   FileBrowser,
 } from './workbench-resource-browser';
 import { WorkspaceTerminalPanel } from './workspace-terminal-panel';
+const KnowledgeSourceView = lazy(() =>
+  import('./knowledge-source-view').then((module) => ({ default: module.KnowledgeSourceView })),
+);
 import { assertNever, fileName, loadResourceViewers, type WorkbenchTab } from './workbench-shared';
 
 const ArtifactView = lazy(() =>
@@ -119,6 +122,12 @@ export function WorkbenchTabContent({
   switch (tab.kind) {
     case 'work':
       return sessionId ? <SessionWorkView key={sessionId} sessionId={sessionId} /> : sessionView;
+    case 'knowledge':
+      return (
+        <Suspense fallback={<CanvasLoading label="Loading knowledge" />}>
+          <KnowledgeSourceView workspaceId={workspaceId} sourceId={tab.sourceId} />
+        </Suspense>
+      );
     case 'session':
       return sessionView;
     case 'files':

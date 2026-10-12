@@ -14,6 +14,7 @@ import { ClioCompactionProgress } from './conversation-summarization';
 import { ClioTurnPreparation } from './turn-preparation';
 import { placeCompactions } from './conversation-compaction-placement';
 import { conversationModelBoundaries } from './conversation-model-boundaries';
+import { ConversationForkCheckpoint } from './conversation-fork-checkpoint';
 import { OpenQuestionsTracker } from './open-questions-tracker';
 import { ClioTranscriptMinimap } from './transcript-minimap';
 import { useAttentionHighlights } from '@/hooks/use-attention-highlights';
@@ -49,7 +50,7 @@ import { placeDeliveredFeedback } from './conversation-feedback';
 export function ClioConversation(props: ClioConversationProps) {
   return (
     <PresentationNavigation.Provider value={props}>
-      <TranscriptDisclosures sessionId={props.messages[0]?.session_id}>
+      <TranscriptDisclosures sessionId={props.sessionId ?? props.messages[0]?.session_id}>
         <ConversationBody {...props} />
       </TranscriptDisclosures>
     </PresentationNavigation.Provider>
@@ -357,6 +358,9 @@ function ConversationBody({
             activeIndex={activeMessageIndex}
             attention={entities.attentionData}
             messages={messages}
+            markedMessageIds={entities.markedMessageIds}
+            markingMessageId={entities.markingMessageId}
+            onMarkMessage={entities.onMarkMessage}
             onJump={jumpToMessage}
             visible={minimapVisible}
             maxMarkerWidth={minimapMarkerWidth}
@@ -452,12 +456,22 @@ function ConversationBody({
             </Alert>
           </div>
         ) : messages.length === 0 ? (
-          <ConversationEmptyState
-            className="h-full"
-            description="Send a message to begin. Live reasoning, tools, approvals, and artifacts will stay in causal order here."
-            icon={<GitBranchIcon className="size-7" />}
-            title="This session has no messages"
-          />
+          <>
+            {entities.forkOrigin?.message_count === 0 ? (
+              <div className="mx-auto max-w-4xl px-5 lg:px-8">
+                <ConversationForkCheckpoint
+                  origin={entities.forkOrigin}
+                  workspaceId={entities.workspaceId}
+                />
+              </div>
+            ) : null}
+            <ConversationEmptyState
+              className="h-full"
+              description="Send a message to begin. Live reasoning, tools, approvals, and artifacts will stay in causal order here."
+              icon={<GitBranchIcon className="size-7" />}
+              title="This session has no messages"
+            />
+          </>
         ) : (
           <div
             ref={(node) => {

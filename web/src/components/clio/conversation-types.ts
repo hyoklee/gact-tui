@@ -20,6 +20,7 @@ import type { McpAppResponseActivityData } from './mcp-app-surface';
 import type { SubagentOpenTarget } from './subagent-card';
 import type { TurnPreparationProps } from './turn-preparation';
 import type { ConversationModelBoundary } from './conversation-model-boundaries';
+import type { ConversationForkOrigin } from './conversation-fork-origin';
 
 export interface ClioConversationProps {
   messages: readonly DomainMessage[];
@@ -33,6 +34,7 @@ export interface ClioConversationProps {
    */
   workspaceId?: string;
   sessionId?: string;
+  forkOrigin?: ConversationForkOrigin;
   tools: Record<string, ToolInvocation>;
   tasks: Record<string, DomainTask>;
   subagents: Record<string, SubagentRun>;
@@ -56,6 +58,9 @@ export interface ClioConversationProps {
   onActionCardAction?: (action: ActionCardAction) => void | Promise<unknown>;
   onForkFromMessage?: (messageId: string) => void | Promise<unknown>;
   forkingMessageId?: string;
+  markedMessageIds?: ReadonlySet<string>;
+  markingMessageId?: string;
+  onMarkMessage?: (messageId: string, marked: boolean) => Promise<void>;
   onRewindToMessage?: (messageId: string) => void | Promise<unknown>;
   rewindingMessageId?: string;
   onRetryMessage?: (messageId: string) => void | Promise<unknown>;

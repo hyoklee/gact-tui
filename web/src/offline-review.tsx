@@ -48,7 +48,7 @@ setWorkerUrl(
   ),
 );
 interface TranscriptRow {
-  session: { id: string; title: string };
+  session: { id: string; title: string; metadata?: Record<string, unknown> };
   messages: { id: string; role: string; created_at?: string; parts: RecordedPart[] }[];
   tool_records: RecordedTool[];
   loaded_skills: { event_id: string; skill_id?: string; file?: string; content?: string }[];
@@ -185,6 +185,7 @@ export function Review() {
             <ArchiveConversation
               key={row.session.id}
               sessionId={row.session.id}
+              metadata={row.session.metadata}
               view={data.transcript_views[row.session.id]}
               snapshot={data.snapshot}
               onOpenArtifact={setOpened}

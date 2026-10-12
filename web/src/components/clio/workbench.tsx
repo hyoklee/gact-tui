@@ -91,6 +91,7 @@ export interface ClioWorkbenchProps {
 }
 
 export type ClioWorkbenchOpenRequest =
+  | { kind: 'knowledge'; sourceId: string; label: string }
   | { kind: 'workspace-file'; path: string }
   | { kind: 'diff'; diff: SessionDiff }
   | { kind: 'artifact'; artifact: ArtifactEntity }
@@ -141,7 +142,15 @@ function restoredWorkbenchState(
     if (!parsed || typeof parsed !== 'object')
       return { tabs: [defaultTab], activeTabId: defaultTab.id };
     const record = parsed as Record<string, unknown>;
-    const storedTabs = Array.isArray(record.tabs) ? record.tabs.filter(isWorkbenchTab) : [];
+    const storedTabs = Array.isArray(record.tabs)
+      ? record.tabs
+          .filter(isWorkbenchTab)
+          .map((tab) =>
+            tab.kind === 'knowledge'
+              ? { ...tab, label: tab.label.replace(/ · Knowledge$/, '') }
+              : tab,
+          )
+      : [];
     const tabs = storedTabs.length ? storedTabs : [defaultTab];
     const requestedActive = typeof record.activeTabId === 'string' ? record.activeTabId : '';
     return {
@@ -181,6 +190,7 @@ const canvasResourceTabs = {
 } satisfies Record<CanvasResourceKind, WorkbenchTab>;
 
 const workbenchTabIcons = {
+  knowledge: BoxesIcon,
   work: ActivityIcon,
   session: ActivityIcon,
   files: FolderIcon,
@@ -336,6 +346,15 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
     const openRequest = useCallback(
       (request: ClioWorkbenchOpenRequest) => {
         switch (request.kind) {
+          case 'knowledge':
+            openTab({
+              id: `knowledge:${request.sourceId}`,
+              kind: 'knowledge',
+              sourceId: request.sourceId,
+              label: request.label,
+              workspaceId,
+            });
+            return;
           case 'workspace-file':
             openTab({
               id: `workspace-file:${request.path}`,

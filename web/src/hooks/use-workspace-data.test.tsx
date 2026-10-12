@@ -79,7 +79,10 @@ vi.mock('./use-session-observability', () => ({
   useSessionObservability: () => ({ processes: { data: [] }, diffs: { data: [] } }),
 }));
 vi.mock('./use-execution-provenance', () => ({
-  useExecutionProvenance: () => ({ data: undefined }),
+  useExecutionProvenance: () => ({
+    execution: { data: undefined, isFetching: false },
+    providers: { isPending: false },
+  }),
 }));
 vi.mock('@/store/live-store', () => {
   const state = {

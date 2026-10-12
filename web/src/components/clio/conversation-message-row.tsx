@@ -2,6 +2,7 @@ import type { PendingInteraction, Message as DomainMessage } from '@clio/core/v3
 import {
   AlertTriangleIcon,
   BotIcon,
+  BookmarkIcon,
   CopyIcon,
   Globe2Icon,
   LoaderCircleIcon,
@@ -39,9 +40,12 @@ import { TranscriptContentPicker } from './transcript-content-picker';
 import { useAttentionEvidenceTarget } from '@/hooks/use-attention-evidence-target';
 import { MessageCompletionFooter } from './message-completion-footer';
 import { ResponseRating } from './response-rating';
+import { MessageMarkButton } from './message-mark-button';
 import { messageToolCallCounts } from './message-tool-call-counts';
 import { ConversationModelCheckpoint } from './conversation-model-boundary';
 import { modelBoundariesEqual } from './conversation-model-boundaries';
+import { ConversationForkCheckpoint } from './conversation-fork-checkpoint';
+import { HarnessInjection } from './conversation-harness-injection';
 
 export const ConversationMessageRow = memo(function ConversationMessageRow({
   message,
@@ -157,9 +161,18 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
           )}
         </MessageAction>
       ) : null}
-      <TranscriptContentPicker sessionId={message.session_id} messageId={message.id} />
+      {message.role === 'assistant' ? (
+        <TranscriptContentPicker sessionId={message.session_id} messageId={message.id} />
+      ) : null}
       <ResponseRating message={message} active={active} />
-      <ClioMessageHistoryActions
+      {entities.onMarkMessage ? (
+        <MessageMarkButton
+          marked={entities.markedMessageIds?.has(message.id) ?? false}
+          pending={entities.markingMessageId !== undefined}
+          onMark={(marked) => entities.onMarkMessage!(message.id, marked)}
+        />
+      ) : null}
+      {message.role === 'assistant' ? <ClioMessageHistoryActions
         forking={entities.forkingMessageId === message.id}
         onFork={
           entities.onForkFromMessage ? () => entities.onForkFromMessage?.(message.id) : undefined
@@ -168,7 +181,7 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
           entities.onRewindToMessage ? () => entities.onRewindToMessage?.(message.id) : undefined
         }
         rewinding={entities.rewindingMessageId === message.id}
-      />
+      /> : null}
       <MessageAction
         label="Copy message"
         onClick={() =>
@@ -198,8 +211,21 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
       style={virtualized ? { transform: `translateY(${start ?? 0}px)` } : undefined}
       tabIndex={-1}
     >
+      {entities.forkOrigin?.message_count === 0 && index === 0 ? (
+        <ConversationForkCheckpoint
+          origin={entities.forkOrigin}
+          workspaceId={entities.workspaceId}
+        />
+      ) : null}
       {modelBoundary ? <ConversationModelCheckpoint boundary={modelBoundary} /> : null}
-      <m.div
+      {message.role === 'system' && message.blocks.length > 0 &&
+        message.blocks.every((block) => block.type === 'injection') ? (
+        <div className="py-1">
+          {message.blocks.map((block) => block.type === 'injection' ? (
+            <HarnessInjection block={block} key={block.id} />
+          ) : null)}
+        </div>
+      ) : <m.div
         animate={{ opacity: 1 }}
         initial={{ opacity: recent ? 0 : 1 }}
         transition={{ duration: 0.16 }}
@@ -220,6 +246,13 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
                     ? 'System'
                     : 'Unknown sender'}
             </span>
+            {entities.markedMessageIds?.has(message.id) ? (
+              <BookmarkIcon
+                aria-label="Marked message"
+                className="size-3 text-muted-foreground"
+                fill="currentColor"
+              />
+            ) : null}
             {message.role !== 'assistant' ? (
               <time className="font-mono text-[0.625rem]" dateTime={message.created_at}>
                 {new Date(message.created_at).toLocaleTimeString([], {
@@ -372,7 +405,13 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
             <div className="mt-3">{actions}</div>
           ) : null}
         </Message>
-      </m.div>
+      </m.div>}
+      {entities.forkOrigin?.message_id === message.id ? (
+        <ConversationForkCheckpoint
+          origin={entities.forkOrigin}
+          workspaceId={entities.workspaceId}
+        />
+      ) : null}
     </div>
   );
 }, conversationMessageRowPropsEqual);
@@ -460,6 +499,10 @@ export function conversationMessageRowPropsEqual(
     left.measureElement !== right.measureElement ||
     left.virtualized !== right.virtualized ||
     left.forkingMessageId !== right.forkingMessageId ||
+    left.markingMessageId !== right.markingMessageId ||
+    (left.markedMessageIds?.has(left.message.id) ?? false) !==
+      (right.markedMessageIds?.has(right.message.id) ?? false) ||
+    left.onMarkMessage !== right.onMarkMessage ||
     left.rewindingMessageId !== right.rewindingMessageId ||
     left.retryingMessageId !== right.retryingMessageId ||
     left.cancellingPendingMessageId !== right.cancellingPendingMessageId ||
@@ -474,6 +517,7 @@ export function conversationMessageRowPropsEqual(
     left.mcpAppResponse !== right.mcpAppResponse ||
     left.messageCompactions !== right.messageCompactions ||
     !modelBoundariesEqual(left.modelBoundary, right.modelBoundary) ||
+    left.forkOrigin !== right.forkOrigin ||
     left.attentionData !== right.attentionData ||
     !routedInteractionsEqual(left, right, messageEntityRefs(left.message).tools) ||
     left.onOpenArtifact !== right.onOpenArtifact ||

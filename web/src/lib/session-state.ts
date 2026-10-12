@@ -12,6 +12,18 @@ export function isManagedChildSession(
   return Boolean(session.parent_session_id && !isUserBranch(session));
 }
 
+/** Only independent conversations can create user branches, including legacy roots. */
+export function canForkSession(
+  session: Pick<Session, 'parent_session_id' | 'session_kind'> | undefined,
+): boolean {
+  return Boolean(
+    session &&
+      session.session_kind !== 'agent' &&
+      session.session_kind !== 'lookup' &&
+      !isManagedChildSession(session),
+  );
+}
+
 export function isSessionRunning(state: Session['state']): boolean {
   return state === 'queued' || state === 'running';
 }

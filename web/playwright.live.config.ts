@@ -24,6 +24,7 @@ export default defineConfig({
   forbidOnly: true,
   retries: 0,
   reporter: 'list',
+  outputDir: process.env['CLIO_LIVE_OUTPUT'] ?? './test-results/live',
   timeout: Number.parseInt(process.env['CLIO_LIVE_TEST_TIMEOUT_MS'] ?? '2700000', 10),
   use: {
     baseURL: `http://127.0.0.1:${uiPort}`,
@@ -33,7 +34,7 @@ export default defineConfig({
   webServer: {
     command: `pnpm exec vite --host 127.0.0.1 --port ${uiPort} --strictPort`,
     port: uiPort,
-    reuseExistingServer: false,
+    reuseExistingServer: process.env['CLIO_LIVE_UI_REUSE'] === '1',
     timeout: 120_000,
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],

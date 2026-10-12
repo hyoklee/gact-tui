@@ -20,6 +20,7 @@ import {
 import type { ClioConversationProps } from '@/components/clio/conversation-types';
 import { A2uiReferenceSessionProvider } from '@/lib/a2ui/reference-session';
 import type { ConversationDisplayMode } from '@/providers/conversation-display-provider';
+import { messageMarkIds } from '@/lib/message-marks';
 
 export interface ArchiveTranscriptView {
   messages: unknown[];
@@ -34,17 +35,20 @@ export interface ArchiveTranscriptView {
 /** Render the saved ledger through the same rows, activity and tool UI as CLIO. */
 export function ArchiveConversation({
   sessionId,
+  metadata,
   view,
   snapshot,
   onOpenArtifact,
   onOpenFile,
 }: {
   sessionId: string;
+  metadata?: Record<string, unknown>;
   view: ArchiveTranscriptView;
   snapshot: SessionReviewSnapshot;
   onOpenArtifact: ClioConversationProps['onOpenArtifact'];
   onOpenFile: ClioConversationProps['onOpenFile'];
 }) {
+  const markedMessageIds = useMemo(() => messageMarkIds(metadata), [metadata]);
   const [modes, setModes] = useState<Record<string, ConversationDisplayMode>>({});
   const entities = useMemo(() => {
     const index = <T extends { id: string }>(values: T[]) =>
@@ -99,6 +103,7 @@ export function ArchiveConversation({
             <ConversationMessageRow
               key={message.id}
               {...entities}
+              markedMessageIds={markedMessageIds}
               message={message}
               index={index}
               recent={false}

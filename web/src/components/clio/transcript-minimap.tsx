@@ -1,33 +1,20 @@
 import type { AttentionAvailable, Message } from '@clio/core/v3';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ListTreeIcon } from 'lucide-react';
-import { lazy, Suspense, useLayoutEffect, useRef, useState } from 'react';
+import { BookmarkIcon, ListTreeIcon } from 'lucide-react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { truncate } from '@/lib/format';
 import { handleScrollableRegionKeys } from '@/lib/scrollable-region-keys';
-import { TRANSCRIPT_PREVIEW_TRUNCATE_CHARS } from '@/lib/runtime-limits';
+import {
+  transcriptMessagePreviews,
+  type TranscriptMessagePreview as Preview,
+} from '@/lib/transcript-message-preview';
 import { type AttentionMinimapMark, attentionMinimapMarks } from '@/lib/attention-minimap-marks';
 import { formatSharePercent } from '@/lib/attention-text';
 import { magnifyRows } from '@/lib/minimap-magnify';
 import { cn } from '@/lib/utils';
-
-// Same lazy split the transcript itself uses: a minimap must not pull the
-// markdown renderer into the first paint just to draw landmarks.
-const MarkdownText = lazy(() =>
-  import('@/components/ai-elements/markdown').then((module) => ({ default: module.MarkdownText })),
-);
-
-function PreviewMarkdown({ className, children }: { className?: string; children: string }) {
-  return (
-    <Suspense fallback={<p className={className}>{children}</p>}>
-      <MarkdownText className={className} controls={false} mode="static">
-        {children}
-      </MarkdownText>
-    </Suspense>
-  );
-}
+import { TranscriptMessagePreview } from './transcript-message-preview';
 
 interface ClioTranscriptMinimapProps {
   activeIndex: number;
@@ -38,7 +25,14 @@ interface ClioTranscriptMinimapProps {
   visible: boolean;
   /** Hover length bounded by the conversation's available left margin. */
   maxMarkerWidth?: number;
+  markedMessageIds?: ReadonlySet<string>;
+  markingMessageId?: string;
+  onMarkMessage?: (messageId: string, marked: boolean) => Promise<void>;
 }
+
+type NavigationProps = Omit<ClioTranscriptMinimapProps, 'visible'> & {
+  previews: ReadonlyMap<string, Preview>;
+};
 
 export function ClioTranscriptMinimap({
   activeIndex,
@@ -47,9 +41,19 @@ export function ClioTranscriptMinimap({
   onJump,
   visible,
   maxMarkerWidth = 24,
+  ...marks
 }: ClioTranscriptMinimapProps) {
+  const previews = useMemo(() => transcriptMessagePreviews(messages), [messages]);
   if (!visible) {
-    return <TranscriptOutline activeIndex={activeIndex} messages={messages} onJump={onJump} />;
+    return (
+      <TranscriptOutline
+        activeIndex={activeIndex}
+        messages={messages}
+        onJump={onJump}
+        previews={previews}
+        {...marks}
+      />
+    );
   }
   return (
     <MinimapRail
@@ -58,6 +62,8 @@ export function ClioTranscriptMinimap({
       messages={messages}
       onJump={onJump}
       maxMarkerWidth={maxMarkerWidth}
+      previews={previews}
+      {...marks}
     />
   );
 }
@@ -66,32 +72,64 @@ function TranscriptOutline({
   activeIndex,
   messages,
   onJump,
-}: Pick<ClioTranscriptMinimapProps, 'activeIndex' | 'messages' | 'onJump'>) {
+  previews,
+  markedOnly = false,
+  inRail = false,
+  ...marks
+}: NavigationProps & { markedOnly?: boolean; inRail?: boolean }) {
   const [outlineOpen, setOutlineOpen] = useState(false);
+  const [onlyMarked, setOnlyMarked] = useState(markedOnly);
+  const count = messages.filter((message) => marks.markedMessageIds?.has(message.id)).length;
+  const label = markedOnly ? 'Marked messages' : 'Transcript outline';
   return (
     <Popover open={outlineOpen} onOpenChange={setOutlineOpen}>
       <PopoverTrigger asChild>
         <Button
-          aria-label="Open transcript outline"
-          className="absolute top-2 -left-0.5 z-10 rounded-full"
+          aria-label={markedOnly ? `Open marked messages (${count})` : 'Open transcript outline'}
+          className={cn(
+            'z-10 rounded-full',
+            inRail ? 'mb-1 size-6 shrink-0' : 'absolute top-2 -left-0.5',
+          )}
           size="icon-xs"
           variant="outline"
         >
-          <ListTreeIcon aria-hidden="true" />
+          {markedOnly ? (
+            <BookmarkIcon aria-hidden="true" className="size-3" fill="currentColor" />
+          ) : (
+            <ListTreeIcon aria-hidden="true" />
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        aria-label="Transcript outline"
-        className="h-80 min-h-48 w-80 min-w-64 max-h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] resize overflow-hidden p-2"
+        aria-label={label}
+        className={cn(
+          'flex w-80 min-w-64 max-h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] flex-col resize overflow-hidden p-2',
+          onlyMarked ? 'min-h-24' : 'h-80 min-h-48',
+        )}
+        style={onlyMarked ? { height: Math.min(320, 40 + 72 * count) } : undefined}
         side="right"
       >
-        <p className="shrink-0 px-2 text-xs font-medium text-muted-foreground">
-          Transcript outline
-        </p>
+        <div className="mb-1 flex shrink-0 items-center justify-between px-2">
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          {!markedOnly ? (
+            <Button
+              aria-pressed={onlyMarked}
+              onClick={() => setOnlyMarked(!onlyMarked)}
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs"
+            >
+              Marked ({count})
+            </Button>
+          ) : null}
+        </div>
         <TranscriptOutlineList
           activeIndex={activeIndex}
           messages={messages}
+          previews={previews}
+          onlyMarked={onlyMarked}
+          {...marks}
           onJump={(index) => {
             setOutlineOpen(false);
             onJump(index);
@@ -106,34 +144,46 @@ function TranscriptOutlineList({
   activeIndex,
   messages,
   onJump,
-}: {
-  activeIndex: number;
-  messages: readonly Message[];
-  onJump: (index: number) => void;
-}) {
+  previews,
+  onlyMarked,
+  ...marks
+}: NavigationProps & { onlyMarked: boolean }) {
   const listRef = useRef<HTMLDivElement>(null);
+  const indices = useMemo(
+    () =>
+      messages.flatMap((message, index) =>
+        onlyMarked && !marks.markedMessageIds?.has(message.id) ? [] : [index],
+      ),
+    [messages, onlyMarked, marks.markedMessageIds],
+  );
   // TanStack Virtual intentionally returns non-memoizable functions; this component owns them.
   // oxlint-disable-next-line react/incompatible-library
   const virtualizer = useVirtualizer({
-    count: messages.length,
-    estimateSize: () => 36,
-    getItemKey: (index) => messages[index]?.id ?? index,
+    count: indices.length,
+    estimateSize: () => 72,
+    getItemKey: (index) => messages[indices[index] ?? -1]?.id ?? index,
     getScrollElement: () => listRef.current,
     overscan: 6,
   });
   useLayoutEffect(() => {
-    if (activeIndex < 0) return;
-    virtualizer.scrollToIndex(activeIndex, { align: 'center' });
-  }, [activeIndex, virtualizer]);
+    const position = indices.indexOf(activeIndex);
+    if (position >= 0) virtualizer.scrollToIndex(position, { align: 'center' });
+  }, [activeIndex, indices, virtualizer]);
   return (
     <div
       className="clio-scrollbar min-h-0 flex-1 overflow-y-auto"
       data-slot="transcript-outline-list"
       ref={listRef}
     >
+      {indices.length === 0 ? (
+        <p className="px-2 py-4 text-sm text-muted-foreground">
+          No marked messages yet. Use the bookmark beside a message or in its rail preview.
+        </p>
+      ) : null}
       <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map((row) => {
-          const message = messages[row.index];
+          const index = indices[row.index] ?? -1;
+          const message = messages[index];
           if (!message) return null;
           return (
             <div
@@ -143,10 +193,12 @@ function TranscriptOutlineList({
               style={{ height: row.size, transform: `translateY(${row.start}px)` }}
             >
               <TranscriptOutlineItem
-                active={row.index === activeIndex}
-                index={row.index}
+                active={index === activeIndex}
+                index={index}
                 message={message}
                 onJump={onJump}
+                previews={previews}
+                {...marks}
               />
             </div>
           );
@@ -161,13 +213,18 @@ function TranscriptOutlineItem({
   index,
   message,
   onJump,
-}: {
+  previews,
+  markedMessageIds,
+  markingMessageId,
+  onMarkMessage,
+}: Pick<NavigationProps, 'previews' | 'markedMessageIds' | 'markingMessageId' | 'onMarkMessage'> & {
   active: boolean;
   index: number;
   message: Message;
   onJump: (index: number) => void;
 }) {
-  const preview = messagePreview(message);
+  const preview = previews.get(message.id)!;
+  const marked = markedMessageIds?.has(message.id) ?? false;
   const previewDismissedRef = useRef(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   return (
@@ -179,7 +236,7 @@ function TranscriptOutlineItem({
       open={previewOpen}
       openDelay={120}
     >
-      <div className="grid min-h-8 rounded-md">
+      <div className="grid h-full rounded-md">
         <HoverCardTrigger asChild>
           <Button
             aria-current={active ? 'location' : undefined}
@@ -200,20 +257,30 @@ function TranscriptOutlineItem({
           aria-hidden="true"
           className="pointer-events-none overflow-hidden px-2 py-1.5 [grid-area:1/1]"
         >
-          <PreviewMarkdown className="overflow-hidden text-left text-sm text-ellipsis whitespace-nowrap! [&_*]:m-0 [&_br]:hidden [&_pre]:inline [&>*]:inline">
-            {preview}
-          </PreviewMarkdown>
+          <p className="flex min-w-0 items-center gap-1 text-left text-xs font-semibold">
+            {marked ? <BookmarkIcon className="size-3 shrink-0" fill="currentColor" /> : null}
+            <span className="truncate">{preview.title}</span>
+          </p>
+          {preview.body ? (
+            <p className="line-clamp-2 text-left text-xs leading-4 text-muted-foreground">
+              {preview.body}
+            </p>
+          ) : null}
         </div>
       </div>
       <HoverCardContent
         align="start"
         aria-label={`${message.role} message ${index + 1} preview`}
-        className="max-h-80 w-96 max-w-[calc(100vw-2rem)] overflow-y-auto"
+        className="w-72 max-w-[calc(100vw-2rem)] p-3"
         role="region"
         side="right"
       >
-        <p className="mb-2 text-xs font-medium capitalize text-muted-foreground">{message.role}</p>
-        <PreviewMarkdown className="text-sm leading-5">{preview}</PreviewMarkdown>
+        <TranscriptMessagePreview
+          preview={preview}
+          marked={marked}
+          pending={markingMessageId !== undefined}
+          onMark={onMarkMessage ? (value) => onMarkMessage(message.id, value) : undefined}
+        />
       </HoverCardContent>
     </HoverCard>
   );
@@ -225,7 +292,9 @@ function MinimapRail({
   messages,
   onJump,
   maxMarkerWidth = 24,
-}: Omit<ClioTranscriptMinimapProps, 'visible'>) {
+  previews,
+  ...marks
+}: NavigationProps) {
   const railRef = useRef<HTMLDivElement>(null);
   const [pointerY, setPointerY] = useState<number | null>(null);
   const heat = new Map<number, AttentionMinimapMark>(
@@ -272,6 +341,7 @@ function MinimapRail({
           const look = attention ? heatLook(mark) : landmarkLook(message);
           const restingWidth = look.base * Math.min(1.5, maxMarkerWidth / 24);
           const active = row.index === activeIndex;
+          const marked = marks.markedMessageIds?.has(message.id) ?? false;
           const lift = placed[position]?.lift ?? 0;
           const activeWidth = Math.min(maxMarkerWidth * 0.5, restingWidth * 1.5);
           const baseWidth = active ? Math.max(restingWidth, activeWidth) : restingWidth;
@@ -293,14 +363,19 @@ function MinimapRail({
                   <span
                     className={cn(
                       'rounded-full transition-[width,height,opacity] duration-150 ease-out group-focus-visible:opacity-100',
-                      look.color,
+                      marked && !attention ? 'bg-foreground' : look.color,
+                      marked && 'ring-1 ring-foreground/30',
                     )}
                     data-heat={mark?.heated ? mark.bucket : undefined}
                     data-slot="transcript-minimap-landmark"
+                    data-marked={marked || undefined}
                     style={{
                       height: (active ? 4 : 3) + 2 * lift,
-                      opacity: active ? 1 : look.opacity + (1 - look.opacity) * lift,
-                      width: baseWidth + (maxMarkerWidth - baseWidth) * lift,
+                      opacity: active || marked ? 1 : look.opacity + (1 - look.opacity) * lift,
+                      width: Math.max(
+                        marked ? Math.min(maxMarkerWidth, 15) : 0,
+                        baseWidth + (maxMarkerWidth - baseWidth) * lift,
+                      ),
                     }}
                   />
                 </button>
@@ -308,13 +383,20 @@ function MinimapRail({
               <HoverCardContent
                 align="start"
                 aria-label={`${message.role} message ${row.index + 1} preview`}
-                className="w-72"
+                className="w-72 max-w-[calc(100vw-2rem)] p-3"
                 role="region"
                 side="right"
               >
-                <p className="text-xs font-medium capitalize text-muted-foreground">
-                  {message.role}
-                </p>
+                <TranscriptMessagePreview
+                  preview={previews.get(message.id)!}
+                  marked={marked}
+                  pending={marks.markingMessageId !== undefined}
+                  onMark={
+                    marks.onMarkMessage
+                      ? (value) => marks.onMarkMessage!(message.id, value)
+                      : undefined
+                  }
+                />
                 {mark ? (
                   <p
                     className={cn(
@@ -326,9 +408,6 @@ function MinimapRail({
                     conversation
                   </p>
                 ) : null}
-                <PreviewMarkdown className="mt-1 line-clamp-3 text-sm">
-                  {messagePreview(message)}
-                </PreviewMarkdown>
               </HoverCardContent>
             </HoverCard>
           );
@@ -339,12 +418,23 @@ function MinimapRail({
   return (
     <aside
       aria-label="Transcript minimap"
-      className="absolute inset-y-3 left-1 z-10"
+      className="absolute inset-y-3 left-1 z-10 flex flex-col items-start"
       style={{ width: maxMarkerWidth + 4 }}
     >
+      {messages.some((message) => marks.markedMessageIds?.has(message.id)) ? (
+        <TranscriptOutline
+          activeIndex={activeIndex}
+          messages={messages}
+          onJump={onJump}
+          previews={previews}
+          markedOnly
+          inRail
+          {...marks}
+        />
+      ) : null}
       <div
         aria-label="Browse transcript landmarks"
-        className="h-full overflow-y-auto overscroll-y-contain px-0.5 outline-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="min-h-0 w-full flex-1 overflow-y-auto overscroll-y-contain px-0.5 outline-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         data-slot="transcript-minimap-scroll-area"
         onKeyDown={handleScrollableRegionKeys}
         onWheel={(event) => event.stopPropagation()}
@@ -398,27 +488,4 @@ function landmarkLook(message: Message): LandmarkLook {
     return look('bg-cyan-500', 8);
   }
   return message.role === 'user' ? look('bg-primary', 12) : look('bg-muted-foreground', 10);
-}
-
-/**
- * The landmark preview projects a message down to one short line, so it follows
- * a fallback chain rather than a merge: visible text first, reasoning only when
- * the message has no text at all. Joining both would present the agent's
- * thinking as message content. The string is cut here, before it reaches a
- * markdown renderer, because CSS ellipsis still pays to parse and lay out the
- * whole message.
- */
-function messagePreview(message: Message): string {
-  const preview =
-    collapse(message.blocks.filter((block) => block.type === 'text')) ||
-    collapse(message.blocks.filter((block) => block.type === 'reasoning'));
-  return truncate(preview, TRANSCRIPT_PREVIEW_TRUNCATE_CHARS) || `${message.role} activity`;
-}
-
-function collapse(blocks: readonly { text: string }[]): string {
-  return blocks
-    .map((block) => block.text)
-    .join(' ')
-    .replaceAll(/\s+/gu, ' ')
-    .trim();
 }

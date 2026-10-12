@@ -11,6 +11,26 @@ test.beforeEach(async ({ page }) => {
   }, fixtureEndpoint);
 });
 
+test('hides both user branching controls while viewing a delegated worker', async ({
+  page,
+}, testInfo) => {
+  const response = await page.request.post(`${fixtureEndpoint}/__test/subagent-navigation`);
+  const worker = await response.json();
+  await page.goto(`/workspaces/ws_flat_ndp/sessions/${worker.id}`);
+  const conversation = page.getByRole('log', { name: 'Conversation' });
+  await expect(conversation.getByText('Baseline complete.', { exact: true })).toBeVisible();
+  await conversation.getByText('Baseline complete.', { exact: true }).hover();
+  await expect(page.getByRole('button', { name: 'Branch from here', exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: /Return to parent conversation/ }).first(),
+  ).toBeVisible();
+  await expect(page.getByRole('combobox', { name: /^Ask .+ to investigate/ })).toHaveCount(0);
+  await page.getByRole('button', { name: `Actions for ${worker.title}`, exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: 'Branch into a new session' })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Share read-only link' })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('subagent-actions.png') });
+});
+
 test('branches from a message with a composer, keeps its parent link, and reopens from navigation', async ({
   page,
 }, testInfo) => {

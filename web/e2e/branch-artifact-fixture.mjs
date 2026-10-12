@@ -69,6 +69,26 @@ export function createBranchArtifactFixture({
       return mixed ? records : [];
     },
     async handle(request, response, url) {
+      if (request.method === 'POST' && url.pathname === '/__test/subagent-navigation') {
+        compact = true;
+        session.state = 'completed';
+        const id = 'sess_managed_worker';
+        const row = {
+          ...session,
+          id,
+          title: 'Station analysis worker',
+          parent_session_id: session.id,
+          session_kind: 'agent',
+          agent_id: 'station-worker',
+        };
+        const messages = structuredClone(transcriptMessages()).map((message) => ({
+          ...message,
+          session_id: id,
+        }));
+        branches.set(id, { session: row, messages });
+        sendJson(response, row);
+        return true;
+      }
       if (request.method === 'POST' && url.pathname === '/__test/branch-navigation') {
         compact = true;
         session.state = 'completed';
@@ -116,7 +136,9 @@ export function createBranchArtifactFixture({
         } else sendJson(response, { artifact: record, resolved: record.versions[0] });
         return true;
       }
-      const match = /^\/v1\/sessions\/(sess_branch_\d+)(\/.*)?$/u.exec(url.pathname);
+      const match = /^\/v1\/sessions\/(sess_branch_\d+|sess_managed_worker)(\/.*)?$/u.exec(
+        url.pathname,
+      );
       const entry = match && branches.get(match[1]);
       if (!entry) return false;
       const suffix = match[2] ?? '';

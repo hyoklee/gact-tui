@@ -46,6 +46,8 @@ import { useComposerDraft } from '@/hooks/use-composer-draft';
 import { useAddToChatSelectionAction } from '@/hooks/use-add-to-chat-selection-action';
 import { useReferenceThisSelectionAction } from '@/hooks/use-reference-this-selection-action';
 import { useWorkbenchNavigation } from '@/hooks/use-workbench-navigation';
+import { useKnowledgeAttachment } from '@/hooks/use-knowledge-attachment';
+import { useWorkspaceResourceMap } from '@/hooks/use-workspace-resource-map';
 import { useRequestedWorkflow } from '@/hooks/use-requested-workflow';
 import { useContextTargetSelection } from '@/hooks/use-context-target-selection';
 import { useWorkspaceNavigationActions } from '@/hooks/use-workspace-navigation-actions';
@@ -53,7 +55,7 @@ import { useWorkspaceTerminalActions } from '@/hooks/use-workspace-terminal-acti
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { buildSessionAttentionMap } from '@/lib/session-attention';
 import { navigateComposerReferenceOrToast } from '@/lib/composer-reference-navigation';
-import { isManagedChildSession, showsBaseAgent } from '@/lib/session-state';
+import { canForkSession, isManagedChildSession, showsBaseAgent } from '@/lib/session-state';
 import { useDesktopTitleSync } from '@/hooks/use-desktop-title-sync';
 import { openExternalUrlOrToast } from '@/tauri/external-url';
 import { useObservabilityNavigation } from '@/hooks/use-observability-navigation';
@@ -67,6 +69,7 @@ export function WorkspacePage() {
   const repository = useRepository();
   const a2uiCatalog = useA2uiCatalogRegistry(sessionId);
   const composerDraft = useComposerDraft(sessionId, { persist: true, endpoint: settings.endpoint });
+  useKnowledgeAttachment(workspaceId, composerDraft);
   const [composerFocusKey, setComposerFocusKey] = useState(0);
   const focusComposerForAnswer = useCallback(() => setComposerFocusKey((key) => key + 1), []);
   useAddToChatSelectionAction(composerDraft, focusComposerForAnswer);
@@ -98,6 +101,7 @@ export function WorkspacePage() {
     contextTargetOptions,
     entities,
     executionProvenance,
+    familyObservability,
     interactions,
     interactionCapabilityError,
     interactionsError,
@@ -173,6 +177,7 @@ export function WorkspacePage() {
     activeRequest: workbenchRequest,
     openArtifact,
     openDiff,
+    openParentSession,
     openSubagent,
     openWorkflow,
     openWorkspaceFile,
@@ -192,13 +197,7 @@ export function WorkspacePage() {
     workspace: activeWorkspace?.display_name,
   });
   useRequestedWorkflow(searchParams.get('workflow'), tools, openWorkflow);
-  const workspaceResourceEntities = useMemo(
-    () =>
-      Object.fromEntries(
-        (workspaceResources.data ?? []).map((resource) => [resource.id, resource]),
-      ),
-    [workspaceResources.data],
-  );
+  const workspaceResourceEntities = useWorkspaceResourceMap(workspaceResources.data);
   const openComposerReference = useCallback(
     async (reference: WorkspaceReference) => {
       await navigateComposerReferenceOrToast({
@@ -382,11 +381,7 @@ export function WorkspacePage() {
       {isManagedChildSession(session) ? (
         <ClioChildSessionFooter
           onHeightChange={variant === 'docked' ? setDockedComposerHeight : undefined}
-          onReturnToParent={() =>
-            navigate(
-              `/workspaces/${encodeURIComponent(parentSession?.workspace_id ?? workspaceId)}/sessions/${encodeURIComponent(session.parent_session_id!)}`,
-            )
-          }
+          onReturnToParent={() => openParentSession(session)}
           parentTitle={parentSession?.title ?? 'Parent conversation'}
           pendingInteractions={pendingInteractionsPanel}
           state={state}
@@ -503,6 +498,7 @@ export function WorkspacePage() {
         <ClioAppShell
           toolbarActions={
             <WorkspaceLiveObservabilityDock
+              {...familyObservability}
               toolbar
               surfaceRef={showcaseSurfaceRef}
               workspaceId={workspaceId}
@@ -634,6 +630,7 @@ export function WorkspacePage() {
               sessionId={sessionId}
               sessionView={
                 <WorkspaceLiveObservabilityView
+                  {...familyObservability}
                   requestedView={requestedView}
                   artifacts={artifactEvidence}
                   artifactProvenanceProvider={executionProvenance.providers.data?.artifact}
@@ -690,6 +687,7 @@ export function WorkspacePage() {
           statusStrip={
             <WorkspaceLiveStatusStrip
               activeWorkCount={activeWorkCount}
+              onOpenWork={() => revealWorkbench({ kind: 'resources', section: 'work' })}
               sessionId={sessionId}
               sessionState={session?.state}
             />
@@ -753,7 +751,9 @@ export function WorkspacePage() {
                           ? sessionHistory.fork.variables
                           : undefined
                       }
-                      onForkFromMessage={sessionHistory.fork.mutateAsync}
+                      onForkFromMessage={
+                        canForkSession(session) ? sessionHistory.fork.mutateAsync : undefined
+                      }
                       onOpenSubagent={openSubagent}
                       onOpenWorkflow={openWorkflow}
                       onRewindToMessage={sessionHistory.rewind.mutateAsync}

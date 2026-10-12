@@ -42,7 +42,7 @@ export interface ClioSessionActionsProps {
   title: string;
   disabled?: boolean;
   management?: { session: Session; actions: ResourceActions; endpoint: string };
-  onFork: () => Promise<void>;
+  onFork?: () => Promise<void>;
   onCompact: () => Promise<void>;
   /** Secondary escape hatch to the OS's own terminal app. Undefined hides
    * the menu item (browser hosts, or a workspace with no known path). */
@@ -124,9 +124,11 @@ export function ClioSessionActions({
               <DropdownMenuSeparator />
             </>
           ) : null}
-          <DropdownMenuItem className="whitespace-nowrap" onSelect={() => void run(onFork)}>
-            <GitForkIcon aria-hidden="true" /> Branch into a new session
-          </DropdownMenuItem>
+          {onFork ? (
+            <DropdownMenuItem className="whitespace-nowrap" onSelect={() => void run(onFork)}>
+              <GitForkIcon aria-hidden="true" /> Branch into a new session
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem className="whitespace-nowrap" onSelect={() => setSharing(true)}>
             <Share2Icon aria-hidden="true" /> Share read-only link
           </DropdownMenuItem>

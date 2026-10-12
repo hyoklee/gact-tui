@@ -65,8 +65,29 @@ describe('explicit agent question modes', () => {
     );
     expect(screen.getByRole('complementary')).toHaveStyle({ bottom: '92px' });
     await userEvent.click(screen.getByRole('button', { name: '2 open questions' }));
-    await userEvent.click(screen.getByRole('button', { name: /Answer when ready/ }));
+    expect(screen.getByRole('dialog', { name: 'Open questions' })).toBeVisible();
+    await userEvent.click(screen.getAllByRole('button', { name: 'Read and answer' })[0]!);
     expect(openQuestion).toHaveBeenCalledWith(question('async'));
+  });
+  it('links to the question source without answering or opening the response dialog', async () => {
+    const openQuestion = vi.fn();
+    render(
+      <QuestionAnswerContext.Provider
+        value={{
+          openQuestion,
+          questionLink: () => '#message-m1/activity-tool1',
+          startAnswer: vi.fn(),
+          stopAnswer: vi.fn(),
+        }}
+      >
+        <OpenQuestionsTracker bottomInset={80} interactions={[question('async')]} />
+      </QuestionAnswerContext.Provider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: '1 open question' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Go to question' }));
+    expect(window.location.hash).toBe('#message-m1/activity-tool1');
+    expect(openQuestion).not.toHaveBeenCalled();
+    window.location.hash = '';
   });
   it('uses a centered transcript-width dialog and sends a free-text answer', async () => {
     const respond = vi.fn().mockResolvedValue(undefined);

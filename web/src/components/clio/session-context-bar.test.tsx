@@ -29,6 +29,27 @@ const blueprint: AgentBlueprintReference = {
 afterEach(cleanup);
 
 describe('ClioSessionContextBar', () => {
+  it.each(['agent', 'lookup'] as const)('hides branching for a %s session', async (kind) => {
+    const user = userEvent.setup();
+    const onFork = vi.fn();
+    render(
+      <ClioSessionContextBar
+        actionsPending={false}
+        onCompact={vi.fn()}
+        onFork={onFork}
+        onOpenBlueprint={vi.fn()}
+        onReturnToParent={vi.fn()}
+        onShare={vi.fn()}
+        onUndo={vi.fn()}
+        session={{ ...session, session_kind: kind, parent_session_id: 'parent' }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: `Actions for ${session.title}` }));
+    expect(screen.queryByRole('menuitem', { name: 'Branch into a new session' })).toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Share read-only link' })).toBeVisible();
+    expect(onFork).not.toHaveBeenCalled();
+  });
+
   it('opens the authoritative session blueprint from its displayed name', async () => {
     const user = userEvent.setup();
     const onOpenBlueprint = vi.fn();

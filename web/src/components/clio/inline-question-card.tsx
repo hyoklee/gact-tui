@@ -67,21 +67,21 @@ export function InlineQuestionCard({
   if (interaction.payload?.response_mode && answerState?.openQuestion) {
     return (
       <Button
-        className="h-auto max-w-full justify-start whitespace-normal text-left"
+        className="h-auto w-full min-w-0 items-start justify-start gap-3 whitespace-normal px-3 py-3 text-left font-normal leading-relaxed"
         data-interaction-id={interaction.id}
         id={inlineQuestionDomId(interaction.source.invocation_id ?? interaction.id)}
         onClick={() => answerState.openQuestion?.(interaction)}
         variant="outline"
       >
-        <MessageCircleQuestionIcon aria-hidden="true" />
-        <span>
+        <MessageCircleQuestionIcon aria-hidden="true" className="mt-0.5" />
+        <span className="min-w-0 space-y-1">
           <span className="block text-xs text-muted-foreground">
             {vocab.agent} asked a question ·{' '}
             {interaction.payload.response_mode === 'async'
               ? 'Answer when ready'
               : 'Answer needed to continue'}
           </span>
-          {interaction.prompt ?? interaction.title}
+          <span className="block break-words">{interaction.prompt ?? interaction.title}</span>
         </span>
       </Button>
     );

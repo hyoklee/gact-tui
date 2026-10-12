@@ -1,4 +1,12 @@
 import { z } from 'zod';
+export const fleetSettingsSchema = z.object({
+  revision: z.string(),
+  judges: z.object({
+    goals: z.object({ provider_id: z.string(), model_id: z.string() }).nullable(),
+    variants: z.object({ provider_id: z.string(), model_id: z.string() }).nullable(),
+    permissions: z.object({ provider_id: z.string(), model_id: z.string() }).nullable(),
+  }),
+});
 import { InfrastructureRepository } from './infrastructure-repository.js';
 import { spotterAvailabilitySchema, type SpotterAvailability } from './spotter-domain.js';
 import {
@@ -32,6 +40,25 @@ export const latestReleaseSchema = z.object({
 
 /** System-wide surfaces scoped to the connected service. */
 export class SystemRepository extends InfrastructureRepository {
+  public fleetSettings(signal?: AbortSignal) {
+    return this.transport.request({
+      method: 'GET',
+      path: '/v1/settings/fleet',
+      signal,
+      decode: (value) => fleetSettingsSchema.parse(value),
+    });
+  }
+
+  public updateFleetSettings(input: z.infer<typeof fleetSettingsSchema>, signal?: AbortSignal) {
+    return this.transport.request({
+      method: 'PATCH',
+      path: '/v1/settings/fleet',
+      body: input,
+      signal,
+      decode: (value) => fleetSettingsSchema.parse(value),
+    });
+  }
+
   public runtimeSettings(signal?: AbortSignal): Promise<RuntimeSettings> {
     return this.transport.request({
       method: 'GET',

@@ -6,7 +6,9 @@ import type {
   ToolInvocation,
   WorkspaceResource,
 } from '@clio/core/v3';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { connectionScope } from '@/lib/connection-scope';
+import { KNOWLEDGE_OPEN_EVENT, type KnowledgeOpenRequest } from '@/lib/knowledge-navigation';
 import { useNavigate } from 'react-router-dom';
 import type { SubagentOpenTarget } from '@/components/clio/subagent-card';
 import type { ClioWorkbenchOpenRequest } from '@/components/clio/workbench';
@@ -58,6 +60,17 @@ export function useWorkbenchNavigation({ allSessions, workspaceId }: UseWorkbenc
     [allSessions, navigate, revealWorkbench, workspaceId],
   );
 
+  useEffect(() => {
+    const open = (event: Event) => {
+      const request = (event as CustomEvent<KnowledgeOpenRequest>).detail;
+      if (request.workspaceId === workspaceId && request.scope === connectionScope(settings)) {
+        revealWorkbench({ kind: 'knowledge', sourceId: request.sourceId, label: request.label });
+      }
+    };
+    window.addEventListener(KNOWLEDGE_OPEN_EVENT, open);
+    return () => window.removeEventListener(KNOWLEDGE_OPEN_EVENT, open);
+  }, [workspaceId, settings, revealWorkbench]);
+
   const openArtifact = useCallback(
     (artifact: Artifact) => revealWorkbench({ kind: 'artifact', artifact }),
     [revealWorkbench],
@@ -81,6 +94,12 @@ export function useWorkbenchNavigation({ allSessions, workspaceId }: UseWorkbenc
     [revealWorkbench],
   );
 
+  const openParentSession = useCallback((session: Session) => {
+    if (!session.parent_session_id) return;
+    const parent = allSessions.find((candidate) => candidate.id === session.parent_session_id);
+    navigate(`/workspaces/${encodeURIComponent(parent?.workspace_id ?? workspaceId)}/sessions/${encodeURIComponent(session.parent_session_id)}`);
+  }, [allSessions, navigate, workspaceId]);
+
   const activeRequest =
     workbenchRequest?.endpoint === settings.endpoint ? workbenchRequest : undefined;
 
@@ -88,6 +107,7 @@ export function useWorkbenchNavigation({ allSessions, workspaceId }: UseWorkbenc
     activeRequest,
     openArtifact,
     openDiff,
+    openParentSession,
     openSubagent,
     openWorkflow,
     openWorkspaceFile,
