@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useQuestionAnswer } from './question-answer-context';
 import { isVariantPickInteraction } from '@/lib/variant-runs';
+import { followTranscriptLink } from '@/lib/inline-question';
 
 export function OpenQuestionsTracker({
   interactions,
@@ -27,7 +28,7 @@ export function OpenQuestionsTracker({
   return (
     <aside
       aria-label="Open questions tracker"
-      className="absolute right-3 z-20"
+      className="pointer-events-auto absolute right-3 z-30"
       style={{ bottom: bottomInset + 12 }}
     >
       <Popover open={open} onOpenChange={setOpen}>
@@ -39,29 +40,54 @@ export function OpenQuestionsTracker({
             className="rounded-full bg-background"
           >
             <MessageCircleQuestionIcon aria-hidden="true" />
-            {questions.length}
+            {questions.length} {questions.length === 1 ? 'question' : 'questions'}
           </Button>
         </PopoverTrigger>
-        <PopoverContent side="top" align="end" className="max-h-80 w-80 overflow-y-auto">
-          <p className="mb-2 text-sm font-medium">Open questions</p>
-          {questions.map((row) => (
-            <Button
-              key={row.id}
-              variant="ghost"
-              className="mb-1 h-auto w-full flex-col items-start whitespace-normal text-left"
-              onClick={() => {
-                setOpen(false);
-                answer.openQuestion?.(row);
-              }}
-            >
-              <span className="text-xs text-muted-foreground">
-                {row.payload?.response_mode === 'async'
-                  ? 'Answer when ready'
-                  : 'Answer needed to continue'}
-              </span>
-              <span>{row.prompt ?? row.title}</span>
-            </Button>
-          ))}
+        <PopoverContent
+          aria-label="Open questions"
+          side="top"
+          align="end"
+          className="max-h-[min(24rem,var(--radix-popover-content-available-height))] w-96 max-w-[calc(100vw-2rem)] overflow-y-auto p-3"
+        >
+          <p className="text-sm font-medium">Open questions</p>
+          {questions.map((row) => {
+            const link = answer.questionLink?.(row);
+            return (
+              <article key={row.id} className="space-y-3 border-t pt-3">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">
+                    {row.payload?.response_mode === 'async'
+                      ? 'Answer when ready'
+                      : 'Answer needed to continue'}
+                  </p>
+                  <p className="break-words text-sm leading-relaxed">{row.prompt ?? row.title}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setOpen(false);
+                      answer.openQuestion?.(row);
+                    }}
+                  >
+                    Read and answer
+                  </Button>
+                  {link ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setOpen(false);
+                        followTranscriptLink(link);
+                      }}
+                    >
+                      Go to question
+                    </Button>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
         </PopoverContent>
       </Popover>
     </aside>

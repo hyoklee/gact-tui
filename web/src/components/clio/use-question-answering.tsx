@@ -87,8 +87,9 @@ export function useQuestionAnswering({
         focusComposer();
       },
       stopAnswer,
+      questionLink: (question) => questionLink(messages, question),
     }),
-    [answering?.id, focusComposer, stopAnswer],
+    [answering?.id, focusComposer, messages, stopAnswer],
   );
   const goToQuestion = useCallback(
     (question: PendingInteraction) => {

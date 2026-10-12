@@ -15,6 +15,7 @@ interface InteractionFrameHeaderProps {
   onCancel?: () => void;
   actions?: ReactNode;
   disabled?: boolean;
+  showFullPrompt?: boolean;
 }
 
 /** Shared compact heading for questions and interactive response surfaces. */
@@ -25,6 +26,7 @@ export function InteractionFrameHeader({
   onCancel,
   actions,
   disabled,
+  showFullPrompt,
 }: InteractionFrameHeaderProps) {
   const isPlanExit = interaction.source.tool_name === 'plan_exit';
   const Icon =
@@ -38,7 +40,7 @@ export function InteractionFrameHeader({
       <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-action" />
       <div className="min-w-0 flex-1">
         <FrameTitle
-          className="line-clamp-3"
+          className={showFullPrompt ? 'break-words font-normal leading-relaxed' : 'line-clamp-3'}
           data-slot="pending-interaction-title"
           title={isPlanExit ? interaction.title : (interaction.prompt ?? interaction.title)}
         >
@@ -51,7 +53,10 @@ export function InteractionFrameHeader({
               The specialist could not answer this, so it needs you.
             </p>
             {interaction.fallback_detail ? (
-              <TechnicalDetails className="mt-1 text-xs text-muted-foreground" title="Technical details">
+              <TechnicalDetails
+                className="mt-1 text-xs text-muted-foreground"
+                title="Technical details"
+              >
                 <code>{interaction.fallback_detail}</code>
               </TechnicalDetails>
             ) : null}

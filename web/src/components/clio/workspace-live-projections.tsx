@@ -114,6 +114,7 @@ export function WorkspaceLiveConversation({
       {...entities}
       {...props}
       {...messageMarks}
+      sessionId={sessionId}
       forkOrigin={forkOrigin}
       messages={messages}
       preparation={{ activeTurnId, activeTurnResponded, dependencies, sessionState }}

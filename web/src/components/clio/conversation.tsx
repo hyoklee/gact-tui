@@ -50,7 +50,7 @@ import { placeDeliveredFeedback } from './conversation-feedback';
 export function ClioConversation(props: ClioConversationProps) {
   return (
     <PresentationNavigation.Provider value={props}>
-      <TranscriptDisclosures sessionId={props.messages[0]?.session_id}>
+      <TranscriptDisclosures sessionId={props.sessionId ?? props.messages[0]?.session_id}>
         <ConversationBody {...props} />
       </TranscriptDisclosures>
     </PresentationNavigation.Provider>
