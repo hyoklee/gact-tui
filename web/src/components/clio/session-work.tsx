@@ -33,6 +33,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useSessionWork } from './use-session-work';
+import { WorkRecordControls } from './work-record-controls';
 
 /** Compact entry to authoritative work state, independent of transcript expansion. */
 export function SessionWorkSummary({
@@ -43,13 +44,16 @@ export function SessionWorkSummary({
   onOpen: () => void;
 }) {
   const { data } = useSessionWork(sessionId);
-  if (!data || (!data.goal && !data.loop && !data.todos.length)) return null;
+  if (!data || (!data.goal && !data.loop && !data.todos.length && !data.schedules.length))
+    return null;
   const current =
     data.goal?.state === 'active' || data.goal?.state === 'paused'
       ? data.goal
       : data.loop?.state === 'active' || data.loop?.state === 'paused'
         ? data.loop
         : undefined;
+  const scheduledCount = data.schedules.filter((schedule) => schedule.enabled).length;
+  const otherLoop = current === data.goal && data.loop?.state === 'active';
   const done = data.todos.filter((todo) => todo.status === 'completed').length;
   return (
     <Button
@@ -63,9 +67,17 @@ export function SessionWorkSummary({
       <ListChecksIcon data-icon="inline-start" />
       <span className="min-w-0 flex-1 truncate">
         {current
-          ? `${current.state === 'paused' ? 'Paused' : 'Active'}: ${current.title}`
-          : 'Session work'}
+          ? `${current.phase === 'waiting' ? 'Waiting' : current.phase === 'needs_input' ? 'Needs input' : current.state === 'paused' ? 'Paused' : 'Active'}: ${current.title}`
+          : data.schedules.some((schedule) => schedule.enabled)
+            ? 'Scheduled work'
+            : 'Session work'}
       </span>
+      {otherLoop ? <span className="shrink-0">Loop</span> : null}
+      {scheduledCount ? (
+        <span className="shrink-0">
+          {scheduledCount} {scheduledCount === 1 ? 'schedule' : 'schedules'}
+        </span>
+      ) : null}
       {data.todos.length ? (
         <span className="shrink-0">
           {done}/{data.todos.length} done
@@ -89,7 +101,15 @@ function workReasonLabel(reason: string): string {
   );
 }
 
-function WorkRecordRow({ record }: { record: WorkRecord }) {
+function WorkRecordRow({
+  record,
+  sessionId,
+  kind,
+}: {
+  record: WorkRecord;
+  sessionId: string;
+  kind: 'goal' | 'loop';
+}) {
   const Icon =
     record.state === 'completed'
       ? CircleCheckIcon
@@ -98,7 +118,8 @@ function WorkRecordRow({ record }: { record: WorkRecord }) {
         : record.state === 'paused'
           ? CirclePauseIcon
           : CircleDotIcon;
-  const state = record.state.charAt(0).toUpperCase() + record.state.slice(1);
+  const phase = record.state === 'active' && record.phase ? record.phase : record.state;
+  const state = phase.charAt(0).toUpperCase() + phase.slice(1).replaceAll('_', ' ');
   return (
     <li className="flex min-w-0 flex-col gap-0.5 py-1.5">
       <div className="flex flex-wrap items-center gap-x-2 text-muted-foreground">
@@ -119,6 +140,7 @@ function WorkRecordRow({ record }: { record: WorkRecord }) {
           {workReasonLabel(record.reason)}
         </p>
       ) : null}
+      <WorkRecordControls sessionId={sessionId} kind={kind} record={record} />
     </li>
   );
 }
@@ -321,6 +343,16 @@ export function SessionWorkView({ sessionId }: { sessionId: string }) {
       ]);
     },
   });
+  const toggleSchedule = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      repository.setScheduleEnabled(sessionId, id, enabled),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: scheduleKey });
+      await queryClient.invalidateQueries({
+        queryKey: ['session-work', settings.endpoint, sessionId],
+      });
+    },
+  });
   if (query.isPending)
     return (
       <p role="status" className="p-4">
@@ -394,7 +426,7 @@ export function SessionWorkView({ sessionId }: { sessionId: string }) {
           >
             {currentIsActive && current ? (
               <ul>
-                <WorkRecordRow record={current} />
+                <WorkRecordRow record={current} sessionId={sessionId} kind={kind} />
               </ul>
             ) : (
               <p className="text-muted-foreground">
@@ -404,7 +436,12 @@ export function SessionWorkView({ sessionId }: { sessionId: string }) {
             <PreviousRecords count={previous.length} noun={`${kind} records`}>
               <ul className="flex flex-col gap-2">
                 {previous.map((record) => (
-                  <WorkRecordRow key={record.id} record={record} />
+                  <WorkRecordRow
+                    key={record.id}
+                    record={record}
+                    sessionId={sessionId}
+                    kind={kind}
+                  />
                 ))}
               </ul>
             </PreviousRecords>
@@ -443,6 +480,17 @@ export function SessionWorkView({ sessionId }: { sessionId: string }) {
                     <span>Time zone: {schedule.timezone}</span>
                   </p>
                   {schedule.last_error ? <p>{schedule.last_error}</p> : null}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={toggleSchedule.isPending}
+                    onClick={() =>
+                      toggleSchedule.mutate({ id: schedule.id, enabled: !schedule.enabled })
+                    }
+                  >
+                    {schedule.enabled ? 'Stop' : 'Restart'}
+                  </Button>
+                  {toggleSchedule.error ? <p role="alert">{toggleSchedule.error.message}</p> : null}
                 </div>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>

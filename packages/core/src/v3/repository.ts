@@ -10,9 +10,6 @@ import type {
   ApprovalRequest,
   PermissionLedgerItem,
   OperationalRun,
-  CreateScheduledTurnInput,
-  ScheduledTurn,
-  ScheduledTurns,
   Session,
   SessionArtifactListing,
   SessionDefaults,
@@ -32,8 +29,6 @@ import {
   turnAttemptSchema,
   workspaceSchema,
   relayStatusSchema,
-  scheduledTurnSchema,
-  scheduledTurnsSchema,
   sessionDefaultsSchema,
   userQuestionSchema,
 } from './schemas.js';
@@ -57,7 +52,7 @@ import {
 } from './artifact-custody.js';
 import type { ClioTransport, StreamScope, TransportFrame } from './transport.js';
 import { mergeA2uiClientMetadata } from './a2ui/index.js';
-import { TaskRepository } from './task-repository.js';
+import { WorkRepository } from './work-repository.js';
 import { decodeCapabilities } from './capability-negotiation.js';
 import { decodeTranscript } from './transcript-decoder.js';
 
@@ -74,7 +69,7 @@ const ARTIFACT_PAGE_SIZE = 200;
  * silently swallowed.
  */
 const MAX_ARTIFACT_PAGES = 100;
-export class ClioRepository extends TaskRepository {
+export class ClioRepository extends WorkRepository {
   public constructor(transport: ClioTransport) {
     super(transport);
   }
@@ -272,42 +267,6 @@ export class ClioRepository extends TaskRepository {
       path: '/v1/session-defaults',
       body: input,
       decode: (value) => sessionDefaultsSchema.parse(value),
-      signal,
-    });
-  }
-
-  public async scheduledTurns(sessionId: string, signal?: AbortSignal): Promise<ScheduledTurns> {
-    const result = await this.transport.request({
-      method: 'GET',
-      path: `/v1/sessions/${encodeURIComponent(sessionId)}/schedules`,
-      decode: (value) => scheduledTurnsSchema.parse(value),
-      signal,
-    });
-    return {
-      schedules: result.schedules,
-      timezone: result.cron_timezone,
-    };
-  }
-
-  public createScheduledTurn(
-    sessionId: string,
-    input: CreateScheduledTurnInput,
-    signal?: AbortSignal,
-  ): Promise<ScheduledTurn> {
-    return this.transport.request({
-      method: 'POST',
-      path: `/v1/sessions/${encodeURIComponent(sessionId)}/schedules`,
-      body: input,
-      decode: (value) => scheduledTurnSchema.parse(value),
-      signal,
-    });
-  }
-
-  public deleteScheduledTurn(scheduleId: string, signal?: AbortSignal): Promise<void> {
-    return this.transport.request({
-      method: 'DELETE',
-      path: `/v1/schedules/${encodeURIComponent(scheduleId)}`,
-      decode: () => undefined,
       signal,
     });
   }

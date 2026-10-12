@@ -49,6 +49,7 @@ import { ToolsSettings } from '@/components/clio/settings-tools';
 import { ScheduleSettings } from '@/components/clio/settings-schedules';
 import { SessionDefaultsSettings } from '@/components/clio/settings-session-defaults';
 import { RuntimeSettingsPanel } from '@/components/clio/settings-runtime';
+import { FleetSettingsPanel } from '@/components/clio/settings-fleet';
 import { ModelsSettings } from '@/components/clio/settings-models';
 import { ProvidersSettings } from '@/components/clio/settings-providers';
 import { DataSourceSettings } from '@/components/clio/settings-data-sources';
@@ -166,6 +167,13 @@ const sections: SettingsDestination[] = [
     icon: BotIcon,
     group: 'Agent',
     keywords: 'instructions capabilities routing',
+  },
+  {
+    id: 'fleet',
+    label: 'Fleet',
+    icon: BotIcon,
+    group: 'Agent',
+    keywords: 'judge goals best of n refinement automode permissions model',
   },
   {
     id: 'runtime',
@@ -629,6 +637,7 @@ function SettingsSection({
   if (section === 'data-sources') return <DataSourceSettings />;
   if (section === 'session-defaults') return <SessionDefaultsSettings />;
   if (section === 'runtime') return <RuntimeSettingsPanel />;
+  if (section === 'fleet') return <FleetSettingsPanel />;
   if (section === 'providers') return <ProvidersSettings />;
   if (section === 'models') return <ModelsSettings />;
   if (section === 'agents') return <AgentSettings />;
