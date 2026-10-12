@@ -47,6 +47,12 @@ export function HarnessInjection({
   const [expanded, setExpanded] = useTranscriptDisclosure(`injection:${block.id}`);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const label = INJECTION_LABELS[block.source] ?? humanizeProtocolValue(block.source);
+  const triggerLabel =
+    block.source === 'summarization'
+      ? block.trigger === 'manual'
+        ? 'Requested'
+        : 'Automatic'
+      : '';
   return (
     <section
       className="min-w-0 max-w-full"
@@ -55,6 +61,7 @@ export function HarnessInjection({
     >
       <Button
         variant="ghost"
+        aria-label={`Injection ${label}${triggerLabel ? ` ${triggerLabel}` : ''}`}
         aria-expanded={expanded}
         onClick={() => setExpanded(!expanded)}
         type="button"
@@ -69,11 +76,7 @@ export function HarnessInjection({
         />
         <span className="shrink-0 text-xs font-normal">Injection</span>
         <span className="min-w-0 flex-1 truncate">{label}</span>
-        {block.source === 'summarization' ? (
-          <span className="shrink-0 text-xs font-normal">
-            {block.trigger === 'manual' ? 'Requested' : 'Automatic'}
-          </span>
-        ) : null}
+        {triggerLabel ? <span className="shrink-0 text-xs font-normal">{triggerLabel}</span> : null}
         <ChevronRightIcon
           aria-hidden="true"
           className={cn('size-3 shrink-0 transition-transform', expanded && 'rotate-90')}
