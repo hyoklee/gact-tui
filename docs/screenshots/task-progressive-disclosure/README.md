@@ -42,7 +42,7 @@ The final run, `codex-ui-progressive238`, passed:
   with complete assignment text available on demand and actions still reachable.
 
 All eleven final captures were visually inspected. The four published copies
-match their source hashes in [manifest.json](manifest.json). The full trace,
+match their source hashes below. The full trace,
 transcripts, session/task snapshots, build-member hashes and verdicts remain in
 the release-recovery `mcp-agent-tasks/task-ui234/qualification239.json` receipt.
 Public native evidence was copied with archive CRC and every member hash checked.
@@ -61,3 +61,12 @@ passed before the final confirmation refinement. Their failures are retained.
 Full Tasks qualification remains incomplete; this review qualifies the changed
 UI on this Linux/model route. It does not qualify protected native/confinement,
 unavailable provider/relay or oversized-SSE routes, and changes no installation.
+
+## Published capture hashes
+
+| Capture | SHA256 |
+| --- | --- |
+| desktop-running.png | ab0222d4461cdb28691b9b82d846450f69af87232656f2ba822e90defeb2db31 |
+| phone-cancel-confirmation.png | c88d04f5c996f9016ea27472e1a3d448aba257cc394170a908c9b22fd10943b0 |
+| phone-details.png | 9530824198a0eb28bc9636a9f97abce41d5f56868009c552546d08dc91abba84 |
+| phone-paused.png | 2080164e58e88ac249411250e73bf08aa400a5762a30eff13a6c247b122c17fe |
