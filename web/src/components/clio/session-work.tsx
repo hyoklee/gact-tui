@@ -480,6 +480,12 @@ export function SessionWorkView({ sessionId }: { sessionId: string }) {
                     <span>Time zone: {schedule.timezone}</span>
                   </p>
                   {schedule.last_error ? <p>{schedule.last_error}</p> : null}
+                  <details className="text-muted-foreground">
+                    <summary className="cursor-pointer">Details</summary>
+                    <p>Run limit: {schedule.max_fires || 'Unlimited'}</p>
+                    <p>Completed runs: {schedule.fire_count}</p>
+                    <p>Deadline: {schedule.until || 'None'}</p>
+                  </details>
                   <Button
                     size="sm"
                     variant="ghost"

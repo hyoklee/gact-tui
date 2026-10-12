@@ -57,6 +57,47 @@ function renderConversation(element: ReactElement) {
 }
 
 describe('ClioConversation harness injection', () => {
+  it.each(['goal_judgment', 'loop_wake', 'scheduled_wake'])(
+    'continues the human prompt with a %s injection and no user controls', async (source) => {
+      const user = userEvent.setup();
+      const onMarkMessage = vi.fn(async () => undefined);
+      const { container } = renderConversation(
+        <ClioConversation artifacts={{}} subagents={{}} surfaces={{}} tasks={{}} tools={{}}
+          onMarkMessage={onMarkMessage} onForkFromMessage={vi.fn()} onRewindToMessage={vi.fn()}
+          messages={[
+            { id: 'prompt', session_id: 'session_1', role: 'user',
+              created_at: '2026-10-12T00:00:00Z',
+              blocks: [{ id: 'prompt_text', type: 'text', text: 'Prepare the report.' }] },
+            { id: 'first', session_id: 'session_1', role: 'assistant',
+              created_at: '2026-10-12T00:00:01Z',
+              blocks: [{ id: 'answer', type: 'text', text: 'The first section is saved.' }] },
+            { id: 'wake', session_id: 'session_1', role: 'system',
+              created_at: '2026-10-12T00:00:02Z',
+              blocks: [{ id: 'injected', type: 'injection', source,
+                text: 'The report is incomplete. Save the remaining section.' }] },
+            { id: 'continued', session_id: 'session_1', role: 'assistant',
+              created_at: '2026-10-12T00:00:03Z',
+              blocks: [{ id: 'result', type: 'text', text: 'The report is complete.' }] },
+          ]}
+        />,
+      );
+      expect(screen.getAllByText('You')).toHaveLength(1);
+      const wake = within(container.querySelector<HTMLElement>('[data-message-id="wake"]')!);
+      expect(wake.queryByRole('button', { name: 'Copy message' })).toBeNull();
+      expect(wake.queryByRole('button', { name: 'Branch from here' })).toBeNull();
+      expect(wake.queryByRole('button', { name: 'Rewind to here' })).toBeNull();
+      expect(wake.queryByRole('button', { name: /Mark message/u })).toBeNull();
+      expect(screen.queryByText(/The report is incomplete/u)).toBeNull();
+      await user.click(wake.getByRole('button', { name: 'Show what it got' }));
+      expect(wake.getByText('The report is incomplete. Save the remaining section.')).toBeVisible();
+      const prompt = within(container.querySelector<HTMLElement>('[data-message-id="prompt"]')!);
+      expect(prompt.getByRole('button', { name: 'Copy message' })).toBeInTheDocument();
+      expect(prompt.queryByRole('button', { name: 'Branch from here' })).toBeNull();
+      expect(prompt.queryByRole('button', { name: 'Rewind to here' })).toBeNull();
+      expect(prompt.queryByRole('button', { name: 'Select content for attention' })).toBeNull();
+    },
+  );
+
   it('keeps a tool-scoped addition inside Activity, expanding to the exact text', async () => {
     const user = userEvent.setup();
     const text =
