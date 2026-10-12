@@ -29,7 +29,7 @@ export function transcriptContentSelection(
   selection: Selection | null,
 ): ContentSelection | undefined {
   if (!selection || selection.isCollapsed || !selection.rangeCount) return;
-  const range = selection.getRangeAt(0);
+  const range = clampToBlock(selection.getRangeAt(0), '[data-content-revision]');
   const element =
     range.startContainer.nodeType === Node.ELEMENT_NODE
       ? (range.startContainer as Element)
@@ -73,4 +73,17 @@ export function transcriptContentSelection(
       end: [...bound.source.slice(0, rawEnd)].length,
     },
   };
+}
+
+/**
+ * A double- or triple-click selection ends at the start of the NEXT block (the
+ * browser selects the paragraph's trailing line break). Clamp such a range to the
+ * end of the block it started in, so a whole-paragraph selection is still one block.
+ */
+export function clampToBlock(range: Range, blockSelector: string): Range {
+  const block = (range.startContainer.nodeType === Node.ELEMENT_NODE ? (range.startContainer as Element) : range.startContainer.parentElement)?.closest(blockSelector);
+  if (!block || block.contains(range.endContainer)) return range;
+  const clamped = range.cloneRange();
+  clamped.setEnd(block, block.childNodes.length);
+  return clamped;
 }
