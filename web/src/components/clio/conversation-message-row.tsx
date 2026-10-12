@@ -45,6 +45,7 @@ import { messageToolCallCounts } from './message-tool-call-counts';
 import { ConversationModelCheckpoint } from './conversation-model-boundary';
 import { modelBoundariesEqual } from './conversation-model-boundaries';
 import { ConversationForkCheckpoint } from './conversation-fork-checkpoint';
+import { HarnessInjection } from './conversation-harness-injection';
 
 export const ConversationMessageRow = memo(function ConversationMessageRow({
   message,
@@ -160,7 +161,9 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
           )}
         </MessageAction>
       ) : null}
-      <TranscriptContentPicker sessionId={message.session_id} messageId={message.id} />
+      {message.role === 'assistant' ? (
+        <TranscriptContentPicker sessionId={message.session_id} messageId={message.id} />
+      ) : null}
       <ResponseRating message={message} active={active} />
       {entities.onMarkMessage ? (
         <MessageMarkButton
@@ -169,7 +172,7 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
           onMark={(marked) => entities.onMarkMessage!(message.id, marked)}
         />
       ) : null}
-      <ClioMessageHistoryActions
+      {message.role === 'assistant' ? <ClioMessageHistoryActions
         forking={entities.forkingMessageId === message.id}
         onFork={
           entities.onForkFromMessage ? () => entities.onForkFromMessage?.(message.id) : undefined
@@ -178,7 +181,7 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
           entities.onRewindToMessage ? () => entities.onRewindToMessage?.(message.id) : undefined
         }
         rewinding={entities.rewindingMessageId === message.id}
-      />
+      /> : null}
       <MessageAction
         label="Copy message"
         onClick={() =>
@@ -215,7 +218,14 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
         />
       ) : null}
       {modelBoundary ? <ConversationModelCheckpoint boundary={modelBoundary} /> : null}
-      <m.div
+      {message.role === 'system' && message.blocks.length > 0 &&
+        message.blocks.every((block) => block.type === 'injection') ? (
+        <div className="py-1">
+          {message.blocks.map((block) => block.type === 'injection' ? (
+            <HarnessInjection block={block} key={block.id} />
+          ) : null)}
+        </div>
+      ) : <m.div
         animate={{ opacity: 1 }}
         initial={{ opacity: recent ? 0 : 1 }}
         transition={{ duration: 0.16 }}
@@ -395,7 +405,7 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
             <div className="mt-3">{actions}</div>
           ) : null}
         </Message>
-      </m.div>
+      </m.div>}
       {entities.forkOrigin?.message_id === message.id ? (
         <ConversationForkCheckpoint
           origin={entities.forkOrigin}

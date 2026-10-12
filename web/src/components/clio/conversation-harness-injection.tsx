@@ -16,6 +16,10 @@ import { useTranscriptDisclosure } from './transcript-disclosure-context';
 type InjectionBlock = Extract<MessageBlock, { type: 'injection' }>;
 
 const INJECTION_LABELS: Record<string, string> = {
+  goal_judgment: 'Goal judgment',
+  loop_wake: 'Loop wake',
+  scheduled_wake: 'Scheduled wake',
+  task_completion: 'Background task completion',
   earlier_turns: 'Recovered conversation context',
   todos: 'Todo list',
   plan_mode: 'Plan reminder',
@@ -43,7 +47,7 @@ export function HarnessInjection({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const label = INJECTION_LABELS[block.source] ?? humanizeProtocolValue(block.source);
   return (
-    <section className="min-w-0 max-w-full" data-slot="harness-injection">
+    <section className="min-w-0 max-w-full" data-slot="harness-injection" data-source={block.source}>
       <div
         className={cn(
           'flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground',

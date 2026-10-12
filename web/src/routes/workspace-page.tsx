@@ -177,6 +177,7 @@ export function WorkspacePage() {
     activeRequest: workbenchRequest,
     openArtifact,
     openDiff,
+    openParentSession,
     openSubagent,
     openWorkflow,
     openWorkspaceFile,
@@ -380,11 +381,7 @@ export function WorkspacePage() {
       {isManagedChildSession(session) ? (
         <ClioChildSessionFooter
           onHeightChange={variant === 'docked' ? setDockedComposerHeight : undefined}
-          onReturnToParent={() =>
-            navigate(
-              `/workspaces/${encodeURIComponent(parentSession?.workspace_id ?? workspaceId)}/sessions/${encodeURIComponent(session.parent_session_id!)}`,
-            )
-          }
+          onReturnToParent={() => openParentSession(session)}
           parentTitle={parentSession?.title ?? 'Parent conversation'}
           pendingInteractions={pendingInteractionsPanel}
           state={state}
@@ -690,6 +687,7 @@ export function WorkspacePage() {
           statusStrip={
             <WorkspaceLiveStatusStrip
               activeWorkCount={activeWorkCount}
+              onOpenWork={() => revealWorkbench({ kind: 'resources', section: 'work' })}
               sessionId={sessionId}
               sessionState={session?.state}
             />

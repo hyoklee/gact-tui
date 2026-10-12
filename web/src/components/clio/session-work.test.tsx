@@ -2,13 +2,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { SessionWorkSummary, SessionWorkView } from './session-work';
+import { SessionWorkStatus, SessionWorkSummary, SessionWorkView } from './session-work';
 
 const { repository } = vi.hoisted(() => ({
   repository: {
     sessionWork: vi.fn(),
     scheduledTurns: vi.fn(),
     deleteScheduledTurn: vi.fn(),
+    controlSessionWork: vi.fn().mockResolvedValue(undefined),
+    setScheduleEnabled: vi.fn().mockResolvedValue(undefined),
   },
 }));
 vi.mock('@/hooks/use-repository', () => ({ useRepository: () => repository }));
@@ -23,9 +25,12 @@ const goal = {
   iterations: 2,
   reason: '',
   created_at: '2026-09-08T12:00:00Z',
+  phase: 'working',
+  details: { max_goal_iters: 0, max_wallclock_s: 0, max_tokens: 0 },
 };
 const snapshot = {
   cursor: 0,
+  schedules: [],
   goal,
   loop: null,
   goals: [goal, { ...goal, id: 'goal-old', title: 'Earlier goal', state: 'completed' as const }],
@@ -69,6 +74,8 @@ const snapshot = {
 beforeEach(() => {
   repository.sessionWork.mockReset().mockResolvedValue(snapshot);
   repository.scheduledTurns.mockReset().mockResolvedValue({ schedules: [], cron_timezone: 'UTC' });
+  repository.controlSessionWork.mockClear();
+  repository.setScheduleEnabled.mockClear();
   repository.deleteScheduledTurn.mockReset().mockResolvedValue(undefined);
 });
 function mount(children: React.ReactNode) {
@@ -80,6 +87,25 @@ function mount(children: React.ReactNode) {
     </QueryClientProvider>,
   );
 }
+
+it.each(['goal', 'loop', 'schedule'])(
+  'keeps a parked %s accessible from the bottom work finder', async (kind) => {
+    repository.sessionWork.mockResolvedValue({
+      ...snapshot, todos: [],
+      goal: kind === 'goal' ? { ...goal, phase: 'waiting' } : null,
+      loop: kind === 'loop' ? { ...goal, kind: 'loop', title: 'Monitor simulation' } : null,
+      schedules: kind === 'schedule' ? [{ id: 'future', question: 'Inspect results', enabled: true }] : [],
+    });
+    const open = vi.fn();
+    mount(<SessionWorkStatus sessionId="s" onOpen={open} fallback="No active work" />);
+    const entry = await screen.findByRole('button', { name: 'Open session Work' });
+    expect(entry).toHaveTextContent(kind === 'goal' ? 'Waiting' : kind === 'loop' ? 'Monitor simulation' : 'Scheduled work');
+    expect(screen.queryByText('No active work')).toBeNull();
+    await userEvent.click(entry);
+    expect(open).toHaveBeenCalledOnce();
+  },
+);
+
 it('shows authoritative work and exposes a compact canvas entry without toggling tasks', async () => {
   const open = vi.fn();
   mount(
@@ -192,4 +218,32 @@ it('lets a user cancel an active schedule from Work', async () => {
     );
   await userEvent.setup().click(screen.getByRole('button', { name: 'Cancel schedule' }));
   expect(repository.deleteScheduledTurn).toHaveBeenCalledWith('schedule-1');
+});
+
+it('opens work details and sends identity-scoped stop, restart and delete actions', async () => {
+  const user = userEvent.setup();
+  mount(<SessionWorkView sessionId="s" />);
+  const goals = within(await screen.findByRole('region', { name: 'Goals' }));
+  await user.click(goals.getByText('Details'));
+  expect(goals.getAllByText('Unlimited')).toHaveLength(3);
+  await user.click(goals.getByRole('button', { name: 'Stop' }));
+  expect(repository.controlSessionWork).toHaveBeenCalledWith('s', 'goal', 'goal1', 'stop');
+  await user.click(goals.getByRole('button', { name: /Previous 1 goal records/ }));
+  await user.click(goals.getByRole('button', { name: 'Restart' }));
+  expect(repository.controlSessionWork).toHaveBeenCalledWith('s', 'goal', 'goal-old', 'restart');
+  const deletes = goals.getAllByRole('button', { name: 'Cancel and delete' });
+  await user.click(deletes[0]!);
+  expect(repository.controlSessionWork).toHaveBeenCalledWith('s', 'goal', 'goal1', 'delete');
+});
+
+it('includes waiting goals and enabled schedules in the bottom finder', async () => {
+  repository.sessionWork.mockResolvedValue({
+    ...snapshot,
+    goal: { ...goal, phase: 'waiting' },
+    schedules: [{ id: 'sch', question: 'Watch the simulation', enabled: true }],
+  });
+  mount(<SessionWorkSummary sessionId="s" onOpen={vi.fn()} />);
+  const entry = await screen.findByRole('button', { name: 'Open session Work' });
+  expect(entry).toHaveTextContent(/waiting/i);
+  expect(entry).toHaveTextContent(/1 schedule/i);
 });
