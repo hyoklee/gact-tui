@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ContentSelection } from '@clio/core/v3';
-import { transcriptContentSelection } from './transcript-content-selection';
+import { clampToBlock, transcriptContentSelection } from './transcript-content-selection';
 
 /**
  * What a person selected, and where. One discriminated union carries every
@@ -128,9 +128,9 @@ export function agentAnswerSelection(
   selection: Selection | null,
 ): AgentAnswerTextSelection | undefined {
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) return undefined;
-  const text = selection.toString().trim();
+  const range = clampToBlock(selection.getRangeAt(0), '[data-slot="message-text"]');
+  const text = range.toString().trim();
   if (!text) return undefined;
-  const range = selection.getRangeAt(0);
   const textBlock = elementOf(range.startContainer)?.closest('[data-slot="message-text"]');
   if (
     !textBlock ||
@@ -161,7 +161,13 @@ export function transcriptSelection(selection: Selection | null): SelectionTarge
   if (answer) return answer;
   const reference = transcriptContentSelection(selection);
   return reference
-    ? { kind: 'transcript-content', reference, text: selection?.toString() ?? '' }
+    ? {
+        kind: 'transcript-content',
+        reference,
+        text: selection?.rangeCount
+          ? clampToBlock(selection.getRangeAt(0), '[data-content-revision]').toString()
+          : '',
+      }
     : undefined;
 }
 

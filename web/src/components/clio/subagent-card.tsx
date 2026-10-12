@@ -1,5 +1,5 @@
 import type { MessageBlock, SubagentRun } from '@clio/core/v3';
-import { BotIcon, ChevronRightIcon } from 'lucide-react';
+import { BotIcon, ChevronRightIcon, ShieldCheckIcon } from 'lucide-react';
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { SubAgentDispatch, type SubAgentState } from '@/components/theokit/sub-agent-dispatch';
 import { formatDuration, truncate } from '@/lib/format';
@@ -181,6 +181,8 @@ export function ClioSubagentCard({ subagent, onOpen }: ClioSubagentCardProps) {
     );
   }
 
+  if (isSpotterWatcher(subagent)) return <SpotterWatcherLine subagent={subagent} onOpen={onOpen} />;
+
   const assignment = getChildAgentAssignment(subagent);
   const interactive = Boolean(subagent.child_session_id && onOpen);
 
@@ -267,4 +269,42 @@ function toTheoState(state: SubagentRun['state']): SubAgentState {
 /** Collapses wrapped prose to a single line, then cuts it to the card's budget. */
 function compactText(value: string, limit: number): string {
   return truncate(value.replace(/\s+/gu, ' ').trim(), limit);
+}
+
+/** The standing SPOTTER watcher (run label "SPOTTER AI") armed by the SPOTTER review policy. */
+function isSpotterWatcher(subagent: SubagentRun): boolean {
+  return subagent.title.startsWith('SPOTTER AI') || subagent.agent_id === 'spotter_watcher';
+}
+
+/** One quiet line instead of a dispatch card: the watcher has no assignment of its own. */
+function SpotterWatcherLine({
+  subagent,
+  onOpen,
+}: {
+  subagent: SubagentRun;
+  onOpen?: (subagent: SubagentRun, target: SubagentOpenTarget) => void;
+}) {
+  const interactive = Boolean(subagent.child_session_id && onOpen);
+  const busy = subagent.state === 'running' || subagent.state === 'queued';
+  return (
+    <button
+      aria-label={interactive ? 'Open the SPOTTER review conversation' : undefined}
+      className={cn(
+        'flex min-h-5 w-full min-w-0 items-center gap-1.5 px-1 text-left text-xs text-muted-foreground outline-none',
+        interactive
+          ? 'cursor-pointer hover:text-foreground focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring/50'
+          : 'cursor-default',
+      )}
+      disabled={!interactive}
+      onClick={(event) => onOpen?.(subagent, event.shiftKey ? 'canvas' : 'conversation')}
+      title={
+        interactive ? 'Open the SPOTTER review. Shift-click to open it in the canvas.' : undefined
+      }
+      type="button"
+    >
+      <ShieldCheckIcon aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
+      <span className="shrink-0 text-foreground">SPOTTER review started</span>
+      <span className="truncate">{busy ? 'reviewing this session' : 'watching this session'}</span>
+    </button>
+  );
 }
