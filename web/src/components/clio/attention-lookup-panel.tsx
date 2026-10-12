@@ -168,9 +168,7 @@ function ScopedAttentionLookup({
           );
           if (first) {
             setHeatCall(first.lm_call_id);
-            onHeatChange?.(
-              (first.kind === 'generated' ? first : first.heat) as AttentionAvailable,
-            );
+            onHeatChange?.((first.kind === 'generated' ? first : first.heat) as AttentionAvailable);
           }
         }
       } catch (failure) {

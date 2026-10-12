@@ -78,11 +78,21 @@ export function transcriptContentSelection(
 /**
  * A double- or triple-click selection ends at the start of the NEXT block (the
  * browser selects the paragraph's trailing line break). Clamp such a range to the
- * end of the block it started in, so a whole-paragraph selection is still one block.
+ * end of the block it started in, so a whole-paragraph selection is still one block;
+ * a range that selects text past the block is returned unchanged.
  */
 export function clampToBlock(range: Range, blockSelector: string): Range {
-  const block = (range.startContainer.nodeType === Node.ELEMENT_NODE ? (range.startContainer as Element) : range.startContainer.parentElement)?.closest(blockSelector);
+  const block = (
+    range.startContainer.nodeType === Node.ELEMENT_NODE
+      ? (range.startContainer as Element)
+      : range.startContainer.parentElement
+  )?.closest(blockSelector);
   if (!block || block.contains(range.endContainer)) return range;
+  // Only a spill that selects no text is the click artifact; a drag into other
+  // content (a tool card, the next message) stays a cross-block selection.
+  const spill = range.cloneRange();
+  spill.setStart(block, block.childNodes.length);
+  if (spill.toString().trim()) return range;
   const clamped = range.cloneRange();
   clamped.setEnd(block, block.childNodes.length);
   return clamped;

@@ -251,9 +251,11 @@ export function ClioSubagentCard({ subagent, onOpen }: ClioSubagentCardProps) {
   return (
     <div title={assignment.detail}>
       <SubAgentDispatch
-        aria-label={interactive
-          ? `Open child conversation ${subagent.title}`
-          : `Child conversation unavailable for ${subagent.title}`}
+        aria-label={
+          interactive
+            ? `Open child conversation ${subagent.title}`
+            : `Child conversation unavailable for ${subagent.title}`
+        }
         className={
           interactive
             ? 'cursor-pointer outline-none transition-colors hover:border-primary/60 hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-ring/50'
@@ -348,7 +350,9 @@ function SpotterWatcherLine({
       )}
       disabled={!interactive}
       onClick={(event) => onOpen?.(subagent, event.shiftKey ? 'canvas' : 'conversation')}
-      title={interactive ? 'Open the SPOTTER review. Shift-click to open it in the canvas.' : undefined}
+      title={
+        interactive ? 'Open the SPOTTER review. Shift-click to open it in the canvas.' : undefined
+      }
       type="button"
     >
       <ShieldCheckIcon aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
