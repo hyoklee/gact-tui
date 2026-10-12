@@ -18,7 +18,9 @@ export function MessageCompletionFooter({
   const settled = Boolean(message.completed_at || message.stop_reason);
   const reason = message.stop_reason?.toLowerCase();
   const interrupted = ['cancelled', 'error', 'failed', 'interrupted'].includes(reason ?? '');
-  const hasAnswer = message.blocks.some((block) => block.type === 'text' && block.text.trim());
+  const hasAnswer = message.blocks.some(
+    (block) => block.type === 'text' && block.channel !== 'next_thought' && block.text.trim(),
+  );
   // A recorded message boundary can be a question pause or a tool handoff.
   // Only an actual answer (or interruption) ends the response for the reader.
   if (

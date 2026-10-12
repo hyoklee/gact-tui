@@ -69,6 +69,11 @@ export function HarnessInjection({
         />
         <span className="shrink-0 text-xs font-normal">Injection</span>
         <span className="min-w-0 flex-1 truncate">{label}</span>
+        {block.source === 'summarization' ? (
+          <span className="shrink-0 text-xs font-normal">
+            {block.trigger === 'manual' ? 'Requested' : 'Automatic'}
+          </span>
+        ) : null}
         <ChevronRightIcon
           aria-hidden="true"
           className={cn('size-3 shrink-0 transition-transform', expanded && 'rotate-90')}

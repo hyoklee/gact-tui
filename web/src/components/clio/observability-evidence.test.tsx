@@ -12,6 +12,7 @@ import { ClioEvidenceView } from './observability-evidence';
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
 });
 
 describe('ClioEvidenceView operational inventory', () => {
@@ -589,7 +590,7 @@ describe('ClioEvidenceView child agents', () => {
     state: 'running' as const,
   };
 
-  it('always lists child agents, with a collapsed explicit empty state', async () => {
+  it('always lists child agents, with an explicit empty state and a disclosure', async () => {
     render(
       <ClioEvidenceView
         artifacts={[]}
@@ -610,9 +611,9 @@ describe('ClioEvidenceView child agents', () => {
       />,
     );
     expect(screen.getByRole('button', { name: 'Child agents, 0 recorded' })).toBeVisible();
-    expect(screen.queryByText('No child agents in this session yet.')).not.toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Child agents, 0 recorded' }));
     expect(screen.getByText('No child agents in this session yet.')).toBeVisible();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Child agents, 0 recorded' }));
+    expect(screen.queryByText('No child agents in this session yet.')).not.toBeInTheDocument();
   });
 
   it('opens in the main chat on click and in the canvas on Shift-click or the canvas action', async () => {

@@ -1,5 +1,5 @@
 import type { ClioRepository, PendingInteraction, Task, ToolInvocation } from '@clio/core/v3';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // The plan review renders Markdown through a React.lazy boundary. Importing the
 // Markdown module graph (streamdown + math + cjk plugins) here loads it while the
@@ -244,6 +244,8 @@ describe('ConversationTurn correlated work placement', () => {
       'tool:call_read',
       'subagent:handoff_returned',
     ]);
+    expect(screen.queryByText(child.task)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show result for Delegate' }));
     expect(screen.getByText(child.task)).toBeVisible();
     expect(screen.queryByText(child.result)).not.toBeInTheDocument();
   });
@@ -317,8 +319,10 @@ describe('ConversationTurn correlated work placement', () => {
       name: 'Workflow steps: inventory → verification',
     });
     expect(group).toBeVisible();
-    expect(group).toHaveTextContent('inventory #1');
-    expect(group).toHaveTextContent('verification #1');
+    expect(group).toHaveTextContent('inventory');
+    expect(group).toHaveTextContent('verification');
+    expect(within(group).getAllByText('Delegate', { exact: true })).toHaveLength(2);
+    expect(within(group).getAllByText('Subagent result', { exact: true })).toHaveLength(2);
     expect(
       screen.queryByText('inventory #1', { selector: '[data-turn-activity^="subagent"] *' }),
     ).not.toBeInTheDocument();

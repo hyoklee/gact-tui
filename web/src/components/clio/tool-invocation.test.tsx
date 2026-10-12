@@ -491,7 +491,7 @@ describe('ClioToolInvocation content and subject rendering', () => {
       expect(icon).toHaveFocus();
     },
   );
-  it('renders declared checklist states without status-word or tool-name inference', () => {
+  it('renders declared checklist states without status-word or tool-name inference', async () => {
     render(
       <ClioToolInvocation
         tool={{
@@ -510,6 +510,8 @@ describe('ClioToolInvocation content and subject rendering', () => {
         }}
       />,
     );
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    await userEvent.click(screen.getByRole('button', { name: 'Show completed 1' }));
     expect(screen.getAllByRole('listitem')).toHaveLength(3);
     expect(screen.getByRole('img', { name: 'Pending' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'In progress' })).toBeInTheDocument();

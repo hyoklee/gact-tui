@@ -154,7 +154,7 @@ describe('answered record for a composer-message answer (#1448)', () => {
     expect(screen.getByRole('list', { name: 'Attached files' })).toHaveTextContent('stations.csv');
     expect(screen.queryByText(/msg_user_1/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Answer message id/i)).not.toBeInTheDocument();
-    expect(screen.getByText('Answer sent to the agent')).toBeInTheDocument();
-    expect(screen.getByText('The agent continues with your answer.')).toBeInTheDocument();
+    expect(screen.getByText('You responded')).toBeInTheDocument();
+    expect(screen.getAllByText('Use the attached list.')).toHaveLength(1);
   });
 });

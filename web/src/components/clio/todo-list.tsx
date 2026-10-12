@@ -69,6 +69,7 @@ export function TodoList<T>({
           <CollapsibleTrigger asChild>
             <Button
               type="button"
+              aria-label={`${open ? 'Hide' : 'Show'} completed ${completed.length}`}
               variant="ghost"
               className="group h-7 gap-1.5 px-1 text-xs font-normal text-muted-foreground hover:bg-transparent hover:text-foreground"
             >

@@ -73,7 +73,7 @@ it('offers the managed local service from Aurora even though only Aurora is reme
   );
   const { rerender } = render(view());
   for (const destination of [mocks.connections[1]!, mocks.connections[0]!]) {
-    await user.click(screen.getByRole('button', { name: /CLIO.*Local/u }));
+    await user.click(screen.getByRole('button', { name: /Local/u }));
     const item = screen
       .getAllByRole('menuitem')
       .find((node) => node.textContent?.includes(destination.endpoint));

@@ -18,7 +18,7 @@ beforeEach(() => {
 });
 
 describe('ClioToolInvocation status and lifecycle semantics', () => {
-  it('keeps a multi-line shell command inside the same bounded preview as stdout', () => {
+  it('bounds the input command and output separately inside one Run result', () => {
     const { container } = render(
       <ClioToolInvocation
         tool={{
@@ -45,7 +45,10 @@ describe('ClioToolInvocation status and lifecycle semantics', () => {
     const viewport = command.closest('[style]');
     expect(viewport).toHaveClass('overflow-hidden');
     expect(viewport).toHaveAttribute('style', expect.stringContaining('max-height:'));
-    expect(viewport?.textContent).toContain('Done');
+    expect(viewport?.textContent).not.toContain('Done');
+    const output = screen.getByRole('region', { name: 'Command output' });
+    expect(output).toHaveTextContent('Done');
+    expect(output).not.toHaveTextContent('print(0)');
     expect(container.querySelector('[data-slot="tool-human-result"]')).toContainElement(
       viewport as HTMLElement,
     );
