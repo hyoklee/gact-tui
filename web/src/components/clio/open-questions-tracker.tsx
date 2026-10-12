@@ -1,6 +1,6 @@
 import type { PendingInteraction } from '@clio/core/v3';
 import { MessageCircleQuestionIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useQuestionAnswer } from './question-answer-context';
@@ -16,6 +16,7 @@ export function OpenQuestionsTracker({
 }) {
   const answer = useQuestionAnswer();
   const [open, setOpen] = useState(false);
+  const focusDestination = useRef(false);
   const questions = interactions.filter(
     (row) =>
       row.kind === 'question' &&
@@ -31,7 +32,13 @@ export function OpenQuestionsTracker({
       className="pointer-events-auto absolute right-3 z-30"
       style={{ bottom: bottomInset + 12 }}
     >
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover
+        open={open}
+        onOpenChange={(next) => {
+          if (next) focusDestination.current = false;
+          setOpen(next);
+        }}
+      >
         <PopoverTrigger asChild>
           <Button
             aria-label={`${questions.length} open question${questions.length === 1 ? '' : 's'}`}
@@ -47,6 +54,9 @@ export function OpenQuestionsTracker({
           aria-label="Open questions"
           side="top"
           align="end"
+          onCloseAutoFocus={(event) => {
+            if (focusDestination.current) event.preventDefault();
+          }}
           className="max-h-[min(24rem,var(--radix-popover-content-available-height))] w-96 max-w-[calc(100vw-2rem)] overflow-y-auto p-3"
         >
           <p className="text-sm font-medium">Open questions</p>
@@ -66,6 +76,7 @@ export function OpenQuestionsTracker({
                   <Button
                     size="sm"
                     onClick={() => {
+                      focusDestination.current = true;
                       setOpen(false);
                       answer.openQuestion?.(row);
                     }}
@@ -77,6 +88,7 @@ export function OpenQuestionsTracker({
                       size="sm"
                       variant="ghost"
                       onClick={() => {
+                        focusDestination.current = true;
                         setOpen(false);
                         followTranscriptLink(link);
                       }}
