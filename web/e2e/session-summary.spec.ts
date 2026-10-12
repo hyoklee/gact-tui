@@ -167,7 +167,15 @@ for (const density of ['both', 'work']) {
           Math.ceil(node.children[1]!.firstElementChild!.getBoundingClientRect().height) +
           1,
       );
-    if (density === 'work') {
+    if (density === 'both') {
+      // Both inventories need their ResizeObserver measurements before the
+      // allocator can lend them equal space. Preserve the exact final tolerance.
+      await expect
+        .poll(async () =>
+          Math.abs((await data.boundingBox())!.height - (await work.boundingBox())!.height),
+        )
+        .toBeLessThan(2);
+    } else {
       // ResizeObserver applies the newly measured allocation on the next
       // animation frame. Wait for that allocation, retaining the same exact
       // half-pixel tolerance rather than accepting a clipped natural height.
