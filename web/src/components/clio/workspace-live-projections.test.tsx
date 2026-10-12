@@ -38,13 +38,16 @@ vi.mock('./conversation', () => ({
     compactions,
     surfaces,
     preparation,
+    sessionId,
   }: {
     artifacts: Record<string, Artifact>;
     compactions?: readonly PendingCompaction[];
     surfaces: Record<string, A2UISurface>;
     preparation?: { activeTurnResponded?: boolean };
+    sessionId?: string;
   }) => (
     <>
+      <output data-testid="conversation-session">{sessionId}</output>
       <output data-testid="turn-responded">{String(preparation?.activeTurnResponded)}</output>
       <output data-testid="compaction-ids">
         {(compactions ?? []).map((compaction) => compaction.compaction_id).join(',')}
@@ -89,6 +92,10 @@ function render(ui: ReactElement) {
 }
 
 describe('WorkspaceLiveConversation', () => {
+  it('passes the session identity before transcript messages have loaded', () => {
+    render(<WorkspaceLiveConversation artifacts={[]} sessionId="sess_1" subagents={[]} />);
+    expect(screen.getByTestId('conversation-session')).toHaveTextContent('sess_1');
+  });
   it('passes the active session identity to the compact work inventory', () => {
     render(
       <QueryClientProvider client={new QueryClient()}>

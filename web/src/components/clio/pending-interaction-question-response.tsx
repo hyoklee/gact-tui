@@ -31,6 +31,7 @@ export function QuestionResponse({
   ownerLabel,
   responseError,
   showOwner,
+  showFullPrompt,
 }: {
   interaction: PendingInteraction;
   disabled?: boolean;
@@ -41,6 +42,7 @@ export function QuestionResponse({
   ownerLabel?: string;
   responseError?: Error;
   showOwner: boolean;
+  showFullPrompt?: boolean;
 }) {
   const [answer, setAnswer] = useState('');
   const [selection, setSelection] = useState('');
@@ -108,6 +110,7 @@ export function QuestionResponse({
         }
         ownerLabel={ownerLabel}
         showOwner={showOwner}
+        showFullPrompt={showFullPrompt}
       />
       <FramePanel className="min-w-0 overflow-hidden">
         <ResponseErrorNotice error={responseError} />
