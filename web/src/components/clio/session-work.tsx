@@ -35,6 +35,18 @@ import { cn } from '@/lib/utils';
 import { useSessionWork } from './use-session-work';
 import { WorkRecordControls } from './work-record-controls';
 
+/** Keep parked goals and future monitoring visible in the bottom work finder. */
+export function SessionWorkStatus({ sessionId, onOpen, fallback }: {
+  sessionId: string; onOpen: () => void; fallback: string;
+}) {
+  const { data } = useSessionWork(sessionId);
+  return data && (data.goal || data.loop || data.schedules.length) ? (
+    <div className="min-w-0 max-w-96 [&_button]:h-5 [&_button]:text-[0.625rem]">
+      <SessionWorkSummary sessionId={sessionId} onOpen={onOpen} />
+    </div>
+  ) : <span>{fallback}</span>;
+}
+
 /** Compact entry to authoritative work state, independent of transcript expansion. */
 export function SessionWorkSummary({
   sessionId,

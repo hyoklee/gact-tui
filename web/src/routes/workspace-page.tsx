@@ -690,6 +690,7 @@ export function WorkspacePage() {
           statusStrip={
             <WorkspaceLiveStatusStrip
               activeWorkCount={activeWorkCount}
+              onOpenWork={() => revealWorkbench({ kind: 'resources', section: 'work' })}
               sessionId={sessionId}
               sessionState={session?.state}
             />

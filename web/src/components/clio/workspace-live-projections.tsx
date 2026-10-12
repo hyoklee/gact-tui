@@ -172,6 +172,7 @@ export function WorkspaceLiveStatusStrip({ sessionId, ...props }: LiveStatusStri
   return (
     <WorkspaceStatusStrip
       {...props}
+      sessionId={sessionId}
       cost={usage?.cost_usd}
       cursor={cursor}
       stream={stream}

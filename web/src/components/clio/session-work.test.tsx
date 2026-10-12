@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { SessionWorkSummary, SessionWorkView } from './session-work';
+import { SessionWorkStatus, SessionWorkSummary, SessionWorkView } from './session-work';
 
 const { repository } = vi.hoisted(() => ({
   repository: {
@@ -87,6 +87,25 @@ function mount(children: React.ReactNode) {
     </QueryClientProvider>,
   );
 }
+
+it.each(['goal', 'loop', 'schedule'])(
+  'keeps a parked %s accessible from the bottom work finder', async (kind) => {
+    repository.sessionWork.mockResolvedValue({
+      ...snapshot, todos: [],
+      goal: kind === 'goal' ? { ...goal, phase: 'waiting' } : null,
+      loop: kind === 'loop' ? { ...goal, kind: 'loop', title: 'Monitor simulation' } : null,
+      schedules: kind === 'schedule' ? [{ id: 'future', question: 'Inspect results', enabled: true }] : [],
+    });
+    const open = vi.fn();
+    mount(<SessionWorkStatus sessionId="s" onOpen={open} fallback="No active work" />);
+    const entry = await screen.findByRole('button', { name: 'Open session Work' });
+    expect(entry).toHaveTextContent(kind === 'goal' ? 'Waiting' : kind === 'loop' ? 'Monitor simulation' : 'Scheduled work');
+    expect(screen.queryByText('No active work')).toBeNull();
+    await userEvent.click(entry);
+    expect(open).toHaveBeenCalledOnce();
+  },
+);
+
 it('shows authoritative work and exposes a compact canvas entry without toggling tasks', async () => {
   const open = vi.fn();
   mount(
