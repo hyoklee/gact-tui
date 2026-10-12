@@ -9,13 +9,11 @@ import type {
 } from '@clio/core/v3';
 import {
   ActivityIcon,
-  BoxesIcon,
   BoxIcon,
   FileDiffIcon,
   FileTextIcon,
   ListChecksIcon,
   ListTreeIcon,
-  ServerIcon,
   WaypointsIcon,
   WrenchIcon,
 } from 'lucide-react';
@@ -32,6 +30,7 @@ import { SessionSummaryRow } from './session-summary-row';
 import { clioStatusLabel } from './status';
 import { ClioToolInvocation } from './tool-invocation';
 import { AsyncTaskList } from './async-task-list';
+import { taskActivity } from './task-activity';
 
 /** Compact inventory of the same authoritative evidence used by the full view. */
 export function SessionEvidenceSummary({
@@ -69,6 +68,7 @@ export function SessionEvidenceSummary({
   subagents: readonly SubagentRun[];
   backgroundProcesses: readonly AsyncProcess[];
 }) {
+  const activityCount = taskActivity(backgroundProcesses, subagents).length;
   return (
     <Accordion
       type="multiple"
@@ -129,30 +129,6 @@ export function SessionEvidenceSummary({
           ))}
         </EvidenceSection>
       ) : null}
-      {subagents.length ? (
-        <EvidenceSection
-          compact
-          icon={BoxesIcon}
-          label="Child agents"
-          value="child-agents"
-          count={subagents.length}
-        >
-          {subagents.map((agent) => (
-            <SessionSummaryRow
-              key={agent.id}
-              icon={<BoxesIcon />}
-              label={agent.title}
-              metadata={clioStatusLabel(agent.state)}
-              onOpen={
-                agent.child_session_id && actions.onOpenSubagent
-                  ? (event) =>
-                      actions.onOpenSubagent?.(agent, event.shiftKey ? 'canvas' : 'conversation')
-                  : undefined
-              }
-            />
-          ))}
-        </EvidenceSection>
-      ) : null}
       {tools.length ? (
         <EvidenceSection
           compact
@@ -166,16 +142,18 @@ export function SessionEvidenceSummary({
           ))}
         </EvidenceSection>
       ) : null}
-      {backgroundProcesses.length ? (
+      {activityCount ? (
         <EvidenceSection
           compact
-          icon={ServerIcon}
-          label="Background tasks"
+          icon={ActivityIcon}
+          label="Background work"
           value="background"
-          count={backgroundProcesses.length}
+          count={activityCount}
         >
           <AsyncTaskList
             processes={backgroundProcesses}
+            subagents={subagents}
+            onOpenSubagent={actions.onOpenSubagent}
             onCancelTask={actions.onCancelTask}
             onControlTask={actions.onControlTask}
           />

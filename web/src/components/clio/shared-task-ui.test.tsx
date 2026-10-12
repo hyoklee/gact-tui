@@ -61,10 +61,17 @@ it.each(['MCP', 'Subagent'] as const)(
       />,
     );
     const user = userEvent.setup();
-    expect(screen.getByText(`${kind} · Owned work`)).toBeVisible();
-    expect(screen.getByText(task.description!)).toBeVisible();
-    expect(screen.getByText('running — Reading owned evidence')).toBeVisible();
-    const name = `Cancel ${kind}: ${task.description}`;
+    expect(screen.getByRole('button', { name: 'Task details: Owned work' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    expect(screen.queryByText(task.description!)).not.toBeInTheDocument();
+    expect(screen.getByText(`${kind} · Running — Reading owned evidence`)).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Task details: Owned work' }));
+    expect(screen.getByRole('region', { name: 'Assignment: Owned work' }).textContent).toBe(
+      task.description,
+    );
+    const name = `Cancel ${kind}: ${task.title}`;
     await user.click(screen.getByRole('button', { name }));
     expect(screen.getByRole('region', { name: 'Task assignment' })).toHaveTextContent(
       task.description!,
@@ -80,7 +87,9 @@ it.each(['MCP', 'Subagent'] as const)(
     await user.click(screen.getByRole('button', { name: 'Cancel task' }));
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(cancel).toHaveBeenCalledWith(task);
-    expect(screen.getByText('Cancellation requested — Reading owned evidence')).toBeVisible();
+    expect(
+      screen.getByText(`${kind} · Cancellation requested — Reading owned evidence`),
+    ).toBeVisible();
     expect(screen.getByRole('button', { name })).toBeDisabled();
     finish();
     await waitFor(() => expect(cancel).toHaveBeenCalledTimes(1));
@@ -226,7 +235,7 @@ it.each([
     );
     const view = render(<AsyncTaskList processes={[task]} onCancelTask={cancel} />);
     const user = userEvent.setup();
-    const buttonName = `Cancel Subagent: ${description}`;
+    const buttonName = `Cancel Subagent: ${task.title}`;
     await user.click(screen.getByRole('button', { name: buttonName }));
     expect(screen.getByRole('alertdialog')).toHaveTextContent(
       'all descendant agents, downloads and shell processes',
@@ -238,7 +247,7 @@ it.each([
     await user.click(screen.getByRole('button', { name: buttonName }));
     await user.click(screen.getByRole('button', { name: 'Cancel task' }));
     expect(cancel).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('Cancellation requested')).toBeVisible();
+    expect(screen.getByText('Subagent · Cancellation requested')).toBeVisible();
     expect(screen.getByRole('button', { name: buttonName })).toBeDisabled();
     finish();
     await waitFor(() => expect(cancel).toHaveBeenCalledTimes(1));
@@ -255,7 +264,7 @@ it.each([
         onCancelTask={cancel}
       />,
     );
-    expect(screen.getByText('cancelled')).toBeVisible();
+    expect(screen.getByText('Subagent · Cancelled')).toBeVisible();
     expect(screen.queryByRole('button', { name: buttonName })).toBeNull();
   },
 );

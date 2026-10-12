@@ -1,11 +1,5 @@
-import type { AsyncProcess } from '@clio/core/v3';
-import {
-  CheckCircle2Icon,
-  CircleAlertIcon,
-  LoaderCircleIcon,
-  PauseIcon,
-  PlayIcon,
-} from 'lucide-react';
+import type { AsyncProcess, SubagentRun } from '@clio/core/v3';
+import { PauseIcon, PlayIcon } from 'lucide-react';
 import { CloseIcon, RetryIcon } from '@/lib/icon-vocabulary';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -19,17 +13,27 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { taskProgressLabel } from './task-progress-label';
+import { taskActivity } from './task-activity';
+import { TaskActivityRow } from './task-activity-row';
+import type { ClioEvidenceViewProps } from './observability-evidence';
 
 const settled = new Set(['completed', 'failed', 'cancelled', 'interrupted']);
 
 export interface AsyncTaskListProps {
   processes: readonly AsyncProcess[];
+  subagents?: readonly SubagentRun[];
+  onOpenSubagent?: ClioEvidenceViewProps['onOpenSubagent'];
   onCancelTask?: (task: AsyncProcess) => Promise<void>;
   onControlTask?: (task: AsyncProcess, action: 'pause' | 'resume' | 'restart') => Promise<void>;
 }
 
-export function AsyncTaskList({ processes, onCancelTask, onControlTask }: AsyncTaskListProps) {
+export function AsyncTaskList({
+  processes,
+  subagents,
+  onOpenSubagent,
+  onCancelTask,
+  onControlTask,
+}: AsyncTaskListProps) {
   const [selected, setSelected] = useState<AsyncProcess>();
   const [requested, setRequested] = useState<Set<string>>(new Set());
   const submitting = useRef(new Set<string>());
@@ -75,85 +79,92 @@ export function AsyncTaskList({ processes, onCancelTask, onControlTask }: AsyncT
     }
   };
   return (
-    <div className="min-w-0 space-y-2" aria-label="Background tasks">
-      {processes.map((task) => {
-        const handle = task.handle ?? task.handle_id ?? task.id;
+    <div className="min-w-0 space-y-0.5" aria-label="Background work">
+      {taskActivity(processes, subagents).map((entry) => {
+        const task = entry.process;
+        if (!task)
+          return (
+            <TaskActivityRow
+              key={entry.key}
+              entry={entry}
+              status={entry.subagent!.state}
+              onOpenSubagent={onOpenSubagent}
+            />
+          );
+        const handle = entry.key;
         const status = task.effective_status ?? task.live_state;
         const active = !settled.has(status);
         const cancellable = task.supported_actions?.includes('cancel');
         const cancelling =
           (active || cancellable) && (task.cancel_requested || requested.has(handle));
-        const held = status === 'paused' || status === 'pause_requested';
-        const Icon = held
-          ? PauseIcon
-          : active
-            ? LoaderCircleIcon
-            : status === 'completed'
-              ? CheckCircle2Icon
-              : CircleAlertIcon;
         const kind = task.task_kind ?? (task.kind === 'agent' ? 'Subagent' : 'MCP');
-        const progress = taskProgressLabel(task.progress, kind);
         return (
-          <div key={handle} className="flex min-w-0 items-start gap-2 rounded-md border p-2">
-            <Icon
-              aria-hidden="true"
-              className={`mt-0.5 size-4 shrink-0 ${active && !held ? 'animate-spin motion-reduce:animate-none' : ''}`}
-            />
-            <div className="min-w-0 flex-1">
-              <p className="text-xs text-muted-foreground">
-                {kind} · {task.title}
-              </p>
-              <p className="break-words text-sm">
-                {task.description || 'Description unavailable for this older task'}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {cancelling
-                  ? 'Cancellation requested'
-                  : controlling[handle]
-                    ? `${controlling[handle]} requested`
-                    : status.replaceAll('_', ' ')}
-                {progress ? ` — ${progress}` : ''}
-              </p>
-            </div>
-            {onControlTask
-              ? (['pause', 'resume', 'restart'] as const)
-                  .filter((action) => task.supported_actions?.includes(action))
-                  .map((action) => {
-                    const ActionIcon =
-                      action === 'pause' ? PauseIcon : action === 'resume' ? PlayIcon : RetryIcon;
-                    return (
-                      <Button
-                        key={action}
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`${action} Subagent: ${task.description || task.title}`}
-                        disabled={Boolean(
-                          controlling[handle] || cancelling || status === 'pause_requested',
-                        )}
-                        onClick={() =>
-                          action === 'restart' ? setRestart(task) : void control(task, action)
-                        }
-                      >
-                        <ActionIcon aria-hidden="true" className="size-4" />
-                      </Button>
-                    );
-                  })
-              : null}
-            {cancellable && onCancelTask ? (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Cancel ${kind}: ${task.description || task.title}`}
-                disabled={Boolean(cancelling)}
-                onClick={() => {
-                  setError('');
-                  setSelected(task);
-                }}
-              >
-                <CloseIcon aria-hidden="true" className="size-4" />
-              </Button>
-            ) : null}
-          </div>
+          <TaskActivityRow
+            key={handle}
+            entry={entry}
+            onOpenSubagent={onOpenSubagent}
+            status={
+              cancelling
+                ? 'cancellation_requested'
+                : controlling[handle]
+                  ? `${controlling[handle]}_requested`
+                  : status
+            }
+            actions={
+              <>
+                {onControlTask
+                  ? (['pause', 'resume', 'restart'] as const)
+                      .filter((action) => task.supported_actions?.includes(action))
+                      .map((action) => {
+                        const ActionIcon =
+                          action === 'pause'
+                            ? PauseIcon
+                            : action === 'resume'
+                              ? PlayIcon
+                              : RetryIcon;
+                        return (
+                          <Button
+                            key={action}
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`${action} Subagent: ${task.title}`}
+                            title={
+                              action === 'pause'
+                                ? 'Pause agent'
+                                : action === 'resume'
+                                  ? 'Resume agent'
+                                  : 'Restart agent'
+                            }
+                            disabled={Boolean(
+                              controlling[handle] || cancelling || status === 'pause_requested',
+                            )}
+                            onClick={() =>
+                              action === 'restart' ? setRestart(task) : void control(task, action)
+                            }
+                          >
+                            <ActionIcon aria-hidden="true" className="size-4" />
+                          </Button>
+                        );
+                      })
+                  : null}
+                {cancellable && onCancelTask ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Cancel ${kind}: ${task.title}`}
+                    title="Cancel task"
+                    disabled={Boolean(cancelling)}
+                    onClick={() => {
+                      setError('');
+                      setSelected(task);
+                    }}
+                  >
+                    <CloseIcon aria-hidden="true" className="size-4" />
+                  </Button>
+                ) : null}
+              </>
+            }
+          />
         );
       })}
       {error ? (

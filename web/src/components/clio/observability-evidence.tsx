@@ -66,6 +66,7 @@ import type { SubagentOpenTarget } from './subagent-card';
 import { getToolActivityTitle, getToolStatus, getToolSummary } from './tool-presentation';
 import { AsyncTaskList } from './async-task-list';
 import { SessionEvidenceSummary } from './session-evidence-summary';
+import { taskActivity } from './task-activity';
 
 export interface ClioEvidenceViewProps {
   compact?: boolean;
@@ -107,6 +108,13 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
   const backgroundProcesses = showActivity ? props.processes : [];
   const runs = showActivity ? (props.runs ?? []) : [];
   const subagents = showActivity ? (props.subagents ?? []) : [];
+  const activity = taskActivity(backgroundProcesses, subagents);
+  const separateSubagents = activity.flatMap((entry) =>
+    !entry.process && entry.subagent ? [entry.subagent] : [],
+  );
+  const taskSubagents = activity.flatMap((entry) =>
+    entry.process && entry.subagent ? [entry.subagent] : [],
+  );
   const tasks = showActivity ? (props.tasks ?? []) : [];
   const tools = showActivity ? (props.tools ?? []) : [];
   const files = showData
@@ -206,14 +214,14 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
             delegated agent, child session, and standing watcher of this
             session can be found and opened, so its absence must read as
             "none yet", never as a missing feature. */}
-        {showActivity && (!props.compact || subagents.length) ? (
+        {showActivity && (!subagents.length || separateSubagents.length) ? (
           <EvidenceSection
             icon={BoxesIcon}
             label="Child agents"
             value="child-agents"
-            count={subagents.length}
+            count={separateSubagents.length}
           >
-            <SubagentEvidence onOpenSubagent={props.onOpenSubagent} subagents={subagents} />
+            <SubagentEvidence onOpenSubagent={props.onOpenSubagent} subagents={separateSubagents} />
           </EvidenceSection>
         ) : null}
         {tools.length ? (
@@ -230,6 +238,8 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
           >
             <AsyncTaskList
               processes={backgroundProcesses}
+              subagents={taskSubagents}
+              onOpenSubagent={props.onOpenSubagent}
               onCancelTask={props.onCancelTask}
               onControlTask={props.onControlTask}
             />
