@@ -5,6 +5,9 @@ import { Accordion } from '@/components/ui/accordion';
 import { useRepository } from '@/hooks/use-repository';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { connectionScope } from '@/lib/connection-scope';
+import { useEvidenceSections } from '@/hooks/use-evidence-disclosures';
+import { TodoList, TodoStatusIcon } from './todo-list';
+import { todoCurrentSummary } from './todo-list-summary';
 import { EvidenceSection } from './observability-evidence-section';
 import { useSessionWork } from './use-session-work';
 import { SessionSummaryRow } from './session-summary-row';
@@ -25,6 +28,7 @@ export function SessionConnectedSources({
     refetchInterval: 5000,
   });
   const connected = sources.data?.filter((source) => source.connected) ?? [];
+  const sections = useEvidenceSections('evidence-connected', ['connected']);
   if (sources.error)
     return (
       <p role="alert" className="py-2 text-xs">
@@ -33,7 +37,7 @@ export function SessionConnectedSources({
     );
   if (!connected.length) return null;
   return (
-    <Accordion type="multiple" defaultValue={['connected']}>
+    <Accordion type="multiple" {...sections}>
       <EvidenceSection
         compact
         icon={DatabaseIcon}
@@ -72,6 +76,7 @@ export function SessionWorkShowcase({
   });
   const todos = work.data?.todos ?? [];
   const scheduled = schedules.data?.schedules ?? [];
+  const sections = useEvidenceSections('evidence-work', ['todos', 'schedules']);
   return (
     <>
       {work.error ? (
@@ -84,7 +89,7 @@ export function SessionWorkShowcase({
           Schedules could not be loaded.
         </p>
       ) : null}
-      <Accordion type="multiple" defaultValue={['todos', 'schedules']}>
+      <Accordion type="multiple" {...sections}>
         {todos.length ? (
           <EvidenceSection
             compact
@@ -92,16 +97,29 @@ export function SessionWorkShowcase({
             label="Todos"
             value="todos"
             count={todos.length}
+            summary={todoCurrentSummary(todos, (todo) => todo.status)}
           >
-            {todos.map((todo, index) => (
-              <SessionSummaryRow
-                key={`${index}:${todo.content}`}
-                icon={<ListChecksIcon />}
-                label={todo.content}
-                metadata={todo.status === 'in_progress' ? 'In progress' : todo.status}
-                onOpen={onOpenWork}
-              />
-            ))}
+            <TodoList
+              items={todos}
+              status={(todo) => todo.status}
+              scope="showcase"
+              renderItem={(todo, index) => (
+                <li key={`${index}:${todo.content}`}>
+                  <SessionSummaryRow
+                    icon={<TodoStatusIcon state={todo.status} />}
+                    label={todo.content}
+                    metadata={
+                      todo.status === 'in_progress'
+                        ? 'In progress'
+                        : todo.status === 'completed'
+                          ? 'Completed'
+                          : 'Pending'
+                    }
+                    onOpen={onOpenWork}
+                  />
+                </li>
+              )}
+            />
           </EvidenceSection>
         ) : null}
         {scheduled.length ? (
@@ -125,7 +143,7 @@ export function SessionWorkShowcase({
                     : undefined,
                 ]
                   .filter(Boolean)
-                  .join(' · ')}
+                  .join(' — ')}
                 onOpen={onOpenWork}
               />
             ))}

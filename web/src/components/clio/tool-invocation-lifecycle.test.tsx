@@ -20,21 +20,35 @@ beforeEach(() => {
 describe('ClioToolInvocation status and lifecycle semantics', () => {
   it('keeps a multi-line shell command inside the same bounded preview as stdout', () => {
     const { container } = render(
-      <ClioToolInvocation tool={{
-        id: 'script', session_id: 's', name: 'shell_bash', state: 'succeeded',
-        presentation: { summary: '', blocks: [{
-          id: 'terminal', type: 'terminal',
-          command: Array.from({ length: 80 }, (_, i) => `print(${i})`).join('\n'),
-          text: 'Done', exit_code: 0,
-        }] },
-      }} />,
+      <ClioToolInvocation
+        tool={{
+          id: 'script',
+          session_id: 's',
+          name: 'shell_bash',
+          state: 'succeeded',
+          presentation: {
+            summary: '',
+            blocks: [
+              {
+                id: 'terminal',
+                type: 'terminal',
+                command: Array.from({ length: 80 }, (_, i) => `print(${i})`).join('\n'),
+                text: 'Done',
+                exit_code: 0,
+              },
+            ],
+          },
+        }}
+      />,
     );
     const command = screen.getByLabelText('Command');
     const viewport = command.closest('[style]');
     expect(viewport).toHaveClass('overflow-hidden');
     expect(viewport).toHaveAttribute('style', expect.stringContaining('max-height:'));
     expect(viewport?.textContent).toContain('Done');
-    expect(container.querySelector('[data-slot="tool-human-result"]')).toContainElement(viewport as HTMLElement);
+    expect(container.querySelector('[data-slot="tool-human-result"]')).toContainElement(
+      viewport as HTMLElement,
+    );
   });
   it('shows one filename and opens its declared full path in the workbench', async () => {
     const openFile = vi.fn();
@@ -352,7 +366,13 @@ describe('ClioToolInvocation status and lifecycle semantics', () => {
             presentation: {
               summary: '',
               blocks: [
-                { id: 'terminal', type: 'terminal', text: 'row-00000\nrow-00001\n', exit_code: 0 },
+                {
+                  id: 'terminal',
+                  type: 'terminal',
+                  command: 'read-data',
+                  text: 'row-00000\nrow-00001\n',
+                  exit_code: 0,
+                },
                 {
                   id: 'saved-output-stdout',
                   type: 'link',
@@ -372,6 +392,12 @@ describe('ClioToolInvocation status and lifecycle semantics', () => {
 
     const saved = screen.getByRole('region', { name: 'Full output saved (20,000 lines, 391 KB)' });
     expect(saved.closest('[data-slot="terminal-saved-output"]')).toBe(saved);
+    const output = screen.getByRole('region', { name: 'Command output' });
+    expect(screen.getByRole('region', { name: 'Input command' })).toHaveTextContent('read-data');
+    expect(output).toContainElement(saved);
+    expect(saved).not.toHaveTextContent('row-19999');
+    expect(output).toHaveTextContent('row-00000');
+    expect(output).toHaveTextContent('row-19999');
     expect(screen.getByText('Last 2 lines')).toBeVisible();
     expect(screen.getByText(/row-19999/u)).toBeVisible();
     // The saved-output link renders once, inside the card -- not again as a loose link.

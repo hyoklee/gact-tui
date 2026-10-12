@@ -1,0 +1,82 @@
+import type { ToolPresentationBlock } from '@clio/core/v3';
+import {
+  Terminal,
+  TerminalCommand,
+  TerminalContent,
+  TerminalHeader,
+} from '@/components/ai-elements/terminal';
+import { BoundedResult } from './bounded-result';
+import { PagedBlock } from './tool-result-primitives';
+import { SavedTerminalOutput } from './tool-result-saved-output';
+
+/** A Run result has one command section and one output section, including saved excerpts. */
+export function ToolTerminalResult({
+  block,
+  saved,
+  lines,
+  running,
+}: {
+  block: ToolPresentationBlock;
+  saved: readonly ToolPresentationBlock[];
+  lines: number;
+  running: boolean;
+}) {
+  const excerpts = running ? [] : saved.filter((item) => item.text || item.content_ref);
+  const outputBlocks = [block, ...excerpts];
+  const renderOutput = (item: ToolPresentationBlock, text: string) => (
+    <div className="min-w-0">
+      {item.id !== block.id && item.detail ? (
+        <p className="border-t border-zinc-800 px-3 pt-2 text-xs text-zinc-400">{item.detail}</p>
+      ) : null}
+      <TerminalContent
+        output={text}
+        className="max-h-none overflow-visible bg-zinc-950 px-3 py-2 text-zinc-100 [&>pre]:p-0"
+      />
+    </div>
+  );
+  return (
+    <Terminal output={block.text ?? ''} autoScroll={false} isStreaming={running}>
+      {block.command ? (
+        <section aria-label="Input command" data-slot="run-command">
+          <TerminalHeader className="border-b-0 px-3 py-1.5 text-xs text-zinc-400">
+            Command
+          </TerminalHeader>
+          <BoundedResult lines={Math.min(lines, 3)} title="Command">
+            <TerminalCommand command={block.command} className="border-b-0 px-3" />
+          </BoundedResult>
+        </section>
+      ) : null}
+      <section
+        aria-label="Command output"
+        className={block.command ? 'border-t border-zinc-800' : ''}
+        data-slot="run-output"
+      >
+        <TerminalHeader className="border-b-0 px-3 py-1.5 text-xs text-zinc-400">
+          Output
+        </TerminalHeader>
+        {outputBlocks.some((item) => item.content_ref) && !running ? (
+          <PagedBlock
+            block={block}
+            groupedBlocks={outputBlocks}
+            lines={lines}
+            renderBlock={renderOutput}
+          />
+        ) : (
+          <BoundedResult lines={lines} running={running} title="Output">
+            {outputBlocks.map((item) => (
+              <div key={item.id}>{renderOutput(item, item.text ?? '')}</div>
+            ))}
+          </BoundedResult>
+        )}
+        {running ? null : saved.map((item) => <SavedTerminalOutput key={item.id} block={item} />)}
+        {!running && (block.timed_out || block.exit_code !== undefined) ? (
+          <p className="border-t border-zinc-800 px-3 py-2 text-xs text-zinc-400">
+            {block.timed_out
+              ? 'Process timed out.'
+              : `Process exited with code ${block.exit_code}.`}
+          </p>
+        ) : null}
+      </section>
+    </Terminal>
+  );
+}

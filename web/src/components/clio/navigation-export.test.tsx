@@ -13,6 +13,7 @@ vi.mock('@/tauri/downloads', () => ({ openDownloads: nativeDownloads }));
 vi.mock('@/tauri/menu-actions', () => ({ useMenuAction: vi.fn() }));
 vi.mock('@/hooks/use-switch-connection', () => ({ useSwitchConnection: () => vi.fn() }));
 vi.mock('@/hooks/use-connection-availability', () => ({ useConnectionAvailabilities: () => ({}) }));
+vi.mock('@/hooks/use-known-connections', () => ({ useKnownConnections: () => [] }));
 vi.mock('@/providers/connection-provider', () => ({
   useConnectionSettings: () => ({
     settings: { endpoint: 'http://localhost/proxy/', label: 'Test' },

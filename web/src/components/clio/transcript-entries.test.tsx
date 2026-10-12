@@ -41,7 +41,7 @@ function iteration(id: string, index: number, streaming = false): ConversationIt
     thinking: [
       {
         id: `${id}:reasoning`,
-        text: `Private recorded ${id} reasoning.`,
+        text: `Private recorded ${id} reasoning.\n\nAdditional evidence for ${id}.`,
         label: 'Thinking',
         streaming,
       },
@@ -115,10 +115,10 @@ it.each(['codex', 'claude_code', 'vllm'])(
     expect(await screen.findAllByText('First public update.')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: /^Reasoning:/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^Activity:/ }));
-    fireEvent.click(screen.getByRole('button', { name: /^Thinking:/ }));
+    expect(screen.queryByRole('button', { name: /^Thinking:/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Update:/ })).not.toBeInTheDocument();
     expect(
-      await screen.findByText('Recorded reasoning.', { exact: true, selector: 'p' }),
+      await screen.findByText('Recorded reasoning.', { exact: true }),
     ).toBeVisible();
     expect(screen.getByRole('button', { name: /^Activity:/ })).toHaveAttribute(
       'aria-expanded',

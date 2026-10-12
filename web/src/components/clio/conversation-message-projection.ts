@@ -1,9 +1,78 @@
-import type { Message as DomainMessage, PendingInteraction } from '@clio/core/v3';
+import type {
+  AsyncProcess,
+  Message as DomainMessage,
+  PendingInteraction,
+  ToolInvocation,
+} from '@clio/core/v3';
 import type { McpAppResponseActivityData } from './mcp-app-surface';
 
 type McpAppBlock = Extract<DomainMessage['blocks'][number], { type: 'mcp_app' }>;
 
 export type SpecialMessageExecutionMode = 'plan' | 'deep_research';
+
+/** Keep resumed assistant segments in one response until the next human prompt. */
+export function conversationResponseContinuity(
+  messages: readonly DomainMessage[],
+  tools: Record<string, ToolInvocation> = {},
+  processes: readonly AsyncProcess[] = [],
+): { continued: ReadonlySet<string>; continuations: ReadonlySet<string> } {
+  const continued = new Set<string>();
+  const continuations = new Set<string>();
+  const runningHandles = new Set(
+    processes
+      .filter(
+        (process) =>
+          !['completed', 'failed', 'cancelled', 'interrupted', 'error'].includes(
+            process.effective_status ?? process.live_state,
+          ),
+      )
+      .map((process) => process.handle ?? process.id),
+  );
+  let previousAssistant: DomainMessage | undefined;
+  for (const message of messages) {
+    if (previousAssistant?.session_id !== message.session_id) previousAssistant = undefined;
+    if (
+      message.role === 'user' ||
+      message.role === 'unknown' ||
+      (message.role === 'system' && !message.blocks.every((block) => block.type === 'injection'))
+    )
+      previousAssistant = undefined;
+    else if (message.role === 'assistant') {
+      if (previousAssistant) {
+        continued.add(previousAssistant.id);
+        continuations.add(message.id);
+      }
+      previousAssistant = message;
+    } else if (
+      previousAssistant &&
+      message.blocks.some(
+        (block) =>
+          block.type === 'injection' && ['task_completion', 'task_results'].includes(block.source),
+      )
+    )
+      continued.add(previousAssistant.id);
+    if (
+      message.role === 'assistant' &&
+      message.blocks.some((block) => {
+        if (block.type !== 'tool') return false;
+        const output = tools[block.tool_id]?.output;
+        if (!output || typeof output !== 'object') return false;
+        const result = 'structuredContent' in output ? output.structuredContent : output;
+        return Boolean(
+          result &&
+            typeof result === 'object' &&
+            'accepted' in result &&
+            result.accepted === true &&
+            'handle' in result &&
+            typeof result.handle === 'string' &&
+            runningHandles.has(result.handle),
+        );
+      })
+    )
+      continued.add(message.id);
+  }
+  return { continued, continuations };
+}
 
 /** Hide transport-only surface revisions in both live and archived transcripts. */
 export function isProjectionOnlyA2UIMessage(message: DomainMessage): boolean {
@@ -38,7 +107,7 @@ function actionContextFromText(text: string): Record<string, unknown> | undefine
   try {
     const parsed: unknown = JSON.parse(json);
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
+      ? (parsed as Record<string, unknown>)
       : undefined;
   } catch {
     return undefined;
@@ -51,21 +120,27 @@ function actionChoiceLabel(context: Record<string, unknown>): string {
   }
   const selectedId = context.selected_id;
   const selectedName = context.equipment ?? context.name ?? context.label;
-  if ((typeof selectedId === 'string' || typeof selectedId === 'number') &&
-    String(selectedId).length <= 60) {
-    const name = typeof selectedName === 'string' && selectedName.length <= 60
-      ? `${selectedName} (${selectedId})`
-      : String(selectedId);
+  if (
+    (typeof selectedId === 'string' || typeof selectedId === 'number') &&
+    String(selectedId).length <= 60
+  ) {
+    const name =
+      typeof selectedName === 'string' && selectedName.length <= 60
+        ? `${selectedName} (${selectedId})`
+        : String(selectedId);
     return `Selected: ${name}`;
   }
   const entries = Object.entries(context);
   if (entries.length !== 1) return 'Choice sent';
   const [key, value] = entries[0]!;
   const readableValue = Array.isArray(value)
-    ? value.length <= 5 && value.every((item) => typeof item === 'string' || typeof item === 'number')
+    ? value.length <= 5 &&
+      value.every((item) => typeof item === 'string' || typeof item === 'number')
       ? value.join(', ')
       : undefined
-    : typeof value === 'string' || typeof value === 'number' ? String(value) : undefined;
+    : typeof value === 'string' || typeof value === 'number'
+      ? String(value)
+      : undefined;
   if (!readableValue || readableValue.length > 100) return 'Choice sent';
   const readableKey = key.replaceAll('_', ' ');
   return `${readableKey[0]?.toUpperCase() ?? ''}${readableKey.slice(1)}: ${readableValue}`;
@@ -74,25 +149,31 @@ function actionChoiceLabel(context: Record<string, unknown>): string {
 /** Keep protocol receipts out of the conversation and name choices plainly. */
 export function projectA2UIActionMessages(messages: readonly DomainMessage[]): DomainMessage[] {
   return messages
-    .filter((message) =>
-      !(message.role === 'assistant' && !message.turn_id &&
-        message.id.startsWith('msg_a2ui_a2ui_action_')),
+    .filter(
+      (message) =>
+        !(
+          message.role === 'assistant' &&
+          !message.turn_id &&
+          message.id.startsWith('msg_a2ui_a2ui_action_')
+        ),
     )
     .map((message) => {
       if (message.role !== 'user') return message;
       const context = message.metadata?.a2ui_action_context;
-      const text = message.blocks.filter((block) => block.type === 'text').map((block) => block.text).join('\n');
+      const text = message.blocks
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join('\n');
       if (!message.metadata?.a2ui_action && !text.startsWith('A2UI event: ')) return message;
-      const choices = context && typeof context === 'object' && !Array.isArray(context)
-        ? context as Record<string, unknown>
-        : actionContextFromText(text);
+      const choices =
+        context && typeof context === 'object' && !Array.isArray(context)
+          ? (context as Record<string, unknown>)
+          : actionContextFromText(text);
       const label = choices ? actionChoiceLabel(choices) : 'Action sent';
       return {
         ...message,
         blocks: message.blocks.map((block) =>
-          block.type === 'text'
-            ? { ...block, text: label }
-            : block,
+          block.type === 'text' ? { ...block, text: label } : block,
         ),
       };
     });
@@ -119,7 +200,11 @@ export function isProjectedQuestionResumeEnvelope(
   // envelope. It belongs in model context, not in the human transcript as a
   // second user-authored prompt.
   if (message.metadata?.plan_exit_resume === true) return true;
-  if (message.metadata?.ask_user_resume !== true) return false;
+  if (
+    message.metadata?.ask_user_resume !== true &&
+    message.metadata?.question_response_mode !== 'async'
+  )
+    return false;
   const questionId = message.metadata.ask_user_question_id;
   if (typeof questionId !== 'string' || questionId.length === 0) return false;
   return (interactions ?? []).some(

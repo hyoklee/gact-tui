@@ -10,10 +10,62 @@ import { ClioToolInvocation } from './tool-invocation';
 
 afterEach(cleanup);
 beforeEach(() => {
+  localStorage.clear();
+  window.dispatchEvent(new StorageEvent('storage', { key: null }));
   Range.prototype.getClientRects = vi.fn(() => [] as unknown as DOMRectList);
 });
 
 describe('ClioToolInvocation content and subject rendering', () => {
+  it('expands a pending wait into named snapshots without repeating header counts', async () => {
+    const user = userEvent.setup();
+    render(
+      <ClioToolInvocation
+        compact
+        tool={{
+          id: 'wait',
+          session_id: 's',
+          name: 'wait_tasks',
+          state: 'succeeded',
+          input: { tasks: ['worker_a', 'worker_b'], return_when: 'all', timeout_s: 0 },
+          output: { results: [], errors: [], pending: ['worker_a', 'worker_b'], timed_out: true },
+        }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Show result for Check all tasks' }));
+    expect(screen.getAllByText('2 pending, 0 results collected')).toHaveLength(1);
+    const result = screen.getByRole('region', { name: 'Check all tasks: Result' });
+    expect(within(result).getByText('worker_a')).toBeVisible();
+    expect(within(result).getByText('worker_b')).toBeVisible();
+    expect(within(result).getAllByText('Pending when this call returned.')).toHaveLength(2);
+    expect(within(result).queryByText('worker_a, worker_b')).not.toBeInTheDocument();
+  });
+
+  it('keeps checklist updates labelled Todos in the header and expanded list', async () => {
+    const user = userEvent.setup();
+    render(
+      <ClioToolInvocation
+        compact
+        tool={{
+          id: 'todos',
+          session_id: 's',
+          name: 'write_todos',
+          state: 'succeeded',
+          presentation: {
+            action: 'Update tasks',
+            summary: '1 task changed',
+            blocks: [{ id: 'todo', type: 'check', state: 'completed', text: 'Review evidence' }],
+          },
+        }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Show result for Update Todos' }));
+    expect(screen.getAllByText('1 todo changed')).toHaveLength(1);
+    expect(screen.queryByText('Review evidence')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Show completed 1' }));
+    expect(screen.getByText('Review evidence')).toBeVisible();
+    expect(screen.queryByText('Update tasks')).not.toBeInTheDocument();
+  });
+
   it('does not create an empty panel for empty declared prose', () => {
     const { container } = render(
       <ClioToolInvocation

@@ -580,7 +580,7 @@ describe('conversationTurnPresentation', () => {
     };
     const view = conversationTurnPresentation(message, tools);
     expect(view.iterations[0]?.summary).toBe(
-      'Preparing grouped plots · Checking chart schema · Adding plant selector',
+      'Preparing grouped plots Checking chart schema Adding plant selector',
     );
     expect(view.iterations[0]?.thinking[0]?.text).toBe(text);
   });

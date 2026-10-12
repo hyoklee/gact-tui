@@ -19,7 +19,6 @@ import type {
 import type { ConversationIteration } from './conversation-turn-model';
 import { ClioStatus } from './status';
 import {
-  ClioSubagentCard,
   ClioAgentMessageLine,
   ClioSubagentLifecycleLine,
   type SubagentOpenTarget,
@@ -393,10 +392,11 @@ function IterationDetail({
                 {subagentsForTool(entry.tool, subagents)
                   .filter((subagent) => !explicitSubagentIds.has(subagent.id))
                   .map((subagent) => (
-                    <ClioSubagentCard
+                    <ClioSubagentLifecycleLine
                       key={subagent.id}
                       onOpen={onOpenSubagent}
                       subagent={subagent}
+                      stage="delegate.started"
                     />
                   ))}
               </div>

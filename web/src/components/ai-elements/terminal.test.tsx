@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { resolveAnsiComponent, Terminal } from './terminal';
+import { resolveAnsiComponent, Terminal, TerminalContent } from './terminal';
 
 afterEach(cleanup);
 
@@ -27,5 +27,15 @@ describe('resolveAnsiComponent', () => {
 
     expect(screen.getByLabelText('Command')).toHaveTextContent('printf "first\\nsecond\\n"');
     expect(screen.getByText(/first\s+second/u)).toBeVisible();
+  });
+
+  it('renders a recorded output page inside the same terminal surface', () => {
+    render(
+      <Terminal output="head excerpt">
+        <TerminalContent output="tail excerpt" />
+      </Terminal>,
+    );
+    expect(screen.getByText('tail excerpt')).toBeVisible();
+    expect(screen.queryByText('head excerpt')).not.toBeInTheDocument();
   });
 });

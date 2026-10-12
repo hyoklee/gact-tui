@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } fro
 import { ChevronDownIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useEvidenceDisclosure } from '@/hooks/use-evidence-disclosures';
 import { sessionSectionHeights, untransformedBorderBoxHeight } from './session-section-layout';
 
 /** Anchor docked sections independently; keep popup sections together in one scrollable view. */
@@ -23,8 +24,10 @@ export function SessionEvidenceColumn({
   const workHeader = useRef<HTMLDivElement>(null);
   const dataContent = useRef<HTMLDivElement>(null);
   const workContent = useRef<HTMLDivElement>(null);
-  const [dataCollapsed, setDataCollapsed] = useState(false);
-  const [workCollapsed, setWorkCollapsed] = useState(false);
+  const [dataOpen, setDataOpen] = useEvidenceDisclosure('evidence-column:data');
+  const [workOpen, setWorkOpen] = useEvidenceDisclosure('evidence-column:work');
+  const dataCollapsed = !dataOpen;
+  const workCollapsed = !workOpen;
   const [sizes, setSizes] = useState<{ data?: number; work?: number }>({});
   const hasData = data !== undefined;
   const hasWork = work !== undefined;
@@ -87,7 +90,7 @@ export function SessionEvidenceColumn({
         <SessionEvidenceSection
           name="Data"
           collapsed={dataCollapsed}
-          onToggle={() => setDataCollapsed((value) => !value)}
+          onToggle={() => setDataOpen(!dataOpen)}
           height={docked ? sizes.data : undefined}
           docked={docked}
           headerRef={dataHeader}
@@ -101,7 +104,7 @@ export function SessionEvidenceColumn({
         <SessionEvidenceSection
           name="Work"
           collapsed={workCollapsed}
-          onToggle={() => setWorkCollapsed((value) => !value)}
+          onToggle={() => setWorkOpen(!workOpen)}
           height={docked ? sizes.work : undefined}
           docked={docked}
           headerRef={workHeader}

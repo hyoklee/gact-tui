@@ -29,7 +29,7 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import type { SavedConnection } from '@/lib/connection';
+import type { ConnectionSettings } from '@/lib/connection';
 import {
   connectionAvailability,
   type ConnectionAvailabilityMap,
@@ -41,8 +41,8 @@ interface NavigationHeaderProps {
   activeLocation?: string;
   currentPath: string;
   connectionAvailabilities: ConnectionAvailabilityMap;
-  recentConnections: readonly SavedConnection[];
-  onConnect: (connection: SavedConnection) => void | Promise<void>;
+  connections: readonly ConnectionSettings[];
+  onConnect: (connection: ConnectionSettings) => void | Promise<void>;
   onNewSession: () => void;
   onNewWorkspace: () => void;
   onImportSession: () => void;
@@ -56,7 +56,7 @@ export function NavigationHeader({
   activeLocation,
   currentPath,
   connectionAvailabilities,
-  recentConnections,
+  connections,
   onConnect,
   onNewSession,
   onNewWorkspace,
@@ -65,7 +65,7 @@ export function NavigationHeader({
   attentionControl,
 }: NavigationHeaderProps) {
   const activeAvailability = connectionAvailability(connectionAvailabilities, endpoint);
-  const otherConnections = recentConnections.filter((recent) => recent.endpoint !== endpoint);
+  const otherConnections = connections.filter((connection) => connection.endpoint !== endpoint);
 
   return (
     <SidebarHeader className="gap-1 px-2 pb-2 pt-2">

@@ -15,6 +15,7 @@ import {
   getToolActionLabel,
   getToolSubject,
   getToolHeaderMetadata,
+  getToolCompactMetadata,
   getToolStatus,
   getToolFailureDetail,
   isA2uiCatalogLookup,
@@ -27,6 +28,8 @@ import { focusAttentionEvidence } from '@/lib/attention-evidence-navigation';
 import { ToolCompactRow } from './tool-compact-row';
 import { useToolDuration } from './use-tool-duration';
 import { formatDuration } from '@/lib/format';
+import { withTaskWaitPresentation } from './task-wait-presentation';
+import { withTodoPresentation } from './todo-tool-presentation';
 
 export function ClioToolInvocation({
   attention,
@@ -77,7 +80,9 @@ export function ClioToolInvocation({
   const workflow = workflowDescriptor(tool);
   const presentedTool = withMemoryPresentation(
     withResourcePresentation(
-      withWorkflowPresentation(withSkillFileSubject(tool)),
+      withWorkflowPresentation(
+        withSkillFileSubject(withTaskWaitPresentation(withTodoPresentation(tool))),
+      ),
       navigation?.resources,
     ),
   );
@@ -101,7 +106,9 @@ export function ClioToolInvocation({
   const declaredFailure = presentedTool.presentation?.blocks.some(
     (block) => block.severity === 'error' && (block.text?.trim() || block.content_ref),
   );
-  const headerMetadata = getToolHeaderMetadata(presentedTool);
+  const headerMetadata = compact
+    ? getToolCompactMetadata(presentedTool)
+    : getToolHeaderMetadata(presentedTool);
   const actionLabel = getToolActionLabel(presentedTool);
   const summaryInHeader =
     Boolean(headerMetadata) && headerMetadata === presentedTool.presentation?.summary?.trim();
@@ -142,7 +149,13 @@ export function ClioToolInvocation({
               {detailsTrigger}
             </div>
             {resultOpen ? (
-              <ToolDetailsContent inline title={`${actionLabel}: Result`}>
+              <ToolDetailsContent
+                inline
+                title={`${actionLabel}: Result`}
+                bounded={
+                  !presentedTool.presentation?.blocks.some((block) => block.type === 'terminal')
+                }
+              >
                 {failure && !declaredFailure ? (
                   <p
                     role="alert"
@@ -151,7 +164,7 @@ export function ClioToolInvocation({
                     {failure.length > 1200 ? `${failure.slice(0, 1200)}…` : failure}
                   </p>
                 ) : null}
-                {subject ? (
+                {subject && presentedTool.presentation?.subject !== 'wait-targets' ? (
                   workflow && navigation?.onOpenWorkflow ? (
                     <Button
                       variant="link"
@@ -169,7 +182,11 @@ export function ClioToolInvocation({
                     Widget catalog loaded. Use technical details to inspect the full catalog.
                   </p>
                 ) : (
-                  <ToolResultPresentation tool={presentedTool} subjectId={subject?.id} />
+                  <ToolResultPresentation
+                    tool={presentedTool}
+                    subjectId={subject?.id}
+                    summaryInHeader={summaryInHeader}
+                  />
                 )}
                 {!presentedTool.presentation?.blocks.length &&
                 !presentedTool.presentation?.summary &&

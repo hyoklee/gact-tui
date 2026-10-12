@@ -30,7 +30,7 @@ const CONNECTED_TRANSPORT_STATES: ReadonlySet<InfrastructureTarget['transport_st
 ]);
 
 /**
- * The DEFAULT list an "Add an agent service" page shows: every CLIO the
+ * Shared service inventory for opening, switching and managing connections: every CLIO the
  * person can click without typing an address, ahead of the manual
  * "Connect by address" form. Three real sources, no invented discovery:
  *
@@ -77,7 +77,10 @@ export function useKnownConnections(): readonly KnownConnection[] {
   });
 
   const connectedTargets = useMemo(
-    () => (targetsQuery.data ?? []).filter((target) => CONNECTED_TRANSPORT_STATES.has(target.transport_state)),
+    () =>
+      (targetsQuery.data ?? []).filter((target) =>
+        CONNECTED_TRANSPORT_STATES.has(target.transport_state),
+      ),
     [targetsQuery.data],
   );
 

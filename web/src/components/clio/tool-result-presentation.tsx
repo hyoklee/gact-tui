@@ -1,6 +1,5 @@
 import { CircleAlertIcon, FileIcon } from 'lucide-react';
 import type { ToolInvocation, ToolPresentationBlock } from '@clio/core/v3';
-import { Terminal, TerminalCommand, TerminalContent } from '@/components/ai-elements/terminal';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { BoundedResult } from './bounded-result';
 import { useTranscriptPreviewLines } from '@/providers/appearance-provider';
@@ -25,7 +24,8 @@ import {
 } from './tool-result-resource-memory';
 import { isProvenanceBlock } from './tool-result-shared';
 import { WorkspaceFilePresentationBlock } from './tool-result-workspace-file';
-import { SavedTerminalOutput } from './tool-result-saved-output';
+import { ToolTerminalResult } from './tool-terminal-result';
+import { TodoList } from './todo-list';
 import { belongsToTerminal, savedOutputsAfter } from './tool-result-saved-output-blocks';
 import { getToolStatus, isA2uiCatalogLookup } from './tool-presentation';
 
@@ -257,19 +257,15 @@ export function ToolResultPresentation({
           const checks: ToolPresentationBlock[] = [];
           for (let i = index; i < blocks.length && blocks[i].type === 'check'; i++)
             checks.push(blocks[i]);
+          const removed = checks.filter((check) => check.change === 'removed');
           return (
-            <BoundedResult
-              key={block.id}
-              lines={3}
-              unit="items"
-              title={
-                checks.some((check) => check.change && check.change !== 'unchanged')
-                  ? 'Task changes'
-                  : 'Task list'
-              }
-            >
-              <ul className="list-none">
-                {checks.map((check) => (
+            <div key={block.id} className="min-w-0 space-y-1">
+              <TodoList
+                items={checks.filter((check) => check.change !== 'removed')}
+                status={(check) => check.state}
+                scope="transcript"
+                summary
+                renderItem={(check) => (
                   <li key={check.id}>
                     {check.content_ref ? (
                       <PagedBlock block={check} lines={lines} />
@@ -277,47 +273,31 @@ export function ToolResultPresentation({
                       <BlockBody block={check} text={check.text ?? ''} />
                     )}
                   </li>
-                ))}
-              </ul>
-            </BoundedResult>
+                )}
+              />
+              {removed.length ? (
+                <BoundedResult title="Removed todos" lines={1} unit="items">
+                  <ul aria-label="Removed todos">
+                    {removed.map((check) => (
+                      <li key={check.id}>
+                        <BlockBody block={check} text={check.text ?? ''} />
+                      </li>
+                    ))}
+                  </ul>
+                </BoundedResult>
+              ) : null}
+            </div>
           );
         }
         if (block.type === 'terminal')
           return (
-            <Terminal
+            <ToolTerminalResult
               key={`${block.id}:${running}`}
-              output={block.text ?? ''}
-              autoScroll={false}
-              isStreaming={running}
-            >
-              {block.content_ref && !running ? (
-                <>
-                  {block.command ? (
-                    <BoundedResult lines={budget} title="Terminal command">
-                      <TerminalCommand command={block.command} />
-                    </BoundedResult>
-                  ) : null}
-                  <PagedBlock block={block} lines={budget} />
-                </>
-              ) : (
-                <BoundedResult lines={budget} running={running} title="Terminal output">
-                  {block.command ? <TerminalCommand command={block.command} /> : null}
-                  <TerminalContent className="max-h-none overflow-visible bg-zinc-950 p-3 text-zinc-100" />
-                </BoundedResult>
-              )}
-              {running
-                ? null
-                : savedOutputsAfter(blocks, index).map((saved) => (
-                    <SavedTerminalOutput key={saved.id} block={saved} lines={budget} />
-                  ))}
-              {!running && (block.timed_out || block.exit_code !== undefined) ? (
-                <p className="border-t border-zinc-800 px-3 py-2 text-sm text-zinc-400">
-                  {block.timed_out
-                    ? 'Process timed out.'
-                    : `Process exited with code ${block.exit_code}.`}
-                </p>
-              ) : null}
-            </Terminal>
+              block={block}
+              saved={savedOutputsAfter(blocks, index)}
+              lines={budget}
+              running={running}
+            />
           );
         const boxed =
           block.severity === 'error' ||

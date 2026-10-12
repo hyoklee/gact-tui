@@ -152,9 +152,54 @@ test('keeps response preparation in the transcript and showcases beside the canv
   );
   await page.setViewportSize({ width: 1280, height: 900 });
   await expect(page.getByRole('dialog', { name: 'Activity and evidence' })).toHaveCount(0);
-  await expect(activity).toHaveAttribute('data-evidence-layout', 'none');
+  await expect(activity).toHaveAttribute('data-evidence-layout', 'both');
+  await expect(activity).toHaveAttribute('aria-expanded', 'false');
+  await page.setViewportSize({ width: 1920, height: 900 });
+  await expect(page.getByRole('dialog', { name: 'Activity and evidence' })).toBeVisible();
+  await expect(activity).toHaveAttribute('aria-expanded', 'true');
   expect(errors).toEqual([]);
 });
+
+for (const [layout, clicks] of [
+  ['bottom', 1],
+  ['top', 2],
+  ['both', 3],
+] as const) {
+  test(`restores ${layout} evidence after the side canvas closes and respects explicit dismissal`, async ({
+    page,
+  }) => {
+    await page.request.post(`${endpoint}/__test/reset`);
+    await page.addInitScript((value) => {
+      localStorage.setItem('clio.recent-connections', JSON.stringify([value]));
+      localStorage.setItem('theme', 'light');
+    }, endpoint);
+    await page.setViewportSize({ width: 1920, height: 900 });
+    await page.goto('/workspaces/ws_flat_ndp/sessions/sess_flat_ndp');
+    const toggle = page.getByRole('button', { name: /^Evidence layout:/ });
+    const panel = page.getByRole('dialog', { name: 'Activity and evidence' });
+    for (let index = 0; index < clicks; index++) await toggle.click();
+    await expect(panel).toHaveAttribute('data-showcase-mode', 'docked');
+    const section = layout === 'top' ? 'Data' : 'Work';
+    await panel.getByRole('button', { name: `Collapse ${section}`, exact: true }).click();
+    await page.getByRole('button', { name: 'Open workspace canvas', exact: true }).click();
+    await expect(panel).toHaveCount(0);
+    await expect(toggle).toHaveAttribute('data-evidence-layout', layout);
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    const closeCanvas = page.getByRole('button', { name: 'Close workspace canvas', exact: true });
+    await expect(toggle).not.toBeFocused();
+    await closeCanvas.click();
+    await expect(panel).toBeVisible();
+    await expect(
+      panel.getByRole('button', { name: `Expand ${section}`, exact: true }),
+    ).toBeVisible();
+    await expect(toggle).toHaveAttribute('data-evidence-layout', layout);
+    await panel.getByRole('button', { name: 'Hide activity and evidence', exact: true }).click();
+    await page.getByRole('button', { name: 'Open workspace canvas', exact: true }).click();
+    await page.getByRole('button', { name: 'Close workspace canvas', exact: true }).click();
+    await expect(panel).toHaveCount(0);
+    await expect(toggle).toHaveAttribute('data-evidence-layout', 'none');
+  });
+}
 
 for (const [width, height] of [
   [1280, 900],

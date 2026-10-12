@@ -76,7 +76,7 @@ export function InlineQuestionCard({
         <MessageCircleQuestionIcon aria-hidden="true" className="mt-0.5" />
         <span className="min-w-0 space-y-1">
           <span className="block text-xs text-muted-foreground">
-            {vocab.agent} asked a question ·{' '}
+            {vocab.agent} asked a question:{' '}
             {interaction.payload.response_mode === 'async'
               ? 'Answer when ready'
               : 'Answer needed to continue'}

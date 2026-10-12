@@ -68,6 +68,6 @@ it('keeps the open question list when the first transcript messages arrive', asy
     ]),
   );
   expect(screen.getByRole('dialog', { name: 'Open questions' })).toBeVisible();
-  await userEvent.click(screen.getByRole('button', { name: 'Read and answer' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Read and answer question 1' }));
   expect(openQuestion).toHaveBeenCalledWith(interaction);
 });

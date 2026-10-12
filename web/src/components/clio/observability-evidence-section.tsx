@@ -6,6 +6,7 @@ export function EvidenceSection({
   label,
   value,
   count,
+  summary,
   children,
   compact = false,
 }: {
@@ -13,6 +14,7 @@ export function EvidenceSection({
   label: string;
   value: string;
   count: number;
+  summary?: string;
   children: React.ReactNode;
   compact?: boolean;
 }) {
@@ -24,24 +26,18 @@ export function EvidenceSection({
             ? 'min-h-7 py-1 text-xs hover:no-underline'
             : 'min-h-9 py-2 text-xs hover:no-underline'
         }
-        aria-label={`${label}, ${count.toLocaleString()} recorded`}
+        aria-label={`${label}, ${summary ?? `${count.toLocaleString()} recorded`}`}
       >
         <span className="flex items-center gap-2">
           <Icon aria-hidden="true" className="size-3.5 text-muted-foreground" />
           {label}
           <span className="text-[11px] tabular-nums text-muted-foreground">
-            {count.toLocaleString()}
+            {summary ?? count.toLocaleString()}
           </span>
         </span>
       </AccordionTrigger>
-      <AccordionContent>
-        <div
-          className={
-            compact
-              ? 'grid min-w-0 gap-0.5'
-              : 'grid min-w-0 grid-cols-1 gap-2'
-          }
-        >
+      <AccordionContent className="h-auto">
+        <div className={compact ? 'grid min-w-0 gap-0.5 pl-4' : 'grid min-w-0 grid-cols-1 gap-2'}>
           {children}
         </div>
       </AccordionContent>

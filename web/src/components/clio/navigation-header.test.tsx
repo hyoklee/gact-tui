@@ -3,6 +3,8 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
+import { useState } from 'react';
+import type { ConnectionSettings } from '@/lib/connection';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { NavigationHeader } from './navigation-header';
@@ -47,7 +49,7 @@ it('shows saved service addresses and prevents selecting an unavailable service'
             onNewSession={vi.fn()}
             onNewWorkspace={vi.fn()}
             onOpenArchived={vi.fn()}
-            recentConnections={[
+            connections={[
               { endpoint: 'http://127.0.0.1:8788', label: 'Contained' },
               { endpoint: 'http://127.0.0.1:9999', label: 'Offline lab' },
             ]}
@@ -89,7 +91,7 @@ it('explains the active service status when its indicator is hovered', async () 
             onNewSession={vi.fn()}
             onNewWorkspace={vi.fn()}
             onOpenArchived={vi.fn()}
-            recentConnections={[{ endpoint: 'http://127.0.0.1:8788', label: 'This device' }]}
+            connections={[{ endpoint: 'http://127.0.0.1:8788', label: 'This device' }]}
           />
         </SidebarProvider>
       </TooltipProvider>
@@ -120,7 +122,7 @@ it('shows agent identity as location followed by the branded agent name', async 
             onNewSession={vi.fn()}
             onNewWorkspace={vi.fn()}
             onOpenArchived={vi.fn()}
-            recentConnections={[
+            connections={[
               {
                 endpoint: 'http://127.0.0.1:17800',
                 label: `Homelab ${brand.agentName}`,
@@ -159,7 +161,7 @@ it('uses a user-defined agent name instead of forcing the branded fallback', () 
             onNewSession={vi.fn()}
             onNewWorkspace={vi.fn()}
             onOpenArchived={vi.fn()}
-            recentConnections={[]}
+            connections={[]}
           />
         </SidebarProvider>
       </TooltipProvider>
@@ -169,3 +171,58 @@ it('uses a user-defined agent name instead of forcing the branded fallback', () 
   expect(screen.getByText('Ares')).toBeVisible();
   expect(screen.getByText('Research')).toBeVisible();
 });
+
+it.each(['local', 'aurora'] as const)(
+  'can switch away from %s and back while retaining the local launch credential',
+  async (initial) => {
+    const local = {
+      endpoint: 'http://127.0.0.1:53211',
+      label: 'This computer',
+      token: 'launch-token',
+    };
+    const aurora = { endpoint: 'http://127.0.0.1:51211', label: 'aurora' };
+    const first = initial === 'local' ? local : aurora;
+    const other = initial === 'local' ? aurora : local;
+    const onConnect = vi.fn();
+    function Switcher() {
+      const [active, setActive] = useState<ConnectionSettings>(first);
+      return (
+        <NavigationHeader
+          activeLabel={active.label}
+          connectionAvailabilities={{}}
+          connections={[local, aurora]}
+          currentPath="/"
+          endpoint={active.endpoint}
+          onConnect={(connection) => {
+            onConnect(connection);
+            setActive(connection);
+          }}
+          onImportSession={vi.fn()}
+          onNewSession={vi.fn()}
+          onNewWorkspace={vi.fn()}
+          onOpenArchived={vi.fn()}
+        />
+      );
+    }
+    render(
+      <MemoryRouter>
+        <TooltipProvider>
+          <SidebarProvider>
+            <Switcher />
+          </SidebarProvider>
+        </TooltipProvider>
+      </MemoryRouter>,
+    );
+    const user = userEvent.setup();
+    for (const destination of [other, first]) {
+      await user.click(screen.getByRole('button', { name: new RegExp(brand.wordmark, 'u') }));
+      expect(screen.getByText('Other agents')).toBeVisible();
+      const item = screen
+        .getAllByRole('menuitem')
+        .find((node) => node.textContent?.includes(destination.endpoint));
+      expect(item).toBeDefined();
+      await user.click(item!);
+      expect(onConnect).toHaveBeenLastCalledWith(destination);
+    }
+  },
+);

@@ -8,9 +8,6 @@ import {
   CirclePauseIcon,
   CircleStopIcon,
   ListChecksIcon,
-  SquareCheckIcon,
-  SquareIcon,
-  SquareMinusIcon,
 } from 'lucide-react';
 import { DeleteIcon } from '@/lib/icon-vocabulary';
 import { useRepository } from '@/hooks/use-repository';
@@ -34,26 +31,40 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { useSessionWork } from './use-session-work';
 import { WorkRecordControls } from './work-record-controls';
+import { useEvidenceDisclosure } from '@/hooks/use-evidence-disclosures';
+import { TodoList, TodoStatusIcon } from './todo-list';
+import { todoCurrentSummary } from './todo-list-summary';
+import { OpenQuestionsSection } from './open-question-list';
 
 /** Keep parked goals and future monitoring visible in the bottom work finder. */
-export function SessionWorkStatus({ sessionId, onOpen, fallback }: {
-  sessionId: string; onOpen: () => void; fallback: string;
+export function SessionWorkStatus({
+  sessionId,
+  onOpen,
+  fallback,
+}: {
+  sessionId: string;
+  onOpen: () => void;
+  fallback: string;
 }) {
   const { data } = useSessionWork(sessionId);
   return data && (data.goal || data.loop || data.schedules.length) ? (
     <div className="min-w-0 max-w-96 [&_button]:h-5 [&_button]:text-[0.625rem]">
       <SessionWorkSummary sessionId={sessionId} onOpen={onOpen} />
     </div>
-  ) : <span>{fallback}</span>;
+  ) : (
+    <span>{fallback}</span>
+  );
 }
 
 /** Compact entry to authoritative work state, independent of transcript expansion. */
 export function SessionWorkSummary({
   sessionId,
   onOpen,
+  includeTodos = true,
 }: {
   sessionId: string;
   onOpen: () => void;
+  includeTodos?: boolean;
 }) {
   const { data } = useSessionWork(sessionId);
   if (!data || (!data.goal && !data.loop && !data.todos.length && !data.schedules.length))
@@ -66,7 +77,7 @@ export function SessionWorkSummary({
         : undefined;
   const scheduledCount = data.schedules.filter((schedule) => schedule.enabled).length;
   const otherLoop = current === data.goal && data.loop?.state === 'active';
-  const done = data.todos.filter((todo) => todo.status === 'completed').length;
+  if (!includeTodos && !current && !scheduledCount) return null;
   return (
     <Button
       type="button"
@@ -90,10 +101,8 @@ export function SessionWorkSummary({
           {scheduledCount} {scheduledCount === 1 ? 'schedule' : 'schedules'}
         </span>
       ) : null}
-      {data.todos.length ? (
-        <span className="shrink-0">
-          {done}/{data.todos.length} done
-        </span>
+      {includeTodos && data.todos.length ? (
+        <span className="shrink-0">{todoCurrentSummary(data.todos, (todo) => todo.status)}</span>
       ) : null}
     </Button>
   );
@@ -204,8 +213,9 @@ function WorkSection({
   hasContent: boolean;
   children: React.ReactNode;
 }) {
+  const [open, setOpen] = useEvidenceDisclosure(`work-view:${title}`);
   return (
-    <Collapsible defaultOpen asChild>
+    <Collapsible open={open} onOpenChange={setOpen} asChild>
       <section
         aria-label={title}
         className={cn(
@@ -248,12 +258,6 @@ function WorkSection({
 }
 
 function TodoRow({ todo }: { todo: WorkTodo }) {
-  const Icon =
-    todo.status === 'completed'
-      ? SquareCheckIcon
-      : todo.status === 'in_progress'
-        ? SquareMinusIcon
-        : SquareIcon;
   const label =
     todo.status === 'in_progress'
       ? 'In progress'
@@ -271,17 +275,7 @@ function TodoRow({ todo }: { todo: WorkTodo }) {
               tabIndex={0}
               className="mt-1 inline-flex size-4 shrink-0 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
-              <Icon
-                aria-hidden="true"
-                className={cn(
-                  'size-4',
-                  todo.status === 'completed'
-                    ? 'text-success'
-                    : todo.status === 'in_progress'
-                      ? 'text-warning'
-                      : 'text-muted-foreground',
-                )}
-              />
+              <TodoStatusIcon state={todo.status} />
             </span>
           </TooltipTrigger>
           <TooltipContent>{label}</TooltipContent>
@@ -333,6 +327,19 @@ function PreviousScheduleRow({ schedule }: { schedule: WorkScheduleHistory }) {
 
 /** Inspect todos, goal/loop history, and schedules without changing runtime state. */
 export function SessionWorkView({ sessionId }: { sessionId: string }) {
+  return (
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
+      <div className="max-h-[45%] shrink-0 overflow-y-auto px-4">
+        <OpenQuestionsSection />
+      </div>
+      <div className="min-h-0 flex-1">
+        <SessionWorkInventory sessionId={sessionId} />
+      </div>
+    </div>
+  );
+}
+
+function SessionWorkInventory({ sessionId }: { sessionId: string }) {
   const [cursor, setCursor] = useState(0);
   const query = useSessionWork(sessionId, cursor);
   const repository = useRepository();
@@ -398,21 +405,24 @@ export function SessionWorkView({ sessionId }: { sessionId: string }) {
     >
       <WorkSection
         title="Todos"
-        summary={data.todos.length ? `${data.todos.length} current` : 'None current'}
+        summary={
+          data.todos.length ? todoCurrentSummary(data.todos, (todo) => todo.status) : 'None current'
+        }
         hasContent={Boolean(data.todos.length || data.todo_history.length)}
       >
         {data.todos.length ? (
-          <ul className="flex flex-col gap-2">
-            {data.todos.map((todo, index) => (
-              <TodoRow key={`${todo.content}-${index}`} todo={todo} />
-            ))}
-          </ul>
+          <TodoList
+            items={data.todos}
+            status={(todo) => todo.status}
+            scope="work"
+            renderItem={(todo, index) => <TodoRow key={`${todo.content}-${index}`} todo={todo} />}
+          />
         ) : (
           <p className="text-muted-foreground">
-            {data.todo_history.length ? 'No current tasks.' : 'No tasks recorded.'}
+            {data.todo_history.length ? 'No current todos.' : 'No todos recorded.'}
           </p>
         )}
-        <PreviousRecords count={data.todo_history.length} noun="task lists">
+        <PreviousRecords count={data.todo_history.length} noun="todo lists">
           <ul className="flex flex-col gap-2">
             {data.todo_history.map((snapshot) => (
               <TodoSnapshotRow key={snapshot.id} snapshot={snapshot} />
