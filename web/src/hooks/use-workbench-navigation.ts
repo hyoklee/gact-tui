@@ -94,6 +94,12 @@ export function useWorkbenchNavigation({ allSessions, workspaceId }: UseWorkbenc
     [revealWorkbench],
   );
 
+  const openParentSession = useCallback((session: Session) => {
+    if (!session.parent_session_id) return;
+    const parent = allSessions.find((candidate) => candidate.id === session.parent_session_id);
+    navigate(`/workspaces/${encodeURIComponent(parent?.workspace_id ?? workspaceId)}/sessions/${encodeURIComponent(session.parent_session_id)}`);
+  }, [allSessions, navigate, workspaceId]);
+
   const activeRequest =
     workbenchRequest?.endpoint === settings.endpoint ? workbenchRequest : undefined;
 
@@ -101,6 +107,7 @@ export function useWorkbenchNavigation({ allSessions, workspaceId }: UseWorkbenc
     activeRequest,
     openArtifact,
     openDiff,
+    openParentSession,
     openSubagent,
     openWorkflow,
     openWorkspaceFile,
