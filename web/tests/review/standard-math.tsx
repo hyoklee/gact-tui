@@ -69,6 +69,11 @@ y &= 2
 \]`}
             </MarkdownText>
           </section>
+          <section aria-label="Display in prose" className="border-t pt-4">
+            <ContentMarkdown>
+              {'Before \\[x_1=2\\] after.\n\n\\[\r\nx=1\r\n\\]  \r\n\r\nLast.'}
+            </ContentMarkdown>
+          </section>
         </div>
       </main>
     </ThemeProvider>

@@ -113,4 +113,16 @@ y &= 2
     expect(container.querySelector('.katex')).toBeNull();
     expect(container.textContent).toContain('unfinished');
   });
+
+  it('renders display delimiters embedded in prose and accepts trailing whitespace', async () => {
+    const { container } = render(
+      <MarkdownText>
+        {'Before \\[x_1=2\\] after.\n\n\\[\r\nx=1\r\n\\]  \r\n\r\nLast.'}
+      </MarkdownText>,
+    );
+    await waitFor(() => expect(container.querySelectorAll('.katex-display')).toHaveLength(2));
+    expect(container.querySelector('.katex-error')).toBeNull();
+    expect(container.textContent).toContain('after.');
+    expect(container.textContent).toContain('Last.');
+  });
 });

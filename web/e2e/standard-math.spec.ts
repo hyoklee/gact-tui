@@ -21,6 +21,9 @@ for (const width of [1280, 390]) {
     await expect(
       page.getByRole('region', { name: 'Multiline equation' }).locator('.katex-display'),
     ).toHaveCount(1);
+    await expect(
+      page.getByRole('region', { name: 'Display in prose' }).locator('.katex-display'),
+    ).toHaveCount(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );

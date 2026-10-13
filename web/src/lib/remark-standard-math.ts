@@ -130,8 +130,14 @@ const enterMath: Handle = function (token) {
     children: [{ type: 'text' as const, value }],
   };
   this.enter(
-    token.type === 'clioMathBlock'
-      ? { type: 'math', value, data: { hName: 'pre', hChildren: [code] } }
+    display
+      ? {
+          type: token.type === 'clioMathBlock' ? 'math' : 'inlineMath',
+          value,
+          // The sanitizer preserves pre/code structure but filters arbitrary
+          // classes. KaTeX recognizes this as display math even inside prose.
+          data: { hName: 'pre', hChildren: [code] },
+        }
       : {
           type: 'inlineMath',
           value,
