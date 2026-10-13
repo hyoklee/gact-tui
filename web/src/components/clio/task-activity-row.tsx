@@ -33,7 +33,7 @@ export function TaskActivityRow({
 }) {
   const { process: task, subagent } = entry;
   const title = task?.title || subagent?.title || 'Task';
-  const kind = task?.task_kind ?? (task?.kind === 'agent' ? 'Subagent' : 'MCP');
+  const kind = task?.task_kind ?? (task?.kind === 'agent' || subagent ? 'Subagent' : 'MCP');
   const assignment = task?.description || subagent?.task;
   const progress = taskProgressLabel(task?.progress, kind);
   const held = status === 'paused' || status === 'pause_requested';

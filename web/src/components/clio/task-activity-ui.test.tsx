@@ -154,6 +154,8 @@ it('keeps legacy child discovery and opening available without unsupported lifec
     />,
   );
   expect(screen.queryByRole('button', { name: /^Cancel/ })).toBeNull();
+  expect(screen.getByText('Subagent · Paused')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Open child conversation Worker #1' })).toBeNull();
   await userEvent.click(screen.getByRole('button', { name: 'Task details: Worker #1' }));
   expect(screen.queryByRole('button', { name: 'Technical details' })).toBeNull();
   await userEvent.click(screen.getByRole('button', { name: 'Open child conversation Worker #1' }));
