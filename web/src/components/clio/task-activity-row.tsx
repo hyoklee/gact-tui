@@ -6,6 +6,7 @@ import {
   CircleAlertIcon,
   CircleDashedIcon,
   LoaderCircleIcon,
+  MessageCircleQuestionIcon,
   PauseIcon,
   PanelRightOpenIcon,
 } from 'lucide-react';
@@ -31,11 +32,13 @@ export function TaskActivityRow({
 }) {
   const { process: task, subagent } = entry;
   const title = task?.title || subagent?.title || 'Task';
-  const kind = task?.task_kind ?? (task?.kind === 'mcp-task' ? 'MCP' : 'Subagent');
+  const kind = task?.task_kind ?? (task?.kind === 'agent' ? 'Subagent' : 'MCP');
   const assignment = task?.description || subagent?.task;
   const progress = taskProgressLabel(task?.progress, kind);
   const held = status === 'paused' || status === 'pause_requested';
   const yielded = status === 'yielded';
+  const awaitingAnswer =
+    kind === 'Question' && (status === 'input_required' || status === 'waiting_user');
   const running =
     status === 'running' ||
     status === 'working' ||
@@ -43,16 +46,21 @@ export function TaskActivityRow({
     status === 'resume_requested';
   const Icon = held
     ? PauseIcon
-    : yielded || status === 'queued'
-      ? CircleDashedIcon
-      : running
-        ? LoaderCircleIcon
-        : status === 'completed'
-          ? CheckCircle2Icon
-          : status === 'cancelled'
-            ? BanIcon
-            : CircleAlertIcon;
-  const label = status.replaceAll('_', ' ').replace(/^./u, (letter) => letter.toUpperCase());
+    : awaitingAnswer
+      ? MessageCircleQuestionIcon
+      : yielded || status === 'queued'
+        ? CircleDashedIcon
+        : running
+          ? LoaderCircleIcon
+          : status === 'completed'
+            ? CheckCircle2Icon
+            : status === 'cancelled'
+              ? BanIcon
+              : CircleAlertIcon;
+  const label = awaitingAnswer
+    ? 'Waiting for your answer'
+    : status.replaceAll('_', ' ').replace(/^./u, (letter) => letter.toUpperCase());
+  const result = task?.result?.answer || task?.result?.answer_excerpt || subagent?.result;
   return (
     <Collapsible className="group/task min-w-0 rounded-lg data-[state=open]:bg-muted/35">
       <div className="flex min-w-0 items-center gap-0.5">
@@ -71,7 +79,7 @@ export function TaskActivityRow({
               <span className="block truncate text-sm font-medium">{title}</span>
               <span className="block truncate text-xs text-muted-foreground">
                 {kind} · {label}
-                {progress ? ` — ${progress}` : ''}
+                {progress && progress !== label ? ` — ${progress}` : ''}
               </span>
             </span>
             <ChevronRightIcon
@@ -108,14 +116,14 @@ export function TaskActivityRow({
               History recording is unconfirmed. Check the task before retrying.
             </p>
           ) : null}
-          {task?.result?.answer_excerpt || subagent?.result ? (
+          {result ? (
             <div
               role="region"
               aria-label={`Result: ${title}`}
               tabIndex={0}
               className="max-h-40 overflow-y-auto text-sm whitespace-pre-wrap [overflow-wrap:anywhere]"
             >
-              {task?.result?.answer_excerpt || subagent?.result}
+              {result}
             </div>
           ) : null}
           {subagent?.child_session_id && onOpenSubagent ? (

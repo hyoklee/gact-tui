@@ -60,7 +60,7 @@ const contextFrameSchema = z.object({
 
 const asyncProcessSchema = z
   .object({
-    kind: z.enum(['agent', 'mcp-task']),
+    kind: z.enum(['agent', 'mcp-task', 'mcp', 'question']),
     id: z.string(),
     title: z.string(),
     live_state: operationalRunStateSchema,
@@ -81,6 +81,7 @@ const asyncProcessSchema = z
     error_reason: z.string().optional(),
     result: z
       .object({
+        answer: z.string().optional(),
         answer_excerpt: z.string().optional(),
         message_ref: z.string().optional(),
         workflow_state: z.record(z.string(), z.unknown()).optional(),

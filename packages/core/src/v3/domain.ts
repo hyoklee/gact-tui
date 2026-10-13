@@ -259,6 +259,7 @@ export interface ApprovalRequest {
 }
 
 export interface UserQuestion {
+  task_handle?: string;
   response_mode?: 'blocking' | 'async';
   id: string;
   session_id: string;
@@ -490,7 +491,8 @@ export interface ContextFrame {
 
 export interface AsyncProcess {
   handle?: string;
-  task_kind?: 'Subagent' | 'Session' | 'MCP' | 'Download' | 'Indexing' | 'Shell';
+  task_kind?: 'Subagent' | 'Session' | 'MCP' | 'Download' | 'Indexing' | 'Shell' | 'Question';
+  question_id?: string;
   activity?: string;
   recording?: 'confirmed' | 'unconfirmed';
   result_reference?: Record<string, unknown> | string;
@@ -503,7 +505,7 @@ export interface AsyncProcess {
   connection_freshness?: string;
   progress?: Record<string, unknown>;
   owner?: { session_id: string; agent?: string };
-  kind: 'agent' | 'mcp-task';
+  kind: 'agent' | 'mcp-task' | 'mcp' | 'question';
   id: string;
   title: string;
   live_state: RunState;
@@ -523,6 +525,7 @@ export interface AsyncProcess {
   updated_at?: string;
   error_reason?: string;
   result?: {
+    answer?: string;
     answer_excerpt?: string;
     message_ref?: string;
     workflow_state?: Record<string, unknown>;

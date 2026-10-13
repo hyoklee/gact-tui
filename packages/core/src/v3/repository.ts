@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ComposerMessagePart } from './composer-domain.js';
 import { sessionMetadataPatch, type SessionUpdateInput } from './session-metadata-patch.js';
 import { agentTaskRecordSchema } from './agent-task-domain.js';
 import type {
@@ -661,7 +662,7 @@ export class ClioRepository extends WorkRepository {
   public answerQuestion(
     sessionId: string,
     questionId: string,
-    answer: { answer?: string; selected_options?: string[] },
+    answer: { answer?: string; selected_options?: string[]; parts?: ComposerMessagePart[] },
     signal?: AbortSignal,
   ): Promise<UserQuestion> {
     return this.transport.request({

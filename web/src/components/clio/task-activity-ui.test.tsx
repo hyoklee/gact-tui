@@ -35,6 +35,48 @@ const child: SubagentRun = {
   task: assignment,
 };
 
+it('shows a question waiting for its answer and reveals the stored answer on demand', async () => {
+  const question: AsyncProcess = {
+    ...task,
+    id: 'question_1',
+    handle: 'task_question_1',
+    kind: 'question',
+    task_kind: 'Question',
+    title: 'Which dataset?',
+    description: 'Which dataset should the analysis use?',
+    effective_status: 'input_required',
+    live_state: 'waiting_user',
+    status: 'pending',
+    child_session_id: undefined,
+    supported_actions: ['observe', 'wait', 'result', 'cancel'],
+    progress: { message: 'Waiting for your answer' },
+  };
+  const view = render(<AsyncTaskList processes={[question]} />);
+  expect(screen.getByText('Question · Waiting for your answer')).toBeVisible();
+  const details = screen.getByRole('button', { name: 'Task details: Which dataset?' });
+  expect(details).toHaveAttribute('aria-expanded', 'false');
+  view.rerender(
+    <AsyncTaskList
+      processes={[
+        {
+          ...question,
+          effective_status: 'completed',
+          live_state: 'completed',
+          status: 'answered',
+          progress: {},
+          result: { answer: 'Use the October dataset.' },
+        },
+      ]}
+    />,
+  );
+  expect(screen.queryByText('Use the October dataset.')).toBeNull();
+  await userEvent.click(details);
+  expect(screen.getByRole('region', { name: 'Result: Which dataset?' })).toHaveTextContent(
+    'Use the October dataset.',
+  );
+  expect(screen.queryByRole('button', { name: /Open child conversation/ })).toBeNull();
+});
+
 it('shows one compact task row and discloses complete assignments and technical identity by keyboard', async () => {
   const user = userEvent.setup();
   render(
