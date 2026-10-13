@@ -1,8 +1,9 @@
 import { cjk } from '@streamdown/cjk';
 import { math } from '@streamdown/math';
 import { type ComponentProps, useEffect, useRef } from 'react';
-import { Streamdown, type ExtraProps } from 'streamdown';
+import { defaultRemarkPlugins, Streamdown, type ExtraProps } from 'streamdown';
 import { ExternalLink } from '@/components/ui/external-link';
+import { parseMathMarkdownBlocks, remarkStandardMath } from '@/lib/remark-standard-math';
 import { cn } from '@/lib/utils';
 
 const streamdownPlugins = { cjk, math };
@@ -32,7 +33,11 @@ function MarkdownLink({
 
 const streamdownComponents = { a: MarkdownLink };
 
-export function MarkdownText({ components, ...props }: ComponentProps<typeof Streamdown>) {
+export function MarkdownText({
+  components,
+  remarkPlugins,
+  ...props
+}: ComponentProps<typeof Streamdown>) {
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -65,6 +70,11 @@ export function MarkdownText({ components, ...props }: ComponentProps<typeof Str
       <Streamdown
         components={{ ...streamdownComponents, ...components }}
         plugins={streamdownPlugins}
+        parseMarkdownIntoBlocksFn={parseMathMarkdownBlocks}
+        remarkPlugins={[
+          ...(remarkPlugins ?? Object.values(defaultRemarkPlugins)),
+          remarkStandardMath,
+        ]}
         {...props}
       />
     </div>
