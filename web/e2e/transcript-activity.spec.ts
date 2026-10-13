@@ -24,6 +24,8 @@ test('renders reader-controlled causal entries and a truthful completion footer 
   });
   const message = page.locator('#message-msg_flat_assistant');
   const activity = message.getByRole('button', { name: /^Activity:/ });
+  await expect(activity).toHaveAttribute('aria-expanded', 'true');
+  await activity.click();
   await expect(activity).toHaveAttribute('aria-expanded', 'false');
   const thinking = message.locator('[data-slot="transcript-reasoning"]');
   await expect(thinking).toHaveCount(0);

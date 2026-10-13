@@ -4,6 +4,69 @@ import {
   type ConversationTurnPresentation,
 } from './conversation-turn-model';
 
+interface LiveActivityOptions {
+  messages: readonly Message[];
+  activeTurnId?: string;
+  sessionState?: string;
+  presentations: ReadonlyMap<string, ConversationTurnPresentation>;
+  tools: Record<string, ToolInvocation>;
+  tasks: Record<string, Task>;
+  feedback: ReadonlyMap<string, readonly Message[]>;
+  injections: ReadonlyMap<string, readonly Message[]>;
+}
+
+/** Follow only the latest visible live activity, including work joined into an earlier row. */
+export function liveActivityIterationId({
+  messages,
+  activeTurnId,
+  sessionState,
+  presentations,
+  tools,
+  tasks,
+  feedback,
+  injections,
+}: LiveActivityOptions): string | undefined {
+  if (
+    !activeTurnId ||
+    !['running', 'queued', 'waiting_permission', 'waiting_user'].includes(sessionState ?? '')
+  )
+    return;
+  const liveIds = messages
+    .filter(
+      (message) =>
+        message.role === 'assistant' && (message.run_id ?? message.turn_id) === activeTurnId,
+    )
+    .map((message) => message.id);
+  if (!liveIds.length) return;
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (message.role !== 'assistant') continue;
+    let view = presentations.get(message.id);
+    if (
+      !liveIds.includes(message.id) &&
+      !view?.iterations.some((iteration) =>
+        liveIds.some((id) => iteration.id.startsWith(`${id}:iteration:`)),
+      )
+    )
+      continue;
+    view ??= conversationTurnPresentation(
+      message,
+      tools,
+      tasks,
+      feedback.get(message.id),
+      injections.get(message.id),
+    );
+    const tail = view.segments.at(-1);
+    if (!tail) continue;
+    // Public text, a question response, an artifact, or another visible entry
+    // takes focus from the preceding automatically opened tool group.
+    if (tail.kind !== 'iterations') return;
+    const start = tail.iterations.findLastIndex((iteration) => iteration.nextThoughts.length > 0);
+    const group = tail.iterations.slice(Math.max(0, start));
+    return group.some((iteration) => iteration.activity.length > 0) ? group[0]?.id : undefined;
+  }
+}
+
 /** Show one terminal return per child run, keeping its latest recorded position. */
 export function foldSubagentReturns(messages: readonly Message[]): Message[] {
   const returned = new Set<string>();

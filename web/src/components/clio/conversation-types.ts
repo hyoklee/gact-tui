@@ -104,6 +104,8 @@ export interface ConversationMessageRowProps extends Omit<ClioConversationProps,
   /** Retain the original message anchor without rendering a second injection row. */
   injectionsGrouped?: boolean;
   active?: boolean;
+  /** Canonical first iteration of the latest live activity group, including joined continuations. */
+  liveActivityId?: string;
   responseContinued?: boolean;
   /** A resumed segment of the same response, without a repeated sender header. */
   responseContinuation?: boolean;

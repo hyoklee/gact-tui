@@ -15,16 +15,16 @@ export function TranscriptDisclosures({ children, sessionId }: TranscriptDisclos
 }
 
 function SessionDisclosures({ children, sessionId }: TranscriptDisclosuresProps) {
-  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
+  const [choices, setChoices] = useState<ReadonlyMap<string, boolean>>(() => new Map());
   const setOpen = useCallback((id: string, open: boolean) => {
-    setOpened((current) => {
-      const next = new Set(current);
-      if (open) next.add(id);
-      else next.delete(id);
+    setChoices((current) => {
+      if (current.get(id) === open) return current;
+      const next = new Map(current);
+      next.set(id, open);
       return next;
     });
   }, []);
-  const value = useMemo(() => ({ sessionId, opened, setOpen }), [sessionId, opened, setOpen]);
+  const value = useMemo(() => ({ sessionId, choices, setOpen }), [sessionId, choices, setOpen]);
   return (
     <TranscriptDisclosureContext.Provider value={value}>
       {children}
