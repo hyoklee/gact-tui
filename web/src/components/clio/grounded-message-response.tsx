@@ -1,8 +1,15 @@
 import type { MessageResponseProps } from '@/components/ai-elements/message';
-import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
+import {
+  Source,
+  SourceContent,
+  Sources,
+  SourcesContent,
+  SourcesTrigger,
+} from '@/components/ai-elements/sources';
 import { groundedMessageSegments } from '@/lib/grounded-message-sources';
 import { cn } from '@/lib/utils';
 import { ContentMarkdown } from './content-markdown';
+import { MarkdownContentLink } from './markdown-content-link';
 
 /** Render explicit source entries as AI Elements source objects in transcript order. */
 export function GroundedMessageResponse({ children, className, ...options }: MessageResponseProps) {
@@ -24,7 +31,7 @@ export function GroundedMessageResponse({ children, className, ...options }: Mes
   }
 
   return (
-    <div className={cn('flex size-full flex-col gap-3', className)}>
+    <div className={cn('flex w-full min-w-0 flex-col gap-3', className)}>
       {segments.map((segment, index) =>
         segment.kind === 'markdown' ? (
           <ContentMarkdown key={`markdown:${index}`} {...options}>
@@ -36,11 +43,20 @@ export function GroundedMessageResponse({ children, className, ...options }: Mes
             <SourcesContent>
               {segment.sources.map((source) => (
                 <Source
+                  asChild
                   description={source.description}
                   href={source.href}
                   key={source.href}
                   title={source.title}
-                />
+                >
+                  <MarkdownContentLink href={source.href} presentation="source">
+                    <SourceContent
+                      href={source.href}
+                      title={source.title}
+                      description={source.description}
+                    />
+                  </MarkdownContentLink>
+                </Source>
               ))}
             </SourcesContent>
           </Sources>

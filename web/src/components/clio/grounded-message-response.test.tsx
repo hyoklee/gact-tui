@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { artifactSchema, type WorkspaceResource } from '@clio/core/v3';
 import { groundedMessageSegments } from '@/lib/grounded-message-sources';
 import { GroundedMessageResponse } from './grounded-message-response';
@@ -8,6 +9,70 @@ import { PresentationNavigation } from './presentation-navigation';
 afterEach(cleanup);
 
 describe('GroundedMessageResponse', () => {
+  it('renders a numbered mixed-source bibliography using routed Source objects', async () => {
+    const openFile = vi.fn();
+    render(
+      <PresentationNavigation.Provider
+        value={{ artifacts: {}, subagents: {}, onOpenFile: openFile }}
+      >
+        <GroundedMessageResponse mode="static">
+          {[
+            'The records support this reading. [1](workspace-file:/data/protocol.md)',
+            '',
+            'Sources:',
+            '1. [Protocol](workspace-file:/data/protocol.md)',
+            '2. [External reference](https://example.com/protocol)',
+          ].join('\n')}
+        </GroundedMessageResponse>
+      </PresentationNavigation.Provider>,
+    );
+    expect(await screen.findByRole('button', { name: /2 sources/u })).toBeVisible();
+    const source = screen.getByRole('link', { name: '[1] Protocol' });
+    expect(source).not.toHaveAttribute('target', '_blank');
+    fireEvent.click(source);
+    expect(openFile).toHaveBeenCalledWith('/data/protocol.md');
+    expect(screen.getByRole('link', { name: /\[2\] External reference/u })).toHaveAttribute(
+      'target',
+      '_blank',
+    );
+    expect(groundedMessageSegments('Sources:\nThe source is unavailable.')).toEqual([
+      { kind: 'markdown', text: 'Sources:\nThe source is unavailable.' },
+    ]);
+    const example = '```markdown\nSources:\n1. [Example](https://example.com)\n```';
+    expect(groundedMessageSegments(example)).toEqual([{ kind: 'markdown', text: example }]);
+  });
+
+  it('keeps conversation and message references in the application router', async () => {
+    function Location() {
+      const location = useLocation();
+      return <output>{location.pathname + location.hash}</output>;
+    }
+    render(
+      <MemoryRouter initialEntries={['/workspaces/current/sessions/current']}>
+        <GroundedMessageResponse mode="static">
+          {'[Prior message](session://workspace/session#message-msg_1)'}
+        </GroundedMessageResponse>
+        <Location />
+      </MemoryRouter>,
+    );
+    const link = await screen.findByRole('link', { name: 'Prior message' });
+    expect(link).not.toHaveAttribute('target', '_blank');
+    fireEvent.click(link);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '/workspaces/workspace/sessions/session#message-msg_1',
+    );
+  });
+
+  it('keeps existing document anchors in the current document', async () => {
+    render(
+      <GroundedMessageResponse mode="static">
+        {'[Section](#actual-section)'}
+      </GroundedMessageResponse>,
+    );
+    const link = await screen.findByRole('link', { name: 'Section' });
+    expect(link).toHaveAttribute('href', '#actual-section');
+    expect(link).not.toHaveAttribute('target', '_blank');
+  });
   it('opens a registered resource and refuses a mismatched workspace reference', async () => {
     const openResource = vi.fn();
     const resource: WorkspaceResource = {

@@ -3,11 +3,12 @@ export const CONTENT_REFERENCE_PATH = '/__clio_content_reference__/';
 export type MarkdownContentReference =
   | { kind: 'file'; path: string }
   | { kind: 'artifact'; uri: string }
-  | { kind: 'resource'; id: string; workspaceId?: string };
+  | { kind: 'resource'; id: string; workspaceId?: string }
+  | { kind: 'session'; workspaceId: string; sessionId: string; messageId?: string };
 
 /** Recognize explicit CLIO references without guessing from filenames or URLs. */
 export function isMarkdownContentReference(uri: string): boolean {
-  return /^(?:workspace-file|artifact|resource):/iu.test(uri);
+  return /^(?:workspace-file|artifact|resource|session):/iu.test(uri);
 }
 
 /** Decode an explicit reference; filesystem reads retain the connected service's policy. */
@@ -39,6 +40,30 @@ export function parseMarkdownContentReference(uri: string): MarkdownContentRefer
     const workspaceId = parts.length === 2 ? parts[0] : undefined;
     if (workspaceId === '') return undefined;
     return { kind: 'resource', id, ...(workspaceId ? { workspaceId } : {}) };
+  }
+  if (scheme === 'session') {
+    const [target, fragment, extra] = body.split('#');
+    if (extra !== undefined || !target.startsWith('//')) return undefined;
+    const parts = target.slice(2).split('/');
+    if (parts.length !== 2) return undefined;
+    try {
+      const [workspaceId, sessionId] = parts.map(decodeURIComponent);
+      const invalid = (part: string) =>
+        !part ||
+        part === '.' ||
+        part === '..' ||
+        /[\\/?#]/u.test(part) ||
+        Array.from(part).some(
+          (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+        );
+      if (invalid(workspaceId) || invalid(sessionId)) return undefined;
+      if (fragment !== undefined && !fragment.startsWith('message-')) return undefined;
+      const messageId = fragment === undefined ? undefined : decodeURIComponent(fragment.slice(8));
+      if (messageId !== undefined && invalid(messageId)) return undefined;
+      return { kind: 'session', workspaceId, sessionId, ...(messageId ? { messageId } : {}) };
+    } catch {
+      return undefined;
+    }
   }
   return undefined;
 }

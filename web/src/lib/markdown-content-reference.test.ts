@@ -6,6 +6,14 @@ import {
 } from './markdown-content-reference';
 
 describe('Markdown content references', () => {
+  it('retains exact conversation and message identity', () => {
+    expect(parseMarkdownContentReference('session://workspace/session#message-msg_1')).toEqual({
+      kind: 'session',
+      workspaceId: 'workspace',
+      sessionId: 'session',
+      messageId: 'msg_1',
+    });
+  });
   it('leaves a malformed Unicode reference unavailable without crashing the transcript', () => {
     const tree = { type: 'link', url: 'workspace-file:/data/\ud800.md' };
     expect(() => remarkContentReferences()(tree)).not.toThrow();
@@ -43,6 +51,12 @@ describe('Markdown content references', () => {
     'workspace-file:data.csv?download=1',
     'resource://other/not-a-resource',
     'resource://other/res_a/extra',
+    'session://workspace/..',
+    'session://workspace/%2e%2e',
+    'session://workspace/session/extra',
+    'session://workspace/session#unknown',
+    'session://workspace/session#message-',
+    'session://workspace/%00session',
     'https://example.com/readme.md',
   ])('rejects malformed or unsupported reference %s', (uri) => {
     expect(parseMarkdownContentReference(uri)).toBeUndefined();

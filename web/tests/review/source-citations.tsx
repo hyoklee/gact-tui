@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { ClioRepository, type SessionReviewSnapshot } from '@clio/core/v3';
 import '../../src/index.css';
 import { ArchiveConnectionProvider } from '../../src/providers/connection-provider';
@@ -31,6 +32,7 @@ const repository = new ClioRepository(new ArchiveTransport(snapshot));
 const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 function Review() {
+  const route = useLocation();
   const [request, setRequest] = useState<{ key: string; request: ClioWorkbenchOpenRequest }>();
   const open = (path: string) =>
     setRequest({ key: `${path}:${Date.now()}`, request: { kind: 'workspace-file', path } });
@@ -38,6 +40,9 @@ function Review() {
     <main className="flex h-dvh flex-col bg-background text-foreground">
       <header className="border-b p-4 text-sm text-muted-foreground">
         Citation interaction review: fictional records and real fixture files, no model or OPAL run.
+        <output className="sr-only" aria-label="Current review route">
+          {route.pathname + route.hash}
+        </output>
       </header>
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-2">
         <section className="overflow-auto p-8">
@@ -49,8 +54,15 @@ function Review() {
                 'I counted three plant measurements in the supplied table. [Measurements](workspace-file:/review/measurements.csv)\n\n' +
                 'The audit is still running; I have not used it to support these findings.\n\n' +
                 'Unavailable reference: [Missing report](artifact://artifact_missing).\n\n' +
-                'External link: [Documentation](https://example.com).'}
+                'External link: [Documentation](https://example.com).\n\n' +
+                'The same protocol can be cited by number. [1](workspace-file:/review/protocol%20notes.md)\n\n' +
+                'Sources:\n1. [Protocol](workspace-file:/review/protocol%20notes.md)\n2. [Documentation](https://example.com)\n\n' +
+                'Inline math: $$x^2$$. A display equation:\n\n$$\n\\bar{x} = \\frac{1}{n}\\sum_{i=1}^{n} x_i\n$$\n\n' +
+                '[This conversation](session://citation-review/citation-session) and [review note](#review-note).'}
             </GroundedMessageResponse>
+            <p id="review-note" className="mt-4 text-sm text-muted-foreground">
+              This note is an existing document anchor.
+            </p>
           </PresentationNavigation.Provider>
         </section>
         <aside className="min-h-0 border-l" aria-label="Source file panel">
@@ -89,7 +101,11 @@ createRoot(document.getElementById('root')!).render(
           }
         >
           <AppearanceProvider>
-            <Review />
+            <MemoryRouter
+              initialEntries={['/workspaces/citation-review/sessions/citation-session']}
+            >
+              <Review />
+            </MemoryRouter>
           </AppearanceProvider>
         </ThemeProvider>
       </RepositoryOverrideProvider>
