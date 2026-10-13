@@ -188,7 +188,7 @@ export function SandboxFoundationRow({ integration }: { integration: ServiceInte
             {setupOutcome}
           </p>
         ) : null}
-        {status !== 'healthy' && !setupUnsupported ? (
+        {(status !== 'healthy' || setup.isPending || polling) && !setupUnsupported ? (
           <div className="mt-2 flex flex-wrap items-center gap-2 text-foreground">
             <Button
               disabled={setup.isPending || polling}
