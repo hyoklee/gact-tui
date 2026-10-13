@@ -1283,26 +1283,25 @@ test('batches a 100-delta stream over a virtualized 1,000-message transcript', a
   expect(Math.abs(measurements.bottomGap)).toBeLessThanOrEqual(2);
 });
 
-test('shows the summarization injection collapsed with a clamped preview, then expands it', async ({
+test('keeps summarization in collapsed activity and discloses its exact received text', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(workspaceUrl);
   await expect(page).toHaveURL(new RegExp(`${workspaceUrl}$`));
   await settleConversationAtLatest(page);
+  await page.getByRole('button', { name: 'Activity: Received context', exact: true }).click();
 
   const compactionRow = page.locator(
     '[data-slot="harness-injection"][data-source="summarization"]',
   );
   await expect(compactionRow).toBeVisible();
-  await expect(compactionRow.getByText(/gave the agent: Summarization/)).toBeVisible();
+  const disclosure = compactionRow.getByRole('button', {
+    name: 'Injection Summarization Automatic',
+  });
+  await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
   await expect(compactionRow.getByText('Automatic')).toBeVisible();
-
-  // Collapsed: a clamped preview of the summary the agent received, not an
-  // empty row — the checkpoint appends to the transcript, it does not hide it.
-  const preview = compactionRow.locator('p.line-clamp-3');
-  await expect(preview).toBeVisible();
-  await expect(preview).toContainText('EarthScope station evidence ledger');
+  await expect(compactionRow.locator('pre')).toHaveCount(0);
   // Scroll the row to the top of the viewport: it sits near the tail of the
   // transcript, close enough to the composer that the floating "Agent needs
   // your response" queue (docked at the bottom) would otherwise cover it.
@@ -1315,16 +1314,23 @@ test('shows the summarization injection collapsed with a clamped preview, then e
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
       ),
   );
-  await expect(compactionRow).toHaveScreenshot('summarization-row-collapsed.png', {
+  await expect(compactionRow).toHaveScreenshot('summarization-disclosure-collapsed.png', {
     animations: 'disabled',
   });
 
-  await compactionRow.getByRole('button', { name: 'Show more' }).click();
-  await expect(compactionRow.locator('p.line-clamp-3')).toHaveCount(0);
+  await disclosure.click();
+  await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+  await expect(compactionRow.locator('pre')).toContainText('EarthScope station evidence ledger');
   await expect(
     compactionRow.getByText(/derived displacement series before this checkpoint/),
   ).toBeVisible();
-  await expect(compactionRow.getByRole('button', { name: 'Show less' })).toBeVisible();
+  await compactionRow.getByRole('button', { name: 'Open exact details' }).click();
+  await expect(page.getByRole('dialog', { name: 'Summarization', exact: true })).toContainText(
+    'derived displacement series before this checkpoint',
+  );
+  await page.keyboard.press('Escape');
+  await disclosure.click();
+  await expect(compactionRow.locator('pre')).toHaveCount(0);
 });
 
 interface LongFrameRecord {

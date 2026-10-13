@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useState, type RefObject } from 'react';
 import { showcaseGutter, type ShowcaseGutter } from './showcase-placement';
 
 /** Measure the actual free gutter; never narrow or move the conversation to make room. */
@@ -41,7 +41,9 @@ export function useShowcasePlacement(
     );
     return next;
   }, [buttonRef, surfaceRef]);
-  useLayoutEffect(() => {
+  // The launcher mounts in the toolbar before the sibling transcript's ref is
+  // attached. Observe after the complete commit so initial hydration is covered.
+  useEffect(() => {
     const button = buttonRef.current;
     const surface = surfaceRef?.current ?? button?.closest('[data-slot="session-transcript"]');
     if (!surface) return;

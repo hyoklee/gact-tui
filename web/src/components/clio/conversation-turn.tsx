@@ -229,7 +229,7 @@ export function ConversationTurn({
     else groups[groups.length - 1].push(iteration);
   }
   return (
-    <div className="space-y-4" data-slot="transcript-entry-sequence">
+    <div className="flex min-w-0 flex-col gap-5" data-slot="transcript-entry-sequence">
       {groups.map((group) => {
         const iteration = group[0];
         const summary = transcriptActivitySummary(group);
@@ -253,7 +253,7 @@ export function ConversationTurn({
                   </span>
                 </ChainOfThoughtHeader>
                 <ChainOfThoughtContent
-                  className="ml-1 mt-1 space-y-1 border-l pl-3"
+                  className="ml-1 mt-3 space-y-3 border-l pl-3"
                   data-slot="transcript-activity-timeline"
                 >
                   {group.map((item) => (

@@ -5,6 +5,7 @@ const endpoint = `http://127.0.0.1:${process.env['CLIO_FIXTURE_PORT'] ?? '18799'
 test('keeps response preparation in the transcript and showcases beside the canvas opener', async ({
   page,
 }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   expect((await page.request.post(`${endpoint}/__test/reset`)).ok()).toBe(true);
