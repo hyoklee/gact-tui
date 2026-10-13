@@ -73,7 +73,6 @@ export function SessionEvidenceSummary({
   const sections = useEvidenceSections('evidence-summary', [
     'runs',
     'tasks',
-    'child-agents',
     'background',
     'files',
     'changes',

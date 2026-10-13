@@ -11,7 +11,37 @@ test.beforeEach(async ({ page }) => {
   }, fixtureEndpoint);
 });
 
-test('hides both user branching controls while viewing a delegated worker', async ({
+test('opens children in tabs, uses Shift for the center, and fits evidence equally', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1000 });
+  const worker = await (
+    await page.request.post(`${fixtureEndpoint}/__test/subagent-navigation`)
+  ).json();
+  await page.goto(workspaceUrl);
+  const layout = page.getByRole('button', { name: /^Evidence layout:/ });
+  await layout.click();
+  const evidence = page.getByLabel('Activity and evidence', { exact: true });
+  await expect(evidence).toHaveAttribute('data-showcase-mode', 'docked');
+  const parentWidth = await evidence.evaluate((element) => element.clientWidth);
+  const child = evidence.getByRole('button', { name: 'Open Station analysis worker', exact: true });
+  await child.click();
+  await expect(page).toHaveURL(new RegExp(`${workspaceUrl}$`));
+  const canvas = page.getByRole('complementary', { name: 'Workspace canvas' });
+  await expect(canvas.getByRole('textbox', { name: 'Message this agent' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close workspace canvas', exact: true }).click();
+  await expect(evidence).toBeVisible();
+  await child.click({ modifiers: ['Shift'] });
+  await expect(page).toHaveURL(new RegExp(`/sessions/${worker.id}$`));
+  await expect(page.getByRole('textbox', { name: 'Message this agent' })).toBeVisible();
+  await expect(evidence).toHaveAttribute('data-showcase-mode', 'docked');
+  await expect.poll(async () => (await evidence.boundingBox())?.width).toBeCloseTo(parentWidth, 0);
+  const bounds = await evidence.boundingBox();
+  const composer = await page.locator('[data-evidence-composer]').boundingBox();
+  expect(bounds!.x).toBeGreaterThan(composer!.x + composer!.width);
+});
+
+test('allows central child follow-ups while hiding user branching controls', async ({
   page,
 }, testInfo) => {
   const response = await page.request.post(`${fixtureEndpoint}/__test/subagent-navigation`);
@@ -29,6 +59,32 @@ test('hides both user branching controls while viewing a delegated worker', asyn
   await expect(page.getByRole('menuitem', { name: 'Branch into a new session' })).toHaveCount(0);
   await expect(page.getByRole('menuitem', { name: 'Share read-only link' })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('subagent-actions.png') });
+  await page.keyboard.press('Escape');
+
+  const parentMessagesUrl = `${fixtureEndpoint}/v1/sessions/${worker.parent_session_id}/messages`;
+  const parentBefore = (await (await page.request.get(parentMessagesUrl)).json()).messages;
+  const followup = page.getByRole('textbox', { name: 'Message this agent' });
+  await expect(followup).toBeVisible();
+  await followup.fill('Check calibration without changing the raw export');
+  const accepted = page.waitForResponse(
+    (result) =>
+      result.request().method() === 'POST' && result.url().endsWith(`/${worker.id}/messages`),
+  );
+  await followup.press('Enter');
+  const receipt = await accepted;
+  expect(receipt.ok()).toBe(true);
+  expect(receipt.request().postDataJSON()).toMatchObject({
+    delivery: 'auto',
+    parts: [{ type: 'text', text: 'Check calibration without changing the raw export' }],
+  });
+  expect(receipt.request().postDataJSON()).not.toHaveProperty('model');
+  await expect(page.getByText('Follow-up sent', { exact: true })).toBeVisible();
+  expect((await (await page.request.get(parentMessagesUrl)).json()).messages).toEqual(parentBefore);
+  await page.reload();
+  await expect(followup).toBeVisible();
+  await expect(
+    conversation.getByText('Check calibration without changing the raw export', { exact: true }),
+  ).toBeVisible();
 });
 
 test('branches from a message with a composer, keeps its parent link, and reopens from navigation', async ({

@@ -5,7 +5,7 @@ export function isUserBranch(session: Pick<Session, 'session_kind'>): boolean {
   return session.session_kind === 'branch';
 }
 
-/** Managed children are followed from their parent rather than independently edited. */
+/** Managed children retain their parent relationship and their own follow-up target. */
 export function isManagedChildSession(
   session: Pick<Session, 'parent_session_id' | 'session_kind'>,
 ): boolean {

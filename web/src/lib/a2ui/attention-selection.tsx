@@ -5,6 +5,7 @@ import { useConnectionSettings } from '@/providers/connection-provider';
 import { connectionScope } from '@/lib/connection-scope';
 import { SelectionActionsContext } from '@/lib/selection-actions-context';
 import { structuredAttentionSelection } from './attention-selection-coordinates';
+import { useAttentionAvailable } from '@/lib/attention-availability';
 
 type Region = Extract<ContentSelection['selection'], { kind?: 'image_region' }>;
 interface SurfaceAttention {
@@ -25,7 +26,13 @@ export function SurfaceAttentionProvider({
   disabled?: boolean;
 }) {
   const registry = useContext(SelectionActionsContext);
-  if (disabled) return <SurfaceAttentionContext.Provider value={undefined}>{children}</SurfaceAttentionContext.Provider>;
+  const available = useAttentionAvailable(surface.session_id);
+  if (disabled || !available)
+    return (
+      <SurfaceAttentionContext.Provider value={undefined}>
+        {children}
+      </SurfaceAttentionContext.Provider>
+    );
   return registry && surface.part_id && !disabled ? (
     <BoundSurface surface={surface}>{children}</BoundSurface>
   ) : (

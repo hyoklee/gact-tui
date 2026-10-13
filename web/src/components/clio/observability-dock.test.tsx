@@ -248,7 +248,7 @@ describe('ClioObservabilityView', () => {
     expect(liveRegionAfter).toHaveTextContent('Working');
   });
 
-  it('opens a child duration centrally and uses shift-click for a durable canvas tab', async () => {
+  it('opens a child duration in a tab and uses Shift-click for the center', async () => {
     const user = userEvent.setup();
     const onOpenSubagent = vi.fn();
     const child = {
@@ -294,10 +294,10 @@ describe('ClioObservabilityView', () => {
     // disambiguates it from the toggle.
     const childLane = screen.getByRole('button', { name: /geospatial #1,/iu });
     await user.click(childLane);
-    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'conversation');
+    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'canvas');
 
     fireEvent.click(childLane, { shiftKey: true });
-    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'canvas');
+    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'conversation');
   });
 
   it('keeps child conversations directly accessible beside the observability control', async () => {
@@ -355,7 +355,7 @@ describe('ClioObservabilityView', () => {
         name: /geospatial #1 Completed Resolve the region and identify the nearest stations/u,
       }),
     );
-    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'conversation');
+    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'canvas');
 
     await user.click(screen.getByRole('button', { name: 'Browse child conversations' }));
     await user.click(screen.getByRole('button', { name: 'Open geospatial #1 in canvas' }));

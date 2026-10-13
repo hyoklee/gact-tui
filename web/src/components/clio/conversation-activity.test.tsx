@@ -99,10 +99,14 @@ describe('ClioConversation activity and interactive surfaces', () => {
       name: 'Open child conversation geospatial #1',
     });
     fireEvent.click(dispatch);
-    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'conversation');
+    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'canvas');
 
     fireEvent.click(dispatch, { shiftKey: true });
+    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'conversation');
+    fireEvent.keyDown(dispatch, { key: 'Enter' });
     expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'canvas');
+    fireEvent.keyDown(dispatch, { key: 'Enter', shiftKey: true });
+    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'conversation');
   });
 
   it('keeps the sourced tool outcome readable inside a compact activity chain', async () => {
@@ -136,7 +140,9 @@ describe('ClioConversation activity and interactive surfaces', () => {
             output: 'large payload omitted from the collapsed summary',
             presentation: {
               summary: 'Read evidence.json',
-              blocks: [{ id: 'outcome', type: 'text', text: 'Three station records are available.' }],
+              blocks: [
+                { id: 'outcome', type: 'text', text: 'Three station records are available.' },
+              ],
             },
           },
         }}

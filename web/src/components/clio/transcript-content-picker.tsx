@@ -17,11 +17,13 @@ import { SelectionActionsContext } from '@/lib/selection-actions-context';
 import { connectionScope } from '@/lib/connection-scope';
 import type { SelectionTarget } from '@/lib/selection-actions';
 import { InfoTip } from './info-tip';
+import { useAttentionAvailable } from '@/lib/attention-availability';
 
 /** Select exact stored parts even when tool cards or media are collapsed. */
 export function TranscriptContentPicker(props: { sessionId: string; messageId: string }) {
   const registry = useContext(SelectionActionsContext);
-  return registry ? <ScopedContentPicker {...props} /> : null;
+  const available = useAttentionAvailable(props.sessionId);
+  return registry && available ? <ScopedContentPicker {...props} /> : null;
 }
 
 function ScopedContentPicker(props: { sessionId: string; messageId: string }) {

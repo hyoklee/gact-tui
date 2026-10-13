@@ -88,7 +88,7 @@ describe('ClioEvidenceView operational inventory', () => {
     );
     expect(onOpenSubagent).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'task_child' }),
-      'conversation',
+      'canvas',
     );
 
     await user.click(screen.getByRole('button', { name: 'Agent runs, 1 recorded' }));
@@ -616,7 +616,7 @@ describe('ClioEvidenceView child agents', () => {
     expect(screen.queryByText('No child agents in this session yet.')).not.toBeInTheDocument();
   });
 
-  it('opens in the main chat on click and in the canvas on Shift-click or the canvas action', async () => {
+  it('opens a workspace tab on click and the center on Shift-click', async () => {
     const user = userEvent.setup();
     const onOpenSubagent = vi.fn();
     render(
@@ -634,7 +634,7 @@ describe('ClioEvidenceView child agents', () => {
     await user.click(row);
     expect(onOpenSubagent).toHaveBeenLastCalledWith(
       expect.objectContaining({ id: 'task_watch' }),
-      'conversation',
+      'canvas',
     );
 
     await user.keyboard('{Shift>}');
@@ -642,7 +642,7 @@ describe('ClioEvidenceView child agents', () => {
     await user.keyboard('{/Shift}');
     expect(onOpenSubagent).toHaveBeenLastCalledWith(
       expect.objectContaining({ id: 'task_watch' }),
-      'canvas',
+      'conversation',
     );
 
     onOpenSubagent.mockClear();

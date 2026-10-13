@@ -1,11 +1,31 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render as renderUI,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createSelectionActionRegistry, type SelectionTarget } from '@/lib/selection-actions';
 import { SelectionActionsContext } from '@/lib/selection-actions-context';
 import { AttentionLookupPanel } from './attention-lookup-panel';
 import { attentionProfileSchema } from '@clio/core/v3';
 import { attentionEvidenceHash } from '@/lib/attention-evidence-navigation';
-import { StrictMode } from 'react';
+import { StrictMode, type ReactElement, type ReactNode } from 'react';
+import { AttentionAvailabilityContext } from '@/lib/attention-availability';
+
+function CapturedAttention({ children }: { children: ReactNode }) {
+  return (
+    <AttentionAvailabilityContext.Provider value={{ sessionId: 's', available: true }}>
+      {children}
+    </AttentionAvailabilityContext.Provider>
+  );
+}
+
+function render(element: ReactElement) {
+  return renderUI(element, { wrapper: CapturedAttention });
+}
 
 const mocks = vi.hoisted(() => ({ endpoint: 'http://clio-a', lookup: vi.fn() }));
 vi.mock('@/hooks/use-repository', () => ({

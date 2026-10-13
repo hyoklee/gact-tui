@@ -114,7 +114,7 @@ it('shows one compact task row and discloses complete assignments and technical 
   expect(screen.queryByText(task.handle!)).toBeNull();
 });
 
-it('opens the exact matched child in conversation and canvas while controls stay independent', async () => {
+it('opens the exact matched child in a workspace tab and center while controls stay independent', async () => {
   const user = userEvent.setup();
   const open = vi.fn();
   const control = vi.fn(async () => {});
@@ -132,12 +132,13 @@ it('opens the exact matched child in conversation and canvas while controls stay
   expect(details).toHaveAttribute('aria-expanded', 'false');
   await user.click(details);
   await user.click(screen.getByRole('button', { name: 'Open child conversation Worker #1' }));
-  expect(open).toHaveBeenLastCalledWith(child, 'conversation');
+  expect(open).toHaveBeenLastCalledWith(child, 'canvas');
   await user.keyboard('{Shift>}');
   await user.click(screen.getByRole('button', { name: 'Open child conversation Worker #1' }));
   await user.keyboard('{/Shift}');
-  expect(open).toHaveBeenLastCalledWith(child, 'canvas');
-  await user.click(screen.getByRole('button', { name: 'Open Worker #1 in canvas' }));
+  expect(open).toHaveBeenLastCalledWith(child, 'conversation');
+  await user.click(screen.getByRole('button', { name: 'Open Worker #1 in the center' }));
+  expect(open).toHaveBeenLastCalledWith(child, 'conversation');
   expect(open).toHaveBeenCalledTimes(3);
 });
 
@@ -156,7 +157,7 @@ it('keeps legacy child discovery and opening available without unsupported lifec
   await userEvent.click(screen.getByRole('button', { name: 'Task details: Worker #1' }));
   expect(screen.queryByRole('button', { name: 'Technical details' })).toBeNull();
   await userEvent.click(screen.getByRole('button', { name: 'Open child conversation Worker #1' }));
-  expect(open).toHaveBeenCalledWith(child, 'conversation');
+  expect(open).toHaveBeenCalledWith(child, 'canvas');
 });
 
 it('reveals settled results and errors without replacing a reader-opened assignment on refresh', async () => {

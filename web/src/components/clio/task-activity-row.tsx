@@ -15,6 +15,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import type { ClioEvidenceViewProps } from './observability-evidence';
 import type { TaskActivity } from './task-activity';
 import { taskProgressLabel } from './task-progress-label';
+import { subagentOpenTarget, SUBAGENT_OPEN_HINT } from './subagent-navigation';
 
 const settled = new Set(['completed', 'failed', 'cancelled', 'interrupted']);
 
@@ -133,18 +134,17 @@ export function TaskActivityRow({
                 size="sm"
                 className="h-8 px-0"
                 aria-label={`Open child conversation ${subagent.title}`}
-                onClick={(event) =>
-                  onOpenSubagent(subagent, event.shiftKey ? 'canvas' : 'conversation')
-                }
+                title={SUBAGENT_OPEN_HINT}
+                onClick={(event) => onOpenSubagent(subagent, subagentOpenTarget(event))}
               >
                 Open conversation
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={`Open ${subagent.title} in canvas`}
-                title="Open in canvas"
-                onClick={() => onOpenSubagent(subagent, 'canvas')}
+                aria-label={`Open ${subagent.title} in the center`}
+                title="Open in the center"
+                onClick={() => onOpenSubagent(subagent, 'conversation')}
               >
                 <PanelRightOpenIcon aria-hidden="true" />
               </Button>

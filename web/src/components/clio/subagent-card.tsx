@@ -1,3 +1,4 @@
+import { subagentOpenTarget, SUBAGENT_OPEN_HINT } from './subagent-navigation';
 import type { MessageBlock, SubagentRun } from '@clio/core/v3';
 import { BotIcon, ChevronRightIcon, ShieldCheckIcon } from 'lucide-react';
 import type { KeyboardEvent, MouseEvent } from 'react';
@@ -118,7 +119,7 @@ export function ClioSubagentProgressLine({ subagent, onOpen }: ClioSubagentCardP
       className="mt-2 flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md border border-border px-3 py-2 text-left text-xs transition-colors enabled:hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-ring"
       disabled={!interactive}
       aria-label={`Open subagent ${name}`}
-      onClick={(event) => onOpen?.(subagent, event.shiftKey ? 'canvas' : 'conversation')}
+      onClick={(event) => onOpen?.(subagent, subagentOpenTarget(event))}
     >
       <BotIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="shrink-0 text-muted-foreground">Subagent</span>
@@ -149,7 +150,7 @@ export function ClioAgentMessageLine({ block, subagent, onOpen }: ClioAgentMessa
       )}
       disabled={!interactive}
       onClick={(event) => {
-        if (subagent && interactive) onOpen?.(subagent, event.shiftKey ? 'canvas' : 'conversation');
+        if (subagent && interactive) onOpen?.(subagent, subagentOpenTarget(event));
       }}
       type="button"
     >
@@ -187,12 +188,12 @@ export function ClioSubagentCard({ subagent, onOpen }: ClioSubagentCardProps) {
   const interactive = Boolean(subagent.child_session_id && onOpen);
 
   const openFromPointer = (event: MouseEvent<HTMLElement>) => {
-    onOpen?.(subagent, event.shiftKey ? 'canvas' : 'conversation');
+    onOpen?.(subagent, subagentOpenTarget(event));
   };
   const openFromKeyboard = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
-    onOpen?.(subagent, event.shiftKey ? 'canvas' : 'conversation');
+    onOpen?.(subagent, subagentOpenTarget(event));
   };
 
   return (
@@ -231,9 +232,7 @@ export function ClioSubagentCard({ subagent, onOpen }: ClioSubagentCardProps) {
         }}
         tabIndex={interactive ? 0 : undefined}
         title={
-          interactive
-            ? 'Open child conversation. Shift-click to open it in the canvas.'
-            : 'This run has no linked child conversation to open.'
+          interactive ? SUBAGENT_OPEN_HINT : 'This run has no linked child conversation to open.'
         }
       />
     </div>
@@ -304,10 +303,8 @@ function SpotterWatcherLine({
           : 'cursor-default',
       )}
       disabled={!interactive}
-      onClick={(event) => onOpen?.(subagent, event.shiftKey ? 'canvas' : 'conversation')}
-      title={
-        interactive ? 'Open the SPOTTER review. Shift-click to open it in the canvas.' : undefined
-      }
+      onClick={(event) => onOpen?.(subagent, subagentOpenTarget(event))}
+      title={interactive ? SUBAGENT_OPEN_HINT : undefined}
       type="button"
     >
       <ShieldCheckIcon aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
