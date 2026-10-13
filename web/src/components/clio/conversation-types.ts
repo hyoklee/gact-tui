@@ -18,6 +18,7 @@ import type {
 } from '@clio/core/v3';
 import type { ConversationDisplayMode } from '@/providers/conversation-display-provider';
 import type { McpAppResponseActivityData } from './mcp-app-surface';
+import type { FileSearchLocation } from '@/lib/search-matches';
 import type { SubagentOpenTarget } from './subagent-card';
 import type { TurnPreparationProps } from './turn-preparation';
 import type { ConversationModelBoundary } from './conversation-model-boundaries';
@@ -70,6 +71,7 @@ export interface ClioConversationProps {
   retryingMessageId?: string;
   onOpenArtifact?: (artifact: Artifact) => void;
   onOpenFile?: (path: string) => void;
+  onOpenFileReference?: (path: string, location: FileSearchLocation) => void;
   onOpenWork?: () => void;
   onOpenResource?: (
     resource: WorkspaceResource,

@@ -7,7 +7,11 @@ import type {
   WorkspaceFileEntry,
   WorkspaceResource,
 } from '@clio/core/v3';
-import { Suspense, lazy, type ReactNode } from 'react';
+import { Suspense, lazy, type ReactNode, type ComponentProps } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useRepository } from '@/hooks/use-repository';
+import { useConnectionSettings } from '@/providers/connection-provider';
+import { connectionScope } from '@/lib/connection-scope';
 import type { SubagentOpenTarget } from './subagent-card';
 import { DiffCanvasView } from './diff-canvas-view';
 import { SessionWorkView } from './session-work';
@@ -209,7 +213,8 @@ export function WorkbenchTabContent({
       );
     case 'workspace-file':
       return (
-        <FileBrowser
+        <ScopedWorkspaceFileBrowser
+          sourceWorkspaceId={workspaceId}
           sessionId={sessionId}
           files={files}
           filesError={filesError}
@@ -220,6 +225,7 @@ export function WorkbenchTabContent({
           onRefresh={onRefreshFiles}
           onSelectedPathChange={(path) => onSelectWorkspaceFilePath(tab.id, path)}
           selectedPath={tab.path}
+          searchLocation={tab.line || tab.find ? { line: tab.line, find: tab.find } : undefined}
           workspaceId={tab.workspaceId}
         />
       );
@@ -345,4 +351,43 @@ export function WorkbenchTabContent({
     default:
       return assertNever(tab);
   }
+}
+
+/** A cross-workspace citation must bring its own tree as well as its own file bytes. */
+function ScopedWorkspaceFileBrowser({
+  sourceWorkspaceId,
+  ...props
+}: ComponentProps<typeof FileBrowser> & { sourceWorkspaceId: string }) {
+  const repository = useRepository();
+  const { settings } = useConnectionSettings();
+  const foreign = sourceWorkspaceId !== props.workspaceId;
+  const listing = useQuery({
+    queryKey: [
+      'workspace-files',
+      settings.endpoint,
+      props.workspaceId,
+      connectionScope(settings),
+      'search-tab',
+    ],
+    queryFn: ({ signal }) => repository.workspaceFiles(props.workspaceId, signal),
+    enabled: foreign,
+  });
+  return (
+    <FileBrowser
+      {...props}
+      {...(foreign
+        ? {
+            files: listing.data?.entries ?? [],
+            filesPending: listing.isPending,
+            filesFetching: listing.isFetching,
+            filesError: listing.error?.message,
+            filesTruncated: listing.data?.truncated,
+            filesNextOffset: undefined,
+            onRefresh: () => {
+              void listing.refetch();
+            },
+          }
+        : {})}
+    />
+  );
 }

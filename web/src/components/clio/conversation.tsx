@@ -1,3 +1,7 @@
+import { useContext } from 'react';
+import { useInRouterContext, useLocation } from 'react-router-dom';
+import { TranscriptDisclosureContext } from './transcript-disclosure-context';
+import { highlightSearchPassage } from '@/lib/search-passage';
 import { inlineQuestionDomId } from '@/lib/inline-question';
 import { focusAttentionEvidence } from '@/lib/attention-evidence-navigation';
 import type { McpAppIdentity } from '@clio/core/v3';
@@ -51,13 +55,19 @@ import { placeHarnessInjections } from './conversation-injection-placement';
 import { foldSubagentReturns, placeContinuedActivity } from './conversation-activity-placement';
 
 export function ClioConversation(props: ClioConversationProps) {
+  const inRouter = useInRouterContext();
   return (
     <PresentationNavigation.Provider value={props}>
       <TranscriptDisclosures sessionId={props.sessionId ?? props.messages[0]?.session_id}>
-        <ConversationBody {...props} />
+        {inRouter ? <RoutedConversationBody {...props} /> : <ConversationBody {...props} />}
       </TranscriptDisclosures>
     </PresentationNavigation.Provider>
   );
+}
+
+function RoutedConversationBody(props: ClioConversationProps) {
+  const location = useLocation();
+  return <ConversationBody {...props} searchHash={location.hash} />;
 }
 
 function ConversationBody({
@@ -67,8 +77,9 @@ function ConversationBody({
   bottomInset = 0,
   compactions,
   preparation,
+  searchHash,
   ...entities
-}: ClioConversationProps) {
+}: ClioConversationProps & { searchHash?: string }) {
   const mcpAppResponses = useMemo(
     () => mcpAppResponsesForMessages(sourceMessages),
     [sourceMessages],
@@ -104,6 +115,8 @@ function ConversationBody({
   const modelBoundaries = useMemo(() => conversationModelBoundaries(messages), [messages]);
   const { conversationWidth } = useAppearancePreferences();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const disclosure = useContext(TranscriptDisclosureContext);
+  const revealDisclosure = disclosure?.setOpen;
   const initialScrollComplete = useRef(false);
   const autoscroll = useTranscriptAutoscroll(scrollRef);
   const { followingRef, scrollToBottom, disengage } = autoscroll;
@@ -355,14 +368,33 @@ function ConversationBody({
 
   useEffect(() => {
     let frame = 0;
+    let clearSearch: (() => void) | undefined;
     const focusSearchResult = () => {
+      clearSearch?.();
+      clearSearch = undefined;
       if (!window.location.hash.startsWith('#message-')) return;
       const [target, query] = window.location.hash.slice('#message-'.length).split('?', 2);
       const [encodedMessageId, encodedActivityId] = target.split('/activity-', 2);
       const messageId = decodeURIComponent(encodedMessageId);
       const activityId = encodedActivityId ? decodeURIComponent(encodedActivityId) : undefined;
+      const parameters = new URLSearchParams(query);
+      const find = parameters.get('find');
+      const part = parameters.get('part');
       const index = messages.findIndex((message) => message.id === messageId);
       if (index < 0) return;
+      if (find) {
+        setTurnDisplayMode(messageId, 'full');
+        if (part) {
+          const message = messages[index];
+          for (const field of ['text', 'thought'])
+            revealDisclosure?.(
+              `thinking:${message.session_id}:${messageId}:${part}:${field}`,
+              true,
+            );
+        }
+        if (scrollRef.current)
+          clearSearch = highlightSearchPassage(scrollRef.current, messageId, part, find);
+      }
       markUserScrollIntent();
       disengage();
       virtualizer.scrollToIndex(index, { align: 'center' });
@@ -384,10 +416,19 @@ function ConversationBody({
     focusSearchResult();
     window.addEventListener('hashchange', focusSearchResult);
     return () => {
+      clearSearch?.();
       window.removeEventListener('hashchange', focusSearchResult);
       window.cancelAnimationFrame(frame);
     };
-  }, [messages, virtualizer, markUserScrollIntent, disengage]);
+  }, [
+    messages,
+    virtualizer,
+    markUserScrollIntent,
+    disengage,
+    revealDisclosure,
+    searchHash,
+    setTurnDisplayMode,
+  ]);
 
   // Streamed deltas and a changed composer inset follow before paint while
   // engaged; the autoscroll hook's ResizeObserver catches later layout growth.

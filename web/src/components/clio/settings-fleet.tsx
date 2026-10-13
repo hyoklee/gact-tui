@@ -1,9 +1,11 @@
+import { vocab } from '@/lib/brand-vocabulary';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ClioModelPicker } from './model-picker';
 import { Button } from '@/components/ui/button';
 import { useProviderGroups } from '@/hooks/use-provider-groups';
 import { useRepository } from '@/hooks/use-repository';
 import { useConnectionSettings } from '@/providers/connection-provider';
+import { connectionScope } from '@/lib/connection-scope';
 
 const roles = [
   ['goals', 'Goals', 'Checks evidence of completion and guides the next step.'],
@@ -20,7 +22,7 @@ export function FleetSettingsPanel() {
   const repository = useRepository();
   const { settings } = useConnectionSettings();
   const client = useQueryClient();
-  const key = ['fleet-settings', settings.endpoint];
+  const key = ['fleet-settings', settings.endpoint, connectionScope(settings)];
   const fleet = useQuery({
     queryKey: key,
     queryFn: ({ signal }) => repository.fleetSettings(signal),
@@ -40,12 +42,46 @@ export function FleetSettingsPanel() {
     );
   const data = fleet.data;
   return (
-    <section className="flex max-w-3xl flex-col gap-4" aria-label="Fleet judges">
+    <section className="flex max-w-3xl flex-col gap-4" aria-label="Fleet models">
       <div>
         <h2 className="text-lg font-semibold">Fleet</h2>
         <p className="text-sm text-muted-foreground">
-          Choose a judge for each role. By default, each uses the conversation’s model.
+          Choose models for search and evaluation. By default, each uses the conversation’s model.
         </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-3 border-b py-3">
+        <div className="min-w-48 flex-1">
+          <h3 className="font-medium">{vocab.agent} Search</h3>
+          <p className="text-sm text-muted-foreground">
+            Answers questions and finds conversations, messages, and files. Press Tab in search to
+            use it.
+          </p>
+        </div>
+        <ClioModelPicker
+          title={`Choose ${vocab.agent} Search model`}
+          options={options}
+          model={data.search?.model_id}
+          provider={data.search?.provider_id}
+          catalogStatus={catalog.isPending ? 'loading' : catalog.isError ? 'error' : 'ready'}
+          onRetryCatalog={() => void catalog.refetch()}
+          trigger={
+            <Button variant="outline" disabled={save.isPending}>
+              {data.search?.model_id ?? 'Conversation or service model'}
+            </Button>
+          }
+          onChange={(model) =>
+            save.mutate({ ...data, search: { provider_id: model.providerId, model_id: model.id } })
+          }
+        />
+        {data.search ? (
+          <Button
+            variant="ghost"
+            disabled={save.isPending}
+            onClick={() => save.mutate({ ...data, search: null })}
+          >
+            Use conversation model
+          </Button>
+        ) : null}
       </div>
       {roles.map(([role, title, description]) => {
         const choice = data.judges[role];

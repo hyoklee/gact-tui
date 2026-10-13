@@ -134,7 +134,7 @@ describe('ClioCommandMenu workspace search', () => {
     expect(
       screen.queryByText('.clio\\agent\\documents\\working-copies\\copy_1\\stations.csv'),
     ).not.toBeInTheDocument();
-    await user.click(await screen.findByText('results/stations.csv'));
+    await user.click(await screen.findByRole('option', { name: /results\/stations.csv/u }));
     expect(onOpenResource).toHaveBeenCalledWith({
       kind: 'workspace-file',
       path: 'results/stations.csv',
@@ -145,7 +145,7 @@ describe('ClioCommandMenu workspace search', () => {
       screen.getByPlaceholderText('Search work, files, artifacts, or actions…'),
       'evidence.csv',
     );
-    await user.click(await screen.findByText('station-evidence.csv'));
+    await user.click(await screen.findByRole('option', { name: /station-evidence.csv/u }));
     expect(onOpenResource).toHaveBeenCalledWith({ kind: 'artifact', artifact });
   });
 
@@ -158,16 +158,24 @@ describe('ClioCommandMenu workspace search', () => {
       screen.getByPlaceholderText('Search work, files, artifacts, or actions…'),
       'immutable',
     );
-    await user.click(await screen.findByText('The result is anchored to immutable evidence.'));
+    const passage = await screen.findByRole('option', {
+      name: /The result is anchored to immutable evidence/u,
+    });
+    expect(passage.querySelector('mark')).toHaveTextContent(/immutable/i);
+    const headings = [...document.querySelectorAll('[cmdk-group-heading]')].map(
+      (item) => item.textContent,
+    );
+    expect(headings.indexOf('Sessions')).toBeLessThan(headings.indexOf('Matching messages'));
+    await user.click(passage);
 
     await waitFor(() =>
       expect(screen.getByTestId('location')).toHaveTextContent(
-        '/workspaces/ws_archive/sessions/sess_archive#message-msg_9',
+        '/workspaces/ws_archive/sessions/sess_archive#message-msg_9?find=immutable',
       ),
     );
     expect(repository.searchMemory).toHaveBeenCalledWith(
       'immutable',
-      { workspaceId: 'ws_current', includeCrossSession: true, limit: 12 },
+      { includeCrossSession: true, limit: 12 },
       expect.any(AbortSignal),
     );
   });
