@@ -1,41 +1,25 @@
 import type { MessageResponseProps } from '@/components/ai-elements/message';
-import { MessageResponse } from '@/components/ai-elements/message';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { groundedMessageSegments } from '@/lib/grounded-message-sources';
 import { cn } from '@/lib/utils';
-import { defaultRemarkPlugins } from 'streamdown';
-import { ArtifactMarkdownImage } from './artifact-markdown-image';
-import { remarkArtifactImages } from '@/lib/remark-artifact-images';
-import { remarkContentReferences } from '@/lib/markdown-content-reference';
-import { MarkdownContentLink } from './markdown-content-link';
-
-const artifactComponents = { img: ArtifactMarkdownImage, a: MarkdownContentLink };
+import { ContentMarkdown } from './content-markdown';
 
 /** Render explicit source entries as AI Elements source objects in transcript order. */
 export function GroundedMessageResponse({ children, className, ...options }: MessageResponseProps) {
-  const props = {
-    ...options,
-    components: { ...artifactComponents, ...options.components },
-    remarkPlugins: [
-      ...(options.remarkPlugins ?? Object.values(defaultRemarkPlugins)),
-      remarkArtifactImages,
-      remarkContentReferences,
-    ],
-  };
   if (typeof children !== 'string') {
     return (
-      <MessageResponse className={className} {...props}>
+      <ContentMarkdown className={className} {...options}>
         {children}
-      </MessageResponse>
+      </ContentMarkdown>
     );
   }
 
   const segments = groundedMessageSegments(children);
   if (!segments.some((segment) => segment.kind === 'sources')) {
     return (
-      <MessageResponse className={className} {...props}>
+      <ContentMarkdown className={className} {...options}>
         {children}
-      </MessageResponse>
+      </ContentMarkdown>
     );
   }
 
@@ -43,9 +27,9 @@ export function GroundedMessageResponse({ children, className, ...options }: Mes
     <div className={cn('flex size-full flex-col gap-3', className)}>
       {segments.map((segment, index) =>
         segment.kind === 'markdown' ? (
-          <MessageResponse key={`markdown:${index}`} {...props}>
+          <ContentMarkdown key={`markdown:${index}`} {...options}>
             {segment.text}
-          </MessageResponse>
+          </ContentMarkdown>
         ) : (
           <Sources className="mb-0" defaultOpen key={`sources:${index}`}>
             <SourcesTrigger count={segment.sources.length} />

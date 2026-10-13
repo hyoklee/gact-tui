@@ -69,6 +69,7 @@ export function MarkdownContentLink({
       {...props}
       className={style}
       href={uri}
+      target={undefined}
       onClick={(event) => {
         event.preventDefault();
         open();
