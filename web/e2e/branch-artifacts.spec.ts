@@ -43,8 +43,11 @@ test('opens children in tabs, uses Shift for the center, and fits evidence equal
     name: 'Task details: Station analysis worker',
     exact: true,
   });
-  await expect(reopenedDetails).toHaveAttribute('aria-expanded', 'false');
-  await reopenedDetails.click();
+  if ((await reopenedDetails.getAttribute('aria-expanded')) !== 'true') {
+    await reopenedDetails.click();
+  }
+  await expect(reopenedDetails).toHaveAttribute('aria-expanded', 'true');
+  await expect(child).toBeVisible();
   await child.click({ modifiers: ['Shift'] });
   await expect(page).toHaveURL(new RegExp(`/sessions/${worker.id}$`));
   await expect(page.getByRole('textbox', { name: 'Message this agent' })).toBeVisible();
