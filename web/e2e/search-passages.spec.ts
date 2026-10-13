@@ -56,9 +56,9 @@ test('Tab enters the dedicated assistant, Enter submits, and a scoped citation o
     .getByPlaceholder('Search work, files, artifacts, or actions…')
     .fill('Where is the reviewer handoff?');
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('textbox', { name: 'Ask CLIO Search' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: /^Ask .+ Search$/u })).toBeVisible();
   expect(fixture.state.created).toBe(0);
-  await page.getByRole('textbox', { name: 'Ask CLIO Search' }).press('Enter');
+  await page.getByRole('textbox', { name: /^Ask .+ Search$/u }).press('Enter');
   await expect(page.getByRole('link', { name: 'Read the archived notes' })).toBeVisible();
   await page.getByRole('link', { name: 'Read the archived notes' }).click();
   await expect(page.getByLabel('Matching file passage').locator('mark')).toHaveText(fixture.phrase);
