@@ -107,3 +107,17 @@ it('shows the actual connection failure and retains the question for retry', asy
   expect(await screen.findByRole('alert')).toHaveTextContent('Search blueprint unavailable');
   expect(screen.getByRole('textbox')).toHaveValue('Where did we discuss the plant?');
 });
+
+it('identifies an older service before offering a search request', async () => {
+  mocks.repository.fleetSettings.mockResolvedValue({
+    judges: { goals: null, variants: null, permissions: null },
+  });
+  show();
+  expect(
+    await screen.findByText(
+      'Search is unavailable on this connection. Update its agent to enable it.',
+    ),
+  ).toBeVisible();
+  expect(screen.getByRole('button', { name: `Search with ${vocab.agent}` })).toBeDisabled();
+  expect(mocks.repository.openSearchSession).not.toHaveBeenCalled();
+});

@@ -53,6 +53,7 @@ export function ClioSearchAssistant({
   const active = Boolean(
     session && isSessionActive(entities.sessions[session.id]?.state ?? session.state),
   );
+  const unavailable = Boolean(fleet.data && fleet.data.search === undefined);
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -70,7 +71,7 @@ export function ClioSearchAssistant({
 
   const ask = async () => {
     const text = query.trim();
-    if (!text || sending.current || active) return;
+    if (!text || sending.current || active || unavailable) return;
     sending.current = true;
     setSubmitting(true);
     setError(undefined);
@@ -140,7 +141,7 @@ export function ClioSearchAssistant({
         <Button
           type="submit"
           aria-label={`Search with ${vocab.agent}`}
-          disabled={!query.trim() || submitting || active}
+          disabled={!query.trim() || submitting || active || unavailable}
         >
           <SendIcon className="size-4" />
         </Button>
@@ -148,6 +149,11 @@ export function ClioSearchAssistant({
       <p className="px-3 pb-2 text-xs text-muted-foreground">
         Read-only search across this connected service’s workspaces.
       </p>
+      {unavailable ? (
+        <p role="status" className="px-3 pb-3 text-sm">
+          Search is unavailable on this connection. Update its agent to enable it.
+        </p>
+      ) : null}
       {error ? (
         <p role="alert" className="mx-3 mb-3 rounded-md border border-destructive p-3 text-sm">
           {error}

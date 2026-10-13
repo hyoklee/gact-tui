@@ -55,6 +55,7 @@ export function FleetSettingsPanel() {
           <p className="text-sm text-muted-foreground">
             Answers questions and finds conversations, messages, and files. Press Tab in search to
             use it.
+            {data.search === undefined ? ' Update this connection’s agent to enable search.' : ''}
           </p>
         </div>
         <ClioModelPicker
@@ -65,7 +66,7 @@ export function FleetSettingsPanel() {
           catalogStatus={catalog.isPending ? 'loading' : catalog.isError ? 'error' : 'ready'}
           onRetryCatalog={() => void catalog.refetch()}
           trigger={
-            <Button variant="outline" disabled={save.isPending}>
+            <Button variant="outline" disabled={save.isPending || data.search === undefined}>
               {data.search?.model_id ?? 'Conversation or service model'}
             </Button>
           }
