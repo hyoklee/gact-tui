@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ClioSearchAssistant } from './search-assistant';
+import { vocab } from '@/lib/brand-vocabulary';
 
 const mocks = vi.hoisted(() => ({
   repository: {
@@ -65,7 +66,7 @@ it('starts only on submit, inherits its server-selected route, and deletes only 
   const view = show();
   expect(mocks.repository.openSearchSession).not.toHaveBeenCalled();
   expect(await screen.findByText('fleet-search-model')).toBeVisible();
-  await userEvent.setup().click(screen.getByRole('button', { name: 'Search with CLIO' }));
+  await userEvent.setup().click(screen.getByRole('button', { name: `Search with ${vocab.agent}` }));
   await waitFor(() =>
     expect(mocks.repository.submitMessage).toHaveBeenCalledWith(
       'search_1',
@@ -91,7 +92,7 @@ it('retires a late-created search if the person closed it before creation return
     }),
   );
   const view = show();
-  await userEvent.setup().click(screen.getByRole('button', { name: 'Search with CLIO' }));
+  await userEvent.setup().click(screen.getByRole('button', { name: `Search with ${vocab.agent}` }));
   view.unmount();
   await act(async () => {
     resolve(opened);
@@ -102,7 +103,7 @@ it('retires a late-created search if the person closed it before creation return
 it('shows the actual connection failure and retains the question for retry', async () => {
   mocks.repository.openSearchSession.mockRejectedValue(new Error('Search blueprint unavailable'));
   show();
-  await userEvent.setup().click(screen.getByRole('button', { name: 'Search with CLIO' }));
+  await userEvent.setup().click(screen.getByRole('button', { name: `Search with ${vocab.agent}` }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Search blueprint unavailable');
   expect(screen.getByRole('textbox')).toHaveValue('Where did we discuss the plant?');
 });
