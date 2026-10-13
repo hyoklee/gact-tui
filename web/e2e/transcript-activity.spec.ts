@@ -150,10 +150,16 @@ test('renders reader-controlled causal entries and a truthful completion footer 
     );
     const read = message.getByRole('button', { name: 'Show result for Read' });
     const run = message.getByRole('button', { name: 'Show result for Run' });
-    const reasoningBounds = (await reasoning.boundingBox())!;
-    expect(
-      (await read.boundingBox())!.y - reasoningBounds.y - reasoningBounds.height,
-    ).toBeGreaterThanOrEqual(10);
+    await expect
+      .poll(async () => {
+        const [reasoningBounds, readBounds] = await Promise.all([
+          reasoning.boundingBox(),
+          read.boundingBox(),
+        ]);
+        if (!reasoningBounds || !readBounds) return -1;
+        return readBounds.y - reasoningBounds.y - reasoningBounds.height;
+      })
+      .toBeGreaterThanOrEqual(10);
     await expect(read).toContainText('61 lines');
     await expect(run).toContainText('failed');
     expect((await read.boundingBox())!.y).toBeLessThan((await run.boundingBox())!.y);
