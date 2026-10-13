@@ -6,6 +6,7 @@ export const responseFeedbackSchema = z.object({
   feedback_id: z.string().uuid(),
   previous_feedback_id: z.string().uuid().nullable(),
   rating: z.enum(['good', 'bad']).nullable(),
+  comment: z.string().max(4000).optional(),
   created_at: z.string(),
   session_id: z.string(),
   message_id: z.string(),
@@ -31,4 +32,5 @@ export interface RateResponseInput {
   feedback_id: string;
   expected_feedback_id: string | null;
   rating: 'good' | 'bad' | null;
+  comment?: string;
 }

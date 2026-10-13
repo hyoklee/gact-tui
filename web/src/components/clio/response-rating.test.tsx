@@ -130,7 +130,7 @@ describe('response rating', () => {
       }),
     );
     await user.click(await screen.findByRole('button', { name: 'Rated bad response' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Remove rating' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Bad response' }));
     await screen.findByRole('button', { name: 'Rate response' });
     expect(mocks.save).toHaveBeenLastCalledWith(
       'session',
@@ -164,14 +164,119 @@ describe('response rating', () => {
 
   it('supports keyboard selection', async () => {
     const user = userEvent.setup();
-    mocks.save.mockResolvedValue(good);
+    mocks.save.mockResolvedValue({ feedback: { ...good.feedback!, rating: 'bad' } });
     mount();
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Rate response' })).toBeEnabled(),
     );
     await user.tab();
-    await user.keyboard('{Enter}{ArrowDown}{Enter}');
-    await waitFor(() => expect(mocks.save).toHaveBeenCalled());
+    await user.keyboard('{Enter}{End}{Enter}');
+    await waitFor(() =>
+      expect(mocks.save).toHaveBeenCalledWith(
+        'session',
+        'answer',
+        expect.objectContaining({ rating: 'bad' }),
+      ),
+    );
+  });
+
+  it.each(['good', 'bad'] as const)(
+    'clears a checked %s rating when selected again',
+    async (rating) => {
+      mocks.read.mockResolvedValue({ feedback: { ...good.feedback!, rating } });
+      mocks.save.mockResolvedValue({ feedback: { ...good.feedback!, rating: null } });
+      const user = userEvent.setup();
+      mount();
+      await user.click(await screen.findByRole('button', { name: `Rated ${rating} response` }));
+      await user.click(
+        screen.getByRole('menuitemradio', {
+          name: rating === 'good' ? 'Good response' : 'Bad response',
+        }),
+      );
+      await screen.findByRole('button', { name: 'Rate response' });
+      expect(mocks.save).toHaveBeenCalledWith(
+        'session',
+        'answer',
+        expect.objectContaining({
+          rating: null,
+          expected_feedback_id: good.feedback!.feedback_id,
+        }),
+      );
+    },
+  );
+
+  it('attaches a comment only after acknowledgement and restores it for editing', async () => {
+    mocks.read.mockResolvedValue(good);
+    let acknowledge!: (value: ResponseFeedbackState) => void;
+    mocks.save.mockReturnValue(
+      new Promise((resolve) => {
+        acknowledge = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    const view = mount();
+    await user.click(await screen.findByRole('button', { name: 'Rated good response' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Add feedback comment' }));
+    await user.type(screen.getByRole('textbox', { name: 'Comment' }), 'Clear units and sources.');
+    await user.click(screen.getByRole('button', { name: 'Save feedback' }));
+    expect(mocks.save).toHaveBeenCalledWith(
+      'session',
+      'answer',
+      expect.objectContaining({
+        expected_feedback_id: good.feedback!.feedback_id,
+        rating: 'good',
+        comment: 'Clear units and sources.',
+      }),
+    );
+    expect(screen.getByRole('button', { name: 'Saving feedback…' })).toBeDisabled();
+    const commented = { feedback: { ...good.feedback!, comment: 'Clear units and sources.' } };
+    acknowledge(commented);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    view.unmount();
+    mocks.read.mockResolvedValue(commented);
+    mount();
+    await user.click(
+      await screen.findByRole('button', { name: 'Rated good response, with comment' }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Edit feedback comment' }));
+    expect(screen.getByRole('textbox', { name: 'Comment' })).toHaveValue(
+      'Clear units and sources.',
+    );
+    await user.clear(screen.getByRole('textbox', { name: 'Comment' }));
+    mocks.save.mockResolvedValue(good);
+    await user.click(screen.getByRole('button', { name: 'Save feedback' }));
+    await waitFor(() =>
+      expect(mocks.save).toHaveBeenLastCalledWith(
+        'session',
+        'answer',
+        expect.objectContaining({ comment: '', rating: 'good' }),
+      ),
+    );
+  });
+
+  it('keeps an unconfirmed comment for retry and can attach it without a thumb rating', async () => {
+    mocks.save.mockRejectedValueOnce(new Error('storage unavailable'));
+    const user = userEvent.setup();
+    mount();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Rate response' })).toBeEnabled(),
+    );
+    await user.click(screen.getByRole('button', { name: 'Rate response' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Add feedback comment' }));
+    await user.type(screen.getByRole('textbox', { name: 'Comment' }), 'Missing units.');
+    await user.click(screen.getByRole('button', { name: 'Save feedback' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your comment is still here');
+    expect(screen.getByRole('textbox', { name: 'Comment' })).toHaveValue('Missing units.');
+    mocks.save.mockResolvedValue({
+      feedback: { ...good.feedback!, rating: null, comment: 'Missing units.' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Save feedback' }));
+    await screen.findByRole('button', { name: 'Rate response, with comment' });
+    expect(mocks.save).toHaveBeenLastCalledWith(
+      'session',
+      'answer',
+      expect.objectContaining({ rating: null, comment: 'Missing units.' }),
+    );
   });
 
   it('hides rating for user, active, unfinished and offline archive messages', () => {

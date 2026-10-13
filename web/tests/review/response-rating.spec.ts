@@ -46,11 +46,15 @@ test('rates a real response, reloads from clio-core, changes and removes it', as
   await expect(page.getByRole('button', { name: 'Rated bad response' })).toBeEnabled();
   await page.getByRole('button', { name: 'Rated bad response' }).click();
   await page.screenshot({ path: `${evidence}/rating-saved-light.png`, animations: 'disabled' });
-  await page.getByRole('menuitem', { name: 'Remove rating' }).click();
+  await page.getByRole('menuitemradio', { name: 'Bad response' }).click();
   await expect(page.getByRole('button', { name: 'Rate response', exact: true })).toBeEnabled();
   const items = (await (await page.request.get(historyUrl)).json()).items;
   const changes = items.slice(-3);
-  expect(changes.map((row: { rating: string | null }) => row.rating)).toEqual(['good', 'bad', null]);
+  expect(changes.map((row: { rating: string | null }) => row.rating)).toEqual([
+    'good',
+    'bad',
+    null,
+  ]);
   expect(changes[1].previous_feedback_id).toBe(changes[0].feedback_id);
   expect(changes[2].previous_feedback_id).toBe(changes[1].feedback_id);
   await writeFile(`${evidence}/clio-core-feedback-history.json`, JSON.stringify(items, null, 2));
