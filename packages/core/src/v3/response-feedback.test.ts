@@ -62,4 +62,19 @@ describe('response feedback repository', () => {
       }),
     ).rejects.toThrow('clio-core unavailable');
   });
+
+  it('transports comments while accepting older responses without a comment field', async () => {
+    const withComment = { ...feedback, comment: 'Missing units.' };
+    const transport = new RecordingTransport([{ feedback: withComment }, { feedback }]);
+    const repository = new ClioRepository(transport);
+    const input = {
+      feedback_id: feedback.feedback_id,
+      expected_feedback_id: null,
+      rating: 'bad' as const,
+      comment: 'Missing units.',
+    };
+    expect(await repository.rateResponse('s', 'm', input)).toEqual({ feedback: withComment });
+    expect(transport.requests[0]!.body).toEqual(input);
+    expect(await repository.responseFeedback('s', 'm')).toEqual({ feedback });
+  });
 });
