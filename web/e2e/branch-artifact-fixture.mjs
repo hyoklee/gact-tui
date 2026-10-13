@@ -66,6 +66,22 @@ export function createBranchArtifactFixture({
     sessions() {
       return [...branches.values()].map((entry) => entry.session);
     },
+    subagents() {
+      const worker = branches.get('sess_managed_worker')?.session;
+      return worker
+        ? [
+            {
+              id: 'task_managed_worker',
+              session_id: session.id,
+              child_session_id: worker.id,
+              agent_id: worker.agent_id,
+              title: worker.title,
+              state: worker.state,
+              task: 'Review the station evidence.',
+            },
+          ]
+        : undefined;
+    },
     artifacts() {
       return mixed ? records : [];
     },

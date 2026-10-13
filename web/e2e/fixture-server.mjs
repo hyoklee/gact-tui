@@ -2068,7 +2068,7 @@ const server = createServer(async (request, response) => {
           detail: 'Evidence retained with source identity.',
         },
       ],
-      subagents: [
+      subagents: branchArtifacts.subagents() ?? [
         {
           id: 'subagent_station',
           session_id: sessionId,

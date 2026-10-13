@@ -12,7 +12,7 @@ export function useShowcasePlacement(
     const button = buttonRef.current;
     const surface = surfaceRef?.current ?? button?.closest('[data-slot="session-transcript"]');
     const column = surface?.querySelector('[data-slot="transcript-column"]');
-    const composer = surface?.querySelector('[data-slot="clio-composer-stack"] form');
+    const composer = surface?.querySelector('[data-evidence-composer]');
     const next =
       surface && column && composer
         ? showcaseGutter(
@@ -50,7 +50,7 @@ export function useShowcasePlacement(
     let frame: number | undefined;
     const measure = () => {
       const column = surface.querySelector('[data-slot="transcript-column"]');
-      const composer = surface.querySelector('[data-slot="clio-composer-stack"] form');
+      const composer = surface.querySelector('[data-evidence-composer]');
       if (column) resize.observe(column);
       if (composer) resize.observe(composer);
       // Visibility follows available space; measuring never changes user selection.

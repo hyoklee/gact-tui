@@ -501,6 +501,10 @@ describe('child work activity projection', () => {
     });
     fireEvent.click(row);
     expect(window.location.hash).toBe('');
+    expect(onOpen).toHaveBeenLastCalledWith('canvas');
+    fireEvent.click(row, { shiftKey: true });
+    expect(onOpen).toHaveBeenLastCalledWith('conversation');
+    fireEvent.keyDown(row, { key: 'Enter', shiftKey: true });
     expect(onOpen).toHaveBeenLastCalledWith('conversation');
     fireEvent.click(screen.getByRole('button', { name: 'Open Evidence researcher in canvas' }));
     expect(onOpen).toHaveBeenLastCalledWith('canvas');

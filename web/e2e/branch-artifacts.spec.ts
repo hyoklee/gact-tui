@@ -11,6 +11,36 @@ test.beforeEach(async ({ page }) => {
   }, fixtureEndpoint);
 });
 
+test('opens children in tabs, uses Shift for the center, and fits evidence equally', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1000 });
+  const worker = await (
+    await page.request.post(`${fixtureEndpoint}/__test/subagent-navigation`)
+  ).json();
+  await page.goto(workspaceUrl);
+  const layout = page.getByRole('button', { name: /^Evidence layout:/ });
+  await layout.click();
+  const evidence = page.getByLabel('Activity and evidence', { exact: true });
+  await expect(evidence).toHaveAttribute('data-showcase-mode', 'docked');
+  const parentWidth = await evidence.evaluate((element) => element.clientWidth);
+  const child = evidence.getByRole('button', { name: 'Open Station analysis worker', exact: true });
+  await child.click();
+  await expect(page).toHaveURL(new RegExp(`${workspaceUrl}$`));
+  const canvas = page.getByRole('complementary', { name: 'Workspace canvas' });
+  await expect(canvas.getByRole('textbox', { name: 'Message this agent' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close workspace canvas', exact: true }).click();
+  await expect(evidence).toBeVisible();
+  await child.click({ modifiers: ['Shift'] });
+  await expect(page).toHaveURL(new RegExp(`/sessions/${worker.id}$`));
+  await expect(page.getByRole('textbox', { name: 'Message this agent' })).toBeVisible();
+  await expect(evidence).toHaveAttribute('data-showcase-mode', 'docked');
+  await expect.poll(async () => (await evidence.boundingBox())?.width).toBeCloseTo(parentWidth, 0);
+  const bounds = await evidence.boundingBox();
+  const composer = await page.locator('[data-evidence-composer]').boundingBox();
+  expect(bounds!.x).toBeGreaterThan(composer!.x + composer!.width);
+});
+
 test('allows central child follow-ups while hiding user branching controls', async ({
   page,
 }, testInfo) => {

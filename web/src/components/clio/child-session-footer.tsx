@@ -59,7 +59,10 @@ export function ClioChildSessionFooter({
       data-slot="clio-child-session-footer"
       ref={rootRef}
     >
-      <div className="pointer-events-auto mx-auto flex w-full max-w-4xl min-w-0 flex-col gap-2">
+      <div
+        data-evidence-composer
+        className="pointer-events-auto mx-auto flex w-full max-w-4xl min-w-0 flex-col gap-2"
+      >
         {pendingInteractions}
         <div className="min-w-0 overflow-hidden rounded-2xl border border-border/40 bg-card/80 shadow-[0_12px_32px_-18px_rgb(0_0_0/0.8)] backdrop-blur-xl">
           <div className="flex min-w-0 flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center">

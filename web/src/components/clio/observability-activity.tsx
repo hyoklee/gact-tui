@@ -1,3 +1,4 @@
+import { activateActivityItem, activateActivityItemFromKeyboard } from './activity-navigation';
 import type {
   AsyncProcess,
   ExecutionProvenanceResult,
@@ -507,24 +508,6 @@ function CausalActivityRow({
   const x = 12 + lane.index * laneSpacing;
   const parentX = 12 + parent.index * laneSpacing;
   const target = Boolean(item.transcriptMessageId || item.onActivate || item.onOpen);
-  const activate = () => {
-    if (item.kind === 'process' && item.onOpen) {
-      item.onOpen('conversation');
-      return;
-    }
-    if (item.transcriptMessageId) {
-      const activityTarget = item.kind === 'tool' ? `/activity-${encodeURIComponent(item.id)}` : '';
-      const hash = `#message-${encodeURIComponent(item.transcriptMessageId)}${activityTarget}`;
-      if (window.location.hash === hash) window.dispatchEvent(new HashChangeEvent('hashchange'));
-      else window.location.hash = hash;
-      return;
-    }
-    if (item.onActivate) {
-      item.onActivate();
-      return;
-    }
-    item.onOpen?.('conversation');
-  };
   const content = (
     <div className="grid min-h-11 min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2">
       <div className="relative min-h-11 shrink-0 self-stretch" style={{ width: graphWidth }}>
@@ -630,7 +613,8 @@ function CausalActivityRow({
       }
       aria-label={`Open transcript event ${item.label}`}
       className="min-h-0 border-b px-0 py-0 last:border-b-0"
-      onClick={activate}
+      onClick={(event) => activateActivityItem(item, event)}
+      onKeyDown={(event) => activateActivityItemFromKeyboard(item, event)}
       role="button"
     >
       {content}
