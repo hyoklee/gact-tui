@@ -44,7 +44,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
-function show() {
+function show(onQueryChange = vi.fn()) {
   return render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -54,7 +54,7 @@ function show() {
           workspaceId="ws_current"
           parentSessionId="parent_1"
           query="Where did we discuss the plant?"
-          onQueryChange={vi.fn()}
+          onQueryChange={onQueryChange}
           onBack={vi.fn()}
           onClose={vi.fn()}
         />
@@ -120,4 +120,22 @@ it('identifies an older service before offering a search request', async () => {
   ).toBeVisible();
   expect(screen.getByRole('button', { name: `Search with ${vocab.agent}` })).toBeDisabled();
   expect(mocks.repository.openSearchSession).not.toHaveBeenCalled();
+});
+
+it('does not clear a new search draft when a closed request finishes submitting', async () => {
+  let finish!: () => void;
+  mocks.repository.submitMessage.mockReturnValue(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const onQueryChange = vi.fn();
+  const view = show(onQueryChange);
+  await userEvent.setup().click(screen.getByRole('button', { name: `Search with ${vocab.agent}` }));
+  await waitFor(() => expect(mocks.repository.submitMessage).toHaveBeenCalled());
+  view.unmount();
+  await act(async () => {
+    finish();
+  });
+  expect(onQueryChange).not.toHaveBeenCalled();
 });

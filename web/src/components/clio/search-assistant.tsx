@@ -96,7 +96,7 @@ export function ClioSearchAssistant({
         delivery: 'start',
         parts: [{ type: 'text', text }],
       });
-      onQueryChange('');
+      if (alive.current) onQueryChange('');
     } catch (reason) {
       if (alive.current)
         setError(
