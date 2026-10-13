@@ -84,9 +84,14 @@ test('compact Session rows open source, tool, Context and Work destinations', as
   const view = page.getByRole('tablist', { name: 'Observability view' });
   await expect(view.getByRole('tab', { name: 'Context' })).toHaveAttribute('data-state', 'active');
   await page.getByRole('button', { name: 'Close workspace canvas' }).click();
-  if (await panel.isVisible())
-    await panel.getByRole('button', { name: 'Hide activity and evidence' }).click();
+  // Closing the canvas restores the remembered panels after layout settles.
+  // Wait for that restoration before dismissing; an immediate visibility probe
+  // can otherwise miss it and cycle the restored layout from Both to Top.
+  await expect(panel).toBeVisible();
+  await panel.getByRole('button', { name: 'Hide activity and evidence' }).click();
+  await expect(panel).toBeHidden();
   await toggle.click({ button: 'right' });
+  await expect(panel).toHaveAttribute('data-showcase-mode', 'docked');
   await panel.getByRole('button', { name: 'Open Work view' }).click();
   await expect(page.getByRole('tab', { name: 'Work', exact: true })).toHaveAttribute(
     'data-state',

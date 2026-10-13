@@ -95,7 +95,7 @@ export interface ClioWorkbenchProps {
 
 export type ClioWorkbenchOpenRequest =
   | { kind: 'knowledge'; sourceId: string; label: string }
-  | { kind: 'workspace-file'; path: string }
+  | { kind: 'workspace-file'; path: string; workspaceId?: string; line?: number; find?: string }
   | { kind: 'diff'; diff: SessionDiff }
   | { kind: 'artifact'; artifact: ArtifactEntity }
   | {
@@ -317,7 +317,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
       setTabs((current) =>
         current.map((candidate) =>
           candidate.id === tabId && candidate.kind === 'workspace-file'
-            ? { ...candidate, label: fileName(path), path }
+            ? { ...candidate, label: fileName(path), path, line: undefined, find: undefined }
             : candidate,
         ),
       );
@@ -359,6 +359,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
             });
             return;
           case 'workspace-file': {
+            targetWorkspaceId = request.workspaceId ?? targetWorkspaceId;
             const root = useLiveStore.getState().entities.workspaces[targetWorkspaceId]?.path;
             const path = workspaceFilePath(request.path, root);
             openTab({
@@ -367,6 +368,8 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
               label: fileName(path),
               path,
               workspaceId: targetWorkspaceId,
+              line: request.line,
+              find: request.find,
             });
             return;
           }
@@ -651,6 +654,11 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
                       onOpenFile: (path) =>
                         openRequest(
                           { kind: 'workspace-file', path },
+                          'workspaceId' in tab ? tab.workspaceId : workspaceId,
+                        ),
+                      onOpenFileReference: (path, location) =>
+                        openRequest(
+                          { ...location, kind: 'workspace-file', path },
                           'workspaceId' in tab ? tab.workspaceId : workspaceId,
                         ),
                       onOpenArtifact: (artifact) => openRequest({ kind: 'artifact', artifact }),

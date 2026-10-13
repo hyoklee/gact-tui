@@ -15,7 +15,15 @@ export type WorkbenchTab =
   | { id: 'artifacts'; kind: 'artifacts'; label: 'Artifacts' }
   | { id: 'blueprints'; kind: 'blueprints'; label: 'Blueprints' }
   | { id: 'resources'; kind: 'resources'; label: 'Resources' }
-  | { id: string; kind: 'workspace-file'; label: string; path: string; workspaceId: string }
+  | {
+      id: string;
+      kind: 'workspace-file';
+      label: string;
+      path: string;
+      workspaceId: string;
+      line?: number;
+      find?: string;
+    }
   | {
       id: string;
       kind: 'diff';

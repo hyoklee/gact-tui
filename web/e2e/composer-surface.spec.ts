@@ -158,6 +158,27 @@ for (const theme of ['dark', 'light'] as const) {
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await page.getByRole('heading', { name: 'EarthScope NDP evidence review' }).click();
+      // Resizing can leave a final Motion layout transform on the composer.
+      // Capture idle geometry only after native and frame-driven motion settle;
+      // the focus assertion below still requires exactly the same bounds.
+      await expect
+        .poll(() =>
+          surface.evaluate(async (node) => {
+            for (let element: Element | null = node; element; element = element.parentElement) {
+              if (element.getAnimations().some((animation) => animation.playState === 'running'))
+                return false;
+            }
+            const before = node.getBoundingClientRect();
+            await new Promise((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(resolve)),
+            );
+            const after = node.getBoundingClientRect();
+            return ['x', 'y', 'width', 'height'].every(
+              (key) => before[key as keyof DOMRect] === after[key as keyof DOMRect],
+            );
+          }),
+        )
+        .toBe(true);
       const idle = await surface.boundingBox();
       const colors = await surface.evaluate((node) => {
         const canvas = document.createElement('canvas');

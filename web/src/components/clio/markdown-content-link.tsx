@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { vocab } from '@/lib/brand-vocabulary';
 import { PresentationNavigation } from './presentation-navigation';
 import { SourceCitation } from './source-citation';
+import { messageSearchHash } from '@/lib/search-matches';
 
 type ContentLinkProps = ComponentProps<'a'> & ExtraProps & { presentation?: 'citation' | 'source' };
 
@@ -105,8 +106,19 @@ export function MarkdownContentLink({
   let title = label ?? 'Source';
   let detail = '';
   let description = '';
-  if (reference?.kind === 'file' && navigation?.onOpenFile) {
-    open = () => navigation.onOpenFile?.(reference.path);
+  if (
+    reference?.kind === 'file' &&
+    (navigation?.onOpenFileReference ||
+      (!reference.workspaceId && !reference.line && !reference.find && navigation?.onOpenFile))
+  ) {
+    open = () =>
+      navigation.onOpenFileReference
+        ? navigation.onOpenFileReference(reference.path, {
+            workspaceId: reference.workspaceId,
+            line: reference.line,
+            find: reference.find,
+          })
+        : navigation.onOpenFile?.(reference.path);
     title = label ?? reference.path.split(/[\\/]/u).at(-1) ?? 'Workspace file';
     detail = reference.path;
     description = `Open this file in ${vocab.product}'s source panel.`;
@@ -137,7 +149,9 @@ export function MarkdownContentLink({
   } else if (reference?.kind === 'session' && inRouter) {
     const route =
       `/workspaces/${encodeURIComponent(reference.workspaceId)}/sessions/${encodeURIComponent(reference.sessionId)}` +
-      (reference.messageId ? `#message-${encodeURIComponent(reference.messageId)}` : '');
+      (reference.messageId
+        ? messageSearchHash(reference.messageId, reference.partId, reference.find)
+        : '');
     return cite(
       <Link {...props} className={style} to={route} target={undefined}>
         {linkText}

@@ -61,7 +61,7 @@ it('reveals both edges after container resize, label resize, reorder and portal 
       </div>
     );
   }
-  const { rerender } = render(<Harness />);
+  const { rerender, unmount } = render(<Harness />);
   expect(strip!.scrollLeft).toBe(0);
   geometry.width = 250;
   act(() => callbacks.at(-1)!([], {} as ResizeObserver));
@@ -76,4 +76,23 @@ it('reveals both edges after container resize, label resize, reorder and portal 
   rerender(<Harness maximized />);
   expect(strip!.scrollLeft).toBe(180);
   expect(disconnect).toHaveBeenCalledTimes(2);
+  // Reordering can finish a transform without producing any resize callback.
+  const active = strip!.firstElementChild!.firstElementChild!;
+  const finishMove = () =>
+    active.dispatchEvent(Object.assign(new Event('transitionend'), { propertyName: 'transform' }));
+  geometry.start = 30;
+  act(finishMove);
+  expect(strip!.scrollLeft).toBe(30);
+  geometry.start = 400;
+  act(() =>
+    active.dispatchEvent(
+      Object.assign(new Event('transitioncancel'), { propertyName: 'transform' }),
+    ),
+  );
+  expect(strip!.scrollLeft).toBe(310);
+  unmount();
+  geometry.start = 30;
+  act(finishMove);
+  expect(strip!.scrollLeft).toBe(310);
+  expect(disconnect).toHaveBeenCalledTimes(3);
 });

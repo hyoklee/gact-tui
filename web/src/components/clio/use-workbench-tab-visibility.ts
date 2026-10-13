@@ -29,6 +29,17 @@ export function useWorkbenchTabVisibility(
     observer.observe(strip);
     observer.observe(active);
     if (active.parentElement) observer.observe(active.parentElement);
-    return () => observer.disconnect();
+    // Sortable moves reordered tabs with a transform after this layout effect.
+    // Transforms do not resize the element, so reveal its final position too.
+    const settled = (event: TransitionEvent) => {
+      if (event.target === active && event.propertyName === 'transform') reveal();
+    };
+    active.addEventListener('transitionend', settled);
+    active.addEventListener('transitioncancel', settled);
+    return () => {
+      observer.disconnect();
+      active.removeEventListener('transitionend', settled);
+      active.removeEventListener('transitioncancel', settled);
+    };
   }, [stripRef, activeTabRef, activeTabId, tabs, maximized]);
 }

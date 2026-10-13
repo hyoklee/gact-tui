@@ -8,6 +8,8 @@ import { getChildAgentAssignment } from './child-agent-presentation';
 import { ClioStatus } from './status';
 import type { SubagentOpenTarget } from './subagent-card';
 import { ChildConversationFollowup } from './child-conversation-followup';
+import { useContext } from 'react';
+import { PresentationNavigation } from './presentation-navigation';
 
 export interface ClioSubagentCanvasViewProps {
   activeSessionId: string;
@@ -28,6 +30,7 @@ export function ClioSubagentCanvasView({
   onOpenSubagent,
   onOpenConversation,
 }: ClioSubagentCanvasViewProps) {
+  const navigation = useContext(PresentationNavigation);
   const childSessionId = subagent.child_session_id;
   const assignment = getChildAgentAssignment(subagent);
   const { entities, messages, transcript } = useLiveSessionTranscript(
@@ -102,6 +105,7 @@ export function ClioSubagentCanvasView({
           messages={messages}
           onOpenArtifact={onOpenArtifact}
           onOpenFile={onOpenFile}
+          onOpenFileReference={navigation?.onOpenFileReference}
           onOpenSubagent={onOpenSubagent}
           subagents={entities.subagents}
           surfaces={entities.surfaces}
