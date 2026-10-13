@@ -28,6 +28,36 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+it('reports a failed startup check even when an older fence receipt is ready', async () => {
+  mocks.status.mockResolvedValue({
+    status: 'ready',
+    setup_in_progress: false,
+    next_action: 'No action required.',
+    setup_progress: {
+      status: 'failed',
+      detail: 'Runtime access verification failed.',
+      started_at: '2026-10-13T20:01:00Z',
+      elapsed_seconds: 60,
+    },
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <SandboxSetupNotification />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await waitFor(() =>
+    expect(mocks.message).toHaveBeenCalledWith(
+      'Protected execution needs attention',
+      expect.objectContaining({ description: 'Runtime access verification failed.' }),
+    ),
+  );
+  expect(mocks.success).not.toHaveBeenCalled();
+  client.clear();
+});
+
 it('follows a service-owned setup from a conversation and reports its completion', async () => {
   const progress = {
     status: 'running',

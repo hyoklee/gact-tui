@@ -15,6 +15,7 @@ export function SandboxSetupNotification() {
   const { credentialsReady, settings } = useConnectionSettings();
   const navigate = useNavigate();
   const observed = useRef('');
+  const notified = useRef('');
   const requested = useIsMutating({
     mutationKey: queryKeys.key('sandbox-setup', settings.endpoint),
   });
@@ -37,16 +38,27 @@ export function SandboxSetupNotification() {
         description: `${progress.detail} (${formatDuration(progress.elapsed_seconds * 1000)}) You can keep using ${vocab.agent} while this finishes.`,
         action: { label: 'View progress', onClick: () => navigate('/infrastructure/agent') },
       });
-    } else if (observed.current === `${settings.endpoint}:${progress.started_at}`) {
+    } else if (
+      notified.current !== `${settings.endpoint}:${progress.started_at}` &&
+      (observed.current === `${settings.endpoint}:${progress.started_at}` ||
+        progress.status === 'failed' ||
+        progress.status === 'setup_required')
+    ) {
       observed.current = '';
-      const ready = row.status === 'ready' || row.status === 'healthy';
+      notified.current = `${settings.endpoint}:${progress.started_at}`;
+      const ready =
+        progress.status !== 'failed' &&
+        progress.status !== 'setup_required' &&
+        (row.status === 'ready' || row.status === 'healthy');
       (ready ? toast.success : toast.message)(
         ready ? 'Protected execution is ready' : 'Protected execution needs attention',
         {
           id,
           description: ready
             ? `Finished in ${formatDuration(progress.elapsed_seconds * 1000)}.`
-            : row.next_action || progress.detail,
+            : progress.status === 'failed'
+              ? progress.detail
+              : row.next_action || progress.detail,
           action: { label: 'View status', onClick: () => navigate('/infrastructure/agent') },
           duration: 10000,
         },

@@ -104,7 +104,8 @@ export function SandboxFoundationRow({ integration }: { integration: ServiceInte
           : 'Setup finished. Inspect the current status below.');
       setSetupOutcome(outcome);
       toast.message(
-        result.row?.status === 'ready' || result.row?.status === 'healthy'
+        result.row?.setup_progress?.status !== 'failed' &&
+          (result.row?.status === 'ready' || result.row?.status === 'healthy')
           ? 'Protected execution is ready'
           : 'Protected execution setup finished',
         {
