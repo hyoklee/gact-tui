@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SessionWorkStatus, SessionWorkSummary, SessionWorkView } from './session-work';
@@ -72,6 +72,8 @@ const snapshot = {
   schedule_history_next_cursor: null,
 };
 beforeEach(() => {
+  localStorage.clear();
+  window.dispatchEvent(new StorageEvent('storage', { key: null }));
   repository.sessionWork.mockReset().mockResolvedValue(snapshot);
   repository.scheduledTurns.mockReset().mockResolvedValue({ schedules: [], cron_timezone: 'UTC' });
   repository.controlSessionWork.mockClear();
@@ -89,17 +91,22 @@ function mount(children: React.ReactNode) {
 }
 
 it.each(['goal', 'loop', 'schedule'])(
-  'keeps a parked %s accessible from the bottom work finder', async (kind) => {
+  'keeps a parked %s accessible from the bottom work finder',
+  async (kind) => {
     repository.sessionWork.mockResolvedValue({
-      ...snapshot, todos: [],
+      ...snapshot,
+      todos: [],
       goal: kind === 'goal' ? { ...goal, phase: 'waiting' } : null,
       loop: kind === 'loop' ? { ...goal, kind: 'loop', title: 'Monitor simulation' } : null,
-      schedules: kind === 'schedule' ? [{ id: 'future', question: 'Inspect results', enabled: true }] : [],
+      schedules:
+        kind === 'schedule' ? [{ id: 'future', question: 'Inspect results', enabled: true }] : [],
     });
     const open = vi.fn();
     mount(<SessionWorkStatus sessionId="s" onOpen={open} fallback="No active work" />);
     const entry = await screen.findByRole('button', { name: 'Open session Work' });
-    expect(entry).toHaveTextContent(kind === 'goal' ? 'Waiting' : kind === 'loop' ? 'Monitor simulation' : 'Scheduled work');
+    expect(entry).toHaveTextContent(
+      kind === 'goal' ? 'Waiting' : kind === 'loop' ? 'Monitor simulation' : 'Scheduled work',
+    );
     expect(screen.queryByText('No active work')).toBeNull();
     await userEvent.click(entry);
     expect(open).toHaveBeenCalledOnce();
@@ -119,14 +126,27 @@ it('shows authoritative work and exposes a compact canvas entry without toggling
   expect(screen.getByText('No active schedules.')).toBeVisible();
   expect(screen.getAllByRole('button', { name: /Previous 1/ })).toHaveLength(4);
   expect(screen.queryByText('Earlier checklist task')).not.toBeInTheDocument();
-  await userEvent.setup().click(screen.getByRole('button', { name: /Previous 1 task lists/ }));
+  await userEvent.setup().click(screen.getByRole('button', { name: /Previous 1 todo lists/ }));
   expect(await screen.findByText('Earlier checklist task')).toBeVisible();
   expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   const entry = screen.getByRole('button', { name: 'Open session Work' });
-  expect(entry).toHaveTextContent('1/2 done');
+  expect(entry).toHaveTextContent('1/2 current');
   expect(entry).toHaveAttribute('type', 'button');
   await userEvent.setup().click(entry);
   expect(open).toHaveBeenCalledOnce();
+});
+
+it('omits a todos-only summary when the adjacent inventory owns the count', async () => {
+  repository.sessionWork.mockResolvedValue({ ...snapshot, goal: null, loop: null });
+  mount(<SessionWorkSummary sessionId="s" onOpen={vi.fn()} includeTodos={false} />);
+  await waitFor(() => expect(repository.sessionWork).toHaveBeenCalled());
+  expect(screen.queryByRole('button', { name: 'Open session Work' })).not.toBeInTheDocument();
+});
+
+it('keeps active work visible without repeating the adjacent todo count', async () => {
+  mount(<SessionWorkSummary sessionId="s" onOpen={vi.fn()} includeTodos={false} />);
+  expect(await screen.findByText('Active: Verify readable output')).toBeVisible();
+  expect(screen.queryByText('1/2 current')).not.toBeInTheDocument();
 });
 
 it('makes every Work category independently collapsible and scrollable', async () => {
@@ -135,7 +155,7 @@ it('makes every Work category independently collapsible and scrollable', async (
   expect(await screen.findByText('Verify readable output')).toBeVisible();
   expect(document.querySelectorAll('[data-slot="work-section-scroll"]')).toHaveLength(4);
   const todos = screen.getByRole('region', { name: 'Todos' });
-  const todosTrigger = within(todos).getByRole('button', { name: 'Todos: 2 current' });
+  const todosTrigger = within(todos).getByRole('button', { name: 'Todos: 1/2 current' });
   expect(todosTrigger).toHaveAttribute('aria-expanded', 'true');
   await userEvent.setup().click(todosTrigger);
   expect(todosTrigger).toHaveAttribute('aria-expanded', 'false');

@@ -21,6 +21,7 @@ import { useAttentionHighlights } from '@/hooks/use-attention-highlights';
 import type { ClioConversationProps } from './conversation-types';
 import {
   foldA2UIRevisionBlocks,
+  conversationResponseContinuity,
   isProjectionOnlyA2UIMessage,
   isProjectedQuestionResumeEnvelope,
   mcpAppResponsesForMessages,
@@ -46,6 +47,8 @@ interface ActiveMcpApp {
 
 import { ConversationMessageRow } from './conversation-message-row';
 import { placeDeliveredFeedback } from './conversation-feedback';
+import { placeHarnessInjections } from './conversation-injection-placement';
+import { foldSubagentReturns, placeContinuedActivity } from './conversation-activity-placement';
 
 export function ClioConversation(props: ClioConversationProps) {
   return (
@@ -72,12 +75,14 @@ function ConversationBody({
   );
   const projectedMessages = useMemo(
     () =>
-      foldA2UIRevisionBlocks(
-        projectA2UIActionMessages(
-          sourceMessages.filter(
-            (message) =>
-              !isProjectionOnlyA2UIMessage(message) &&
-              !isProjectedQuestionResumeEnvelope(message, entities.interactions),
+      foldSubagentReturns(
+        foldA2UIRevisionBlocks(
+          projectA2UIActionMessages(
+            sourceMessages.filter(
+              (message) =>
+                !isProjectionOnlyA2UIMessage(message) &&
+                !isProjectedQuestionResumeEnvelope(message, entities.interactions),
+            ),
           ),
         ),
       ),
@@ -87,6 +92,11 @@ function ConversationBody({
     () => placeDeliveredFeedback(projectedMessages),
     [projectedMessages],
   );
+  const responseContinuity = useMemo(
+    () => conversationResponseContinuity(messages, entities.tools, entities.processes),
+    [messages, entities.tools, entities.processes],
+  );
+  const injectionPlacement = useMemo(() => placeHarnessInjections(messages), [messages]);
   const compactionPlacement = useMemo(
     () => placeCompactions(compactions ?? [], messages),
     [compactions, messages],
@@ -107,6 +117,33 @@ function ConversationBody({
       current[messageId] === mode ? current : { ...current, [messageId]: mode },
     );
   }, []);
+  const activityPlacement = useMemo(
+    () =>
+      placeContinuedActivity(
+        messages,
+        responseContinuity.continuations,
+        entities.tools,
+        entities.tasks,
+        feedback,
+        injectionPlacement.before,
+        new Set([
+          ...modelBoundaries.keys(),
+          ...Object.keys(turnDisplayModes).filter((id) => turnDisplayModes[id] === 'full'),
+          ...compactionPlacement.byMessage.keys(),
+        ]),
+      ),
+    [
+      messages,
+      responseContinuity,
+      entities.tools,
+      entities.tasks,
+      feedback,
+      injectionPlacement,
+      modelBoundaries,
+      turnDisplayModes,
+      compactionPlacement,
+    ],
+  );
   const referencedSurfaceIds = useMemo(
     () =>
       new Set(
@@ -161,6 +198,16 @@ function ConversationBody({
       (block) => (block.type === 'text' || block.type === 'reasoning') && block.streaming,
     ),
   );
+  const activeStreamingMessageId = messages[activeStreamingIndex]?.id;
+  const activeActivityIndex = activeStreamingMessageId
+    ? messages.findIndex((message) =>
+        activityPlacement
+          .get(message.id)
+          ?.iterations.some((iteration) =>
+            iteration.id.startsWith(`${activeStreamingMessageId}:iteration:`),
+          ),
+      )
+    : -1;
   const virtualized = messages.length >= VIRTUALIZATION_THRESHOLD;
   // oxlint-disable-next-line react/incompatible-library -- TanStack owns these functions.
   const virtualizer = useVirtualizer({
@@ -174,9 +221,8 @@ function ConversationBody({
     rangeExtractor: useCallback(
       (range) => {
         const indexes = defaultRangeExtractor(range);
-        if (activeStreamingIndex >= 0 && !indexes.includes(activeStreamingIndex)) {
-          indexes.push(activeStreamingIndex);
-          indexes.sort((left, right) => left - right);
+        for (const index of [activeStreamingIndex, activeActivityIndex]) {
+          if (index >= 0 && !indexes.includes(index)) indexes.push(index);
         }
         const anchor = readingAnchorRef.current;
         // Persisted history may prepend rows after a live message was selected.
@@ -188,9 +234,9 @@ function ConversationBody({
           indexes.push(anchorIndex);
           indexes.sort((left, right) => left - right);
         }
-        return indexes;
+        return indexes.sort((left, right) => left - right);
       },
-      [activeStreamingIndex, messages],
+      [activeActivityIndex, activeStreamingIndex, messages],
     ),
   });
   const virtualRows = virtualizer.getVirtualItems();
@@ -498,6 +544,11 @@ function ConversationBody({
               return (
                 <ConversationMessageRow
                   feedbackMessages={feedback.get(message.id)}
+                  injectionMessages={injectionPlacement.before.get(message.id)}
+                  injectionsGrouped={injectionPlacement.grouped.has(message.id)}
+                  responseContinued={responseContinuity.continued.has(message.id)}
+                  responseContinuation={responseContinuity.continuations.has(message.id)}
+                  turnPresentation={activityPlacement.get(message.id)}
                   active={
                     (preparation?.sessionState === 'running' ||
                       preparation?.sessionState === 'queued' ||
@@ -558,7 +609,7 @@ function ConversationBody({
             ))}
           </div>
         ) : null}
-        {!autoscroll.engaged && messages.length > 0 ? (
+        {!autoscroll.engaged && autoscroll.scrollable && messages.length > 0 ? (
           // A zero-height sticky rail inside the scroller, so a wheel over the
           // button still scrolls the transcript (and reaches its intent
           // handlers) instead of dying on a sibling overlay. Sticky offsets

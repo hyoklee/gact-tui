@@ -16,6 +16,7 @@ vi.mock('@/providers/connection-provider', () => ({
 import { ClioObservabilityDock, ClioObservabilityView } from './observability-dock';
 
 beforeEach(() => {
+  localStorage.clear();
   Object.defineProperty(URL, 'createObjectURL', {
     configurable: true,
     value: vi.fn(() => 'blob:artifact-preview'),

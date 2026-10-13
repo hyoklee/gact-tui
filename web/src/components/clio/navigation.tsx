@@ -18,6 +18,8 @@ import {
 } from '@/components/ui/sidebar';
 import { useSwitchConnection } from '@/hooks/use-switch-connection';
 import { useConnectionAvailabilities } from '@/hooks/use-connection-availability';
+import { useKnownConnections } from '@/hooks/use-known-connections';
+import type { ConnectionSettings } from '@/lib/connection';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { useMenuAction } from '@/tauri/menu-actions';
 import { ClioArchivedSessionsDialog } from './archived-sessions-dialog';
@@ -54,15 +56,19 @@ export function ClioNavigation({
   attentions,
 }: ClioNavigationProps) {
   const location = useLocation();
-  const { settings, recents } = useConnectionSettings();
-  const knownConnections = useMemo(
-    () =>
-      recents.some((connection) => connection.endpoint === endpoint)
-        ? recents
-        : [{ endpoint, label: settings.label }, ...recents],
-    [endpoint, recents, settings.label],
+  const { settings } = useConnectionSettings();
+  const knownConnections = useKnownConnections();
+  const activeConnection = useMemo(() => [{ ...settings, endpoint }], [endpoint, settings]);
+  const activeAvailability = useConnectionAvailabilities(activeConnection);
+  const connectionAvailabilities = useMemo(
+    () => ({
+      ...Object.fromEntries(
+        knownConnections.map((connection) => [connection.endpoint, connection.availability]),
+      ),
+      ...activeAvailability,
+    }),
+    [activeAvailability, knownConnections],
   );
-  const connectionAvailabilities = useConnectionAvailabilities(knownConnections);
   const switchConnection = useSwitchConnection();
   const [createKind, setCreateKind] = useState<'workspace' | 'session' | null>(null);
   const [createWorkspaceId, setCreateWorkspaceId] = useState(activeWorkspaceId);
@@ -92,9 +98,9 @@ export function ClioNavigation({
         });
       });
   };
-  const switchService = async (recent: (typeof recents)[number]) => {
+  const switchService = async (connection: ConnectionSettings) => {
     try {
-      await switchConnection(recent);
+      await switchConnection(connection);
     } catch (error) {
       toast.error('Could not switch agent service', {
         description: error instanceof Error ? error.message : String(error),
@@ -141,7 +147,7 @@ export function ClioNavigation({
             onNewSession={() => openNewSession()}
             onNewWorkspace={() => setCreateKind('workspace')}
             onOpenArchived={() => setArchivedOpen(true)}
-            recentConnections={recents}
+            connections={knownConnections}
           />
           <SidebarContent>
             <WorkspaceNavigation

@@ -95,6 +95,18 @@ describe('agentAnswerSelection', () => {
     expect(agentAnswerSelection(select('a', 3, 'a', 3))).toBeUndefined();
   });
 
+  it('keeps a paragraph selection whose end spills to the start of the next block', () => {
+    transcript();
+    const answer = document.getElementById('a')!;
+    const range = document.createRange();
+    range.setStart(answer.firstChild!, 0);
+    range.setEnd(document.getElementById('tool')!.firstChild!, 0);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    expect(agentAnswerSelection(selection)).toMatchObject({ kind: 'agent-answer-text' });
+  });
+
   it('preserves the selected part identity and its content revision', () => {
     transcript();
     const block = document.getElementById('a')!.parentElement!;

@@ -107,7 +107,7 @@ describe('ClioConversation transcript viewport', () => {
         {
           id: 'reasoning',
           type: 'reasoning' as const,
-          text: 'Selected evidence.',
+          text: 'Selected evidence.\n\nSupporting details for this selection.',
           streaming: true,
         },
       ],

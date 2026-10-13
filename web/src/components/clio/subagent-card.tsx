@@ -1,12 +1,13 @@
 import type { MessageBlock, SubagentRun } from '@clio/core/v3';
-import { ArrowRightIcon, BotIcon, CornerDownRightIcon, TriangleAlertIcon } from 'lucide-react';
-import { useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { BotIcon, ChevronRightIcon, ShieldCheckIcon } from 'lucide-react';
+import type { KeyboardEvent, MouseEvent } from 'react';
 import { SubAgentDispatch, type SubAgentState } from '@/components/theokit/sub-agent-dispatch';
 import { formatDuration, truncate } from '@/lib/format';
 import { SUBAGENT_RESULT_TRUNCATE_CHARS, SUBAGENT_TASK_TRUNCATE_CHARS } from '@/lib/runtime-limits';
 import { cn } from '@/lib/utils';
 import { getChildAgentAssignment } from './child-agent-presentation';
 import { ActivityRow } from './activity-row';
+import { ClioToolInvocation } from './tool-invocation';
 import { ClioStatus } from './status';
 
 export interface ClioSubagentCardProps {
@@ -31,153 +32,105 @@ export interface ClioAgentMessageLineProps {
   onOpen?: (subagent: SubagentRun, target: SubagentOpenTarget) => void;
 }
 
-/** One chronological child-agent ledger event: launch or return, never both. */
+/** A child launch or return uses the same collapsed result row as other tools. */
 export function ClioSubagentLifecycleLine({
   stage,
   subagent,
   task,
-  onOpen,
 }: ClioSubagentLifecycleLineProps) {
   const started = stage === 'delegate.started';
   const continued = stage === 'delegate.superseded';
-  const failed = !started && !continued && subagent?.state === 'failed';
   const terminal = !started && !continued;
-  const displayState = terminal ? (failed ? 'failed' : 'completed') : subagent?.state;
-  const title = subagent?.title || 'Child agent';
-  const origin = subagent?.origin;
-  const agentName = subagent?.agent_id || title;
-  const namedRun = title === agentName || title.startsWith(`${agentName} #`);
-  // A custom run label may be the full assignment. Keep assignments in their
-  // existing detail row and preserve the recorded agent as the navigation name.
-  const displayTitle = origin ? `${agentName} → ${origin.name}` : namedRun ? title : agentName;
-  const detail =
-    started || failed
-      ? task?.trim() ||
-        (subagent ? getChildAgentAssignment(subagent).label : 'Waiting for the child task record.')
-      : '';
-  const interactive = Boolean(subagent?.child_session_id && onOpen);
-
-  const open = (shiftKey: boolean) => {
-    if (subagent && interactive) onOpen?.(subagent, shiftKey ? 'canvas' : 'conversation');
-  };
-
+  const failed = terminal && subagent?.state === 'failed';
+  const cancelled = terminal && subagent?.state === 'cancelled';
+  const assignment = task?.trim() || (subagent ? getChildAgentAssignment(subagent).label : '');
+  const result = subagent?.result || subagent?.summary;
+  const label =
+    [subagent?.agent_id, subagent?.origin?.name].filter(Boolean).join(': ') || 'Child agent';
   return (
-    <div className="min-w-0 text-sm">
-      <div className="group flex min-h-5 w-full min-w-0 items-center gap-1.5 px-1 text-left">
-        <span aria-hidden="true" className="relative size-5 shrink-0 text-primary">
-          <BotIcon className="absolute left-0 top-0 size-4" />
-          <CornerDownRightIcon className="absolute bottom-0 right-0 size-3 rounded-sm bg-background text-muted-foreground" />
-        </span>
-        <button
-          aria-label={interactive ? `Open child conversation ${displayTitle}` : undefined}
-          className={cn(
-            'flex min-w-0 items-center gap-1 truncate font-medium text-primary outline-none underline-offset-2',
-            interactive
-              ? 'cursor-pointer hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring/50'
-              : 'cursor-default text-foreground',
-          )}
-          disabled={!interactive}
-          onClick={(event) => open(event.shiftKey)}
-          onMouseDown={(event) => {
-            if (event.shiftKey) event.preventDefault();
-          }}
-          title={
-            interactive
-              ? 'Open child conversation. Shift-click to open it in the canvas.'
-              : undefined
-          }
-          type="button"
-        >
-          {origin ? (
-            <>
-              <span className="truncate">{agentName}</span>
-              <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0" />
-              <span className="truncate">{origin.name}</span>
-            </>
-          ) : (
-            title
-          )}
-        </button>
-        {origin?.mode ? (
-          <span className="shrink-0 text-xs text-muted-foreground">{origin.mode}</span>
-        ) : null}
-        <span className="shrink-0 text-muted-foreground">
-          {started ? 'started' : continued ? 'continued' : failed ? 'failed' : 'completed'}
-        </span>
-        {terminal && !failed && subagent?.duration_ms !== undefined ? (
-          <span className="shrink-0 text-muted-foreground">
-            in {formatDuration(subagent.duration_ms)}
-          </span>
-        ) : null}
-        {!started && displayState ? (
-          <ClioStatus compact className="ml-auto shrink-0" value={displayState} />
-        ) : null}
-      </div>
-      {detail ? (
-        <ExpandableChildPrompt
-          text={detail}
-          onOpen={interactive ? (event) => open(event.shiftKey) : undefined}
-          title={displayTitle}
-        />
-      ) : null}
-      {failed && subagent?.summary ? (
-        <div
-          className="ml-7 mt-1 flex min-w-0 items-start gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1 text-xs leading-5 text-destructive"
-          role="alert"
-        >
-          <TriangleAlertIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-          <span className="min-w-0 [overflow-wrap:anywhere]">{subagent.summary}</span>
-        </div>
-      ) : null}
-    </div>
+    <ClioToolInvocation
+      compact
+      tool={{
+        id: `${subagent?.id ?? 'child'}:${stage}`,
+        session_id: subagent?.session_id ?? '',
+        name: 'subagent',
+        state: failed ? 'failed' : cancelled ? 'cancelled' : 'succeeded',
+        duration_ms: terminal ? subagent?.duration_ms : undefined,
+        input: { assignment, child_session_id: subagent?.child_session_id },
+        output: terminal ? result : undefined,
+        presentation: {
+          action: started ? 'Delegate' : continued ? 'Continue subagent' : 'Subagent result',
+          subject: 'child',
+          summary: started
+            ? 'Accepted'
+            : continued
+              ? 'Accepted'
+              : failed
+                ? 'Failed'
+                : cancelled
+                  ? 'Cancelled'
+                  : 'Turn ended',
+          blocks: [
+            { id: 'child', type: 'text', label, text: label },
+            ...(assignment
+              ? [{ id: 'assignment', type: 'text' as const, label: 'Assignment', text: assignment }]
+              : []),
+            ...(terminal && result
+              ? [
+                  {
+                    id: 'result',
+                    type: 'markdown' as const,
+                    label: 'Returned result',
+                    text: result,
+                  },
+                ]
+              : []),
+            ...(terminal && !result
+              ? [{ id: 'missing-result', type: 'text' as const, text: 'No result was recorded.' }]
+              : []),
+            ...(subagent?.child_session_id
+              ? [
+                  {
+                    id: 'conversation',
+                    type: 'link' as const,
+                    target: 'session' as const,
+                    label: 'Open child conversation',
+                    uri: subagent.child_session_id,
+                  },
+                ]
+              : []),
+          ],
+        },
+      }}
+    />
   );
 }
 
-function ExpandableChildPrompt({
-  text,
-  onOpen,
-  title,
-}: {
-  text: string;
-  onOpen?: (event: MouseEvent<HTMLButtonElement>) => void;
-  title: string;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const long = text.length > SUBAGENT_TASK_TRUNCATE_CHARS;
-  const content = (
-    <span
-      className={cn(
-        'block whitespace-normal [overflow-wrap:anywhere]',
-        long && !expanded && 'line-clamp-2',
-      )}
-    >
-      {text}
-    </span>
-  );
+/** Keep pending delegated work visible after an interim answer, outside its tool disclosure. */
+export function ClioSubagentProgressLine({ subagent, onOpen }: ClioSubagentCardProps) {
+  if (!subagent) return null;
+  const name = subagent.agent_id || 'Child agent';
+  const interactive = Boolean(subagent.child_session_id && onOpen);
   return (
-    <div className="ml-7 min-w-0 pr-2 text-sm leading-5 text-foreground/90">
-      {onOpen ? (
-        <button
-          aria-label={`Open child conversation ${title} from assignment`}
-          className="block w-full rounded-sm text-left outline-none transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50"
-          onClick={onOpen}
-          type="button"
-        >
-          {content}
-        </button>
-      ) : (
-        content
-      )}
-      {long ? (
-        <button
-          className="mt-0.5 text-xs font-medium text-primary underline-offset-2 hover:text-primary/80 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          onClick={() => setExpanded((value) => !value)}
-          type="button"
-        >
-          {expanded ? 'Show less' : 'Show more'}
-        </button>
-      ) : null}
-    </div>
+    <button
+      type="button"
+      data-slot="subagent-progress"
+      className="mt-2 flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md border border-border px-3 py-2 text-left text-xs transition-colors enabled:hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-ring"
+      disabled={!interactive}
+      aria-label={`Open subagent ${name}`}
+      onClick={(event) => onOpen?.(subagent, event.shiftKey ? 'canvas' : 'conversation')}
+    >
+      <BotIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+      <span className="shrink-0 text-muted-foreground">Subagent</span>
+      <span className="min-w-0 flex-1 truncate" title={subagent.title}>
+        <span className="font-medium">{name}</span>
+        {subagent.title && subagent.title !== name ? (
+          <span className="ml-2 text-muted-foreground">{subagent.title}</span>
+        ) : null}
+      </span>
+      <ClioStatus value={subagent.state} />
+      {interactive ? <ChevronRightIcon aria-hidden="true" className="size-3 shrink-0" /> : null}
+    </button>
   );
 }
 
@@ -228,6 +181,8 @@ export function ClioSubagentCard({ subagent, onOpen }: ClioSubagentCardProps) {
     );
   }
 
+  if (isSpotterWatcher(subagent)) return <SpotterWatcherLine subagent={subagent} onOpen={onOpen} />;
+
   const assignment = getChildAgentAssignment(subagent);
   const interactive = Boolean(subagent.child_session_id && onOpen);
 
@@ -243,9 +198,11 @@ export function ClioSubagentCard({ subagent, onOpen }: ClioSubagentCardProps) {
   return (
     <div title={assignment.detail}>
       <SubAgentDispatch
-        aria-label={interactive
-          ? `Open child conversation ${subagent.title}`
-          : `Child conversation unavailable for ${subagent.title}`}
+        aria-label={
+          interactive
+            ? `Open child conversation ${subagent.title}`
+            : `Child conversation unavailable for ${subagent.title}`
+        }
         className={
           interactive
             ? 'cursor-pointer outline-none transition-colors hover:border-primary/60 hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-ring/50'
@@ -312,4 +269,42 @@ function toTheoState(state: SubagentRun['state']): SubAgentState {
 /** Collapses wrapped prose to a single line, then cuts it to the card's budget. */
 function compactText(value: string, limit: number): string {
   return truncate(value.replace(/\s+/gu, ' ').trim(), limit);
+}
+
+/** The standing SPOTTER watcher (run label "SPOTTER AI") armed by the SPOTTER review policy. */
+function isSpotterWatcher(subagent: SubagentRun): boolean {
+  return subagent.title.startsWith('SPOTTER AI') || subagent.agent_id === 'spotter_watcher';
+}
+
+/** One quiet line instead of a dispatch card: the watcher has no assignment of its own. */
+function SpotterWatcherLine({
+  subagent,
+  onOpen,
+}: {
+  subagent: SubagentRun;
+  onOpen?: (subagent: SubagentRun, target: SubagentOpenTarget) => void;
+}) {
+  const interactive = Boolean(subagent.child_session_id && onOpen);
+  const busy = subagent.state === 'running' || subagent.state === 'queued';
+  return (
+    <button
+      aria-label={interactive ? 'Open the SPOTTER review conversation' : undefined}
+      className={cn(
+        'flex min-h-5 w-full min-w-0 items-center gap-1.5 px-1 text-left text-xs text-muted-foreground outline-none',
+        interactive
+          ? 'cursor-pointer hover:text-foreground focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring/50'
+          : 'cursor-default',
+      )}
+      disabled={!interactive}
+      onClick={(event) => onOpen?.(subagent, event.shiftKey ? 'canvas' : 'conversation')}
+      title={
+        interactive ? 'Open the SPOTTER review. Shift-click to open it in the canvas.' : undefined
+      }
+      type="button"
+    >
+      <ShieldCheckIcon aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
+      <span className="shrink-0 text-foreground">SPOTTER review started</span>
+      <span className="truncate">{busy ? 'reviewing this session' : 'watching this session'}</span>
+    </button>
+  );
 }

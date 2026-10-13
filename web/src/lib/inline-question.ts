@@ -6,6 +6,21 @@ export function inlineQuestionDomId(invocationId: string): string {
   return `question-${encodeURIComponent(invocationId)}`;
 }
 
+/** Human questions still awaiting an answer, excluding plan and draft choices. */
+export function openHumanQuestions(
+  interactions: readonly PendingInteraction[],
+): PendingInteraction[] {
+  return interactions.filter(
+    (row) =>
+      row.kind === 'question' &&
+      row.status === 'pending' &&
+      row.requires_human_response !== false &&
+      row.source.tool_name !== 'plan_exit' &&
+      !row.payload?.plan_exit &&
+      !isVariantPickInteraction(row),
+  );
+}
+
 /**
  * A question the agent asked with its own `ask_user` tool, anchored to that
  * tool call: it lives in the log at the tool call, not in the response tray.

@@ -125,6 +125,22 @@ function conversation(text: string): ReactElement {
 
 const scrollButton = () => screen.queryByRole('button', { name: 'Scroll to bottom' });
 
+it('keeps a disclosure press clear of the scroll control while the transcript fits', () => {
+  const geometry = stubScrollGeometry();
+  geometry.resizeContent(-1700);
+  render(conversation('Short recorded update'));
+  const log = screen.getByRole('log', { name: 'Conversation' });
+  const disclosure = document.createElement('button');
+  disclosure.setAttribute('aria-expanded', 'false');
+  log.append(disclosure);
+  fireEvent.pointerDown(disclosure);
+  expect(scrollButton()).toBeNull();
+  geometry.grow(600);
+  expect(scrollButton()).toBeVisible();
+  geometry.grow(-600);
+  expect(scrollButton()).toBeNull();
+});
+
 let now = 1_000;
 beforeEach(() => {
   now = 1_000;

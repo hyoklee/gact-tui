@@ -6,7 +6,7 @@ import { GroundedMessageResponse } from './grounded-message-response';
 import { useTranscriptDisclosure } from './transcript-disclosure-context';
 import { TranscriptReasoning, type ThoughtSource } from './transcript-reasoning';
 
-/** Reveal recorded thinking on demand, retaining the reader's choice across updates. */
+/** Show recorded reasoning plainly; disclose only passages with additional content. */
 export function TranscriptReasoningPassage({
   id,
   text,
@@ -28,11 +28,39 @@ export function TranscriptReasoningPassage({
     /^\s*(?:#{1,6}[^\S\r\n]+[^\r\n]+|\*\*[^\r\n]+\*\*|__[^\r\n]+__)[^\S\r\n]*(?:\r?\n|$)/u,
   );
   const bodyStart = title?.[0].length ?? 0;
-  const heading = text
-    .trim()
-    .split('\n', 1)[0]
-    .replace(/^[\s#]+|[*_`]/gu, '')
+  const trimmed = text.trim();
+  const firstLine = trimmed.split('\n', 1)[0];
+  const hasDetails = trimmed.slice(firstLine.length).trim().length > 0;
+  const heading = firstLine
+    .replace(/^\s{0,3}#{1,6}\s+/u, '')
+    .replace(/\*\*\*\*|____/gu, ' ')
+    .replace(/(\*\*|__)(.*?)\1/gu, '$2')
+    .replace(/`([^`]+)`/gu, '$1')
     .trim();
+  const icon = streaming ? (
+    <LoaderCircleIcon
+      aria-hidden="true"
+      className="size-3.5 shrink-0 animate-spin text-muted-foreground"
+    />
+  ) : (
+    <MessageSquareTextIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+  );
+  if (!hasDetails) {
+    return (
+      <div
+        aria-busy={streaming || undefined}
+        data-slot="transcript-reasoning"
+        className="flex min-h-7 w-full min-w-0 items-center gap-2 px-1 py-1 pr-7 text-xs font-normal text-foreground"
+      >
+        {icon}
+        <div className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+          <TranscriptReasoning text={text} source={source}>
+            {heading}
+          </TranscriptReasoning>
+        </div>
+      </div>
+    );
+  }
   return (
     <Collapsible
       open={open}
@@ -45,18 +73,10 @@ export function TranscriptReasoningPassage({
         <Button
           variant="ghost"
           aria-label={`Thinking: ${heading || 'Details'}`}
-          className="h-auto min-h-7 w-full min-w-0 justify-start gap-2 rounded-sm px-1 py-1 text-xs font-normal text-muted-foreground"
+          className="h-auto min-h-7 w-full min-w-0 justify-start gap-2 rounded-sm px-1 py-1 pr-7 text-xs font-normal text-foreground aria-expanded:bg-transparent"
         >
-          {streaming ? (
-            <LoaderCircleIcon
-              aria-hidden="true"
-              className="size-3.5 shrink-0 animate-spin text-primary"
-            />
-          ) : (
-            <MessageSquareTextIcon aria-hidden="true" className="size-3.5 shrink-0" />
-          )}
-          <span className="shrink-0 font-medium">Thinking</span>
-          <span className="min-w-0 flex-1 truncate text-left">{heading}</span>
+          {icon}
+          <span className="min-w-0 flex-1 truncate text-left font-normal">{heading}</span>
           <ChevronRightIcon
             aria-hidden="true"
             className={cn('size-3 shrink-0 transition-transform', open && 'rotate-90')}

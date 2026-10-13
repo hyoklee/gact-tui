@@ -25,7 +25,7 @@ test('renders reader-controlled causal entries and a truthful completion footer 
   const message = page.locator('#message-msg_flat_assistant');
   const activity = message.getByRole('button', { name: /^Activity:/ });
   await expect(activity).toHaveAttribute('aria-expanded', 'false');
-  const thinking = message.locator('[data-slot="transcript-reasoning-text"]');
+  const thinking = message.locator('[data-slot="transcript-reasoning"]');
   await expect(thinking).toHaveCount(0);
   await expect(message.getByRole('button', { name: /^(?:Thinking|Reasoning):/u })).toHaveCount(0);
   await expect(activity.locator('svg.animate-spin')).toHaveCount(1);
@@ -36,16 +36,28 @@ test('renders reader-controlled causal entries and a truthful completion footer 
   ).toHaveCount(1);
   await expect(message.getByRole('group', { name: 'Activity detail' })).toHaveCount(0);
   await expect(message.locator('[data-slot="message-completion-footer"]')).toHaveCount(0);
+  const update = message.locator('p').filter({
+    hasText: /^Read the fixture notes before preparing the report\.$/u,
+  });
+  await expect
+    .poll(async () => {
+      // The streaming fixture changes virtualized row heights. A detached row
+      // has no geometry; wait for its mounted measurements before comparing.
+      const [updateBounds, activityBounds] = await Promise.all([
+        update.boundingBox(),
+        activity.boundingBox(),
+      ]);
+      if (!updateBounds || !activityBounds) return -1;
+      return activityBounds.y - updateBounds.y - updateBounds.height;
+    })
+    .toBeGreaterThanOrEqual(18);
   await activity.click();
-  const thinkingRow = message.getByRole('button', { name: /^Thinking:/ });
-  await expect(thinkingRow).toHaveAttribute('aria-expanded', 'false');
-  await expect(thinking).toHaveCount(0);
-  await thinkingRow.click();
+  await expect(message.getByRole('button', { name: /^Thinking:/ })).toHaveCount(0);
   await expect(thinking).toBeVisible();
   const reasoning = message.locator('[data-slot="transcript-reasoning"]');
   await expect(reasoning).toHaveCount(1);
   await expect(reasoning).toHaveAttribute('aria-busy', 'true');
-  await expect(reasoning.locator('[data-slot="transcript-reasoning-text"]')).toHaveCount(1);
+  await expect(reasoning).toContainText('Read the fixture notes before preparing the report.');
   await page.request.post(`${endpoint}/__test/transcript-activity`, { data: { phase: 'answer' } });
   const persisted = await (
     await page.request.get(`${endpoint}/v1/sessions/sess_flat_ndp/messages`)
@@ -128,7 +140,7 @@ test('renders reader-controlled causal entries and a truthful completion footer 
     });
     expect(Math.abs((await activity.boundingBox())!.y - before!.y)).toBeLessThanOrEqual(2);
     await expect(message.getByRole('button', { name: /^Reasoning:/ })).toHaveCount(0);
-    await expect(thinkingRow).toHaveAttribute('aria-expanded', 'true');
+    await expect(message.getByRole('button', { name: /^Thinking:/ })).toHaveCount(0);
     await expect(thinking).toBeVisible();
     await expect(reasoning).not.toHaveAttribute('aria-busy');
     await expect(reasoning).toContainText('Read the fixture notes before preparing the report.');
@@ -138,6 +150,16 @@ test('renders reader-controlled causal entries and a truthful completion footer 
     );
     const read = message.getByRole('button', { name: 'Show result for Read' });
     const run = message.getByRole('button', { name: 'Show result for Run' });
+    await expect
+      .poll(async () => {
+        const [reasoningBounds, readBounds] = await Promise.all([
+          reasoning.boundingBox(),
+          read.boundingBox(),
+        ]);
+        if (!reasoningBounds || !readBounds) return -1;
+        return readBounds.y - reasoningBounds.y - reasoningBounds.height;
+      })
+      .toBeGreaterThanOrEqual(10);
     await expect(read).toContainText('61 lines');
     await expect(run).toContainText('failed');
     expect((await read.boundingBox())!.y).toBeLessThan((await run.boundingBox())!.y);

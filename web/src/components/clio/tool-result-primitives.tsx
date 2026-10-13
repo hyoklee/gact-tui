@@ -1,14 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  ArrowRightIcon,
-  BotIcon,
-  CalendarClockIcon,
-  ChevronRightIcon,
-  ServerIcon,
-  SquareCheckIcon,
-  SquareIcon,
-  SquareMinusIcon,
-} from 'lucide-react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { BotIcon, CalendarClockIcon, ChevronRightIcon, ServerIcon } from 'lucide-react';
 import { InfoIcon } from '@/lib/icon-vocabulary';
 import { bundledLanguages, type BundledLanguage } from 'shiki';
 import type { ToolPresentationBlock } from '@clio/core/v3';
@@ -29,6 +20,7 @@ import { ClioStatus, clioStatusLabel, type ClioStatusValue } from './status';
 import { formatDuration } from '@/lib/format';
 import { providerDisplayName } from '@/lib/provider-presentation';
 import { cn } from '@/lib/utils';
+import { TodoStatusIcon } from './todo-list';
 
 const CLIO_STATUSES = new Set<ClioStatusValue>([
   'queued',
@@ -306,9 +298,7 @@ export function CheckStateIcon({
   className: string;
   state: ToolPresentationBlock['state'];
 }) {
-  if (state === 'completed') return <SquareCheckIcon aria-hidden="true" className={className} />;
-  if (state === 'in_progress') return <SquareMinusIcon aria-hidden="true" className={className} />;
-  return <SquareIcon aria-hidden="true" className={className} />;
+  return <TodoStatusIcon state={state} className={className} />;
 }
 
 export function BlockBody({
@@ -392,7 +382,7 @@ export function BlockBody({
           : block.change === 'added'
             ? `Added as ${status}`
             : block.change === 'removed'
-              ? `Removed from task list, was ${status}`
+              ? `Removed from todo list, was ${status}`
               : status;
       return (
         <div className="flex items-start gap-2 py-1">
@@ -403,20 +393,8 @@ export function BlockBody({
                   role="img"
                   aria-label={accessibleStatus}
                   tabIndex={0}
-                  className={cn(
-                    'mt-1 inline-flex h-4 shrink-0 items-center rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-                    block.change === 'status_changed' ? 'w-auto gap-0.5' : 'w-4',
-                  )}
+                  className="mt-1 inline-flex size-4 shrink-0 items-center rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
-                  {block.previous_state && block.change === 'status_changed' ? (
-                    <>
-                      <CheckStateIcon
-                        className="size-4 text-muted-foreground"
-                        state={block.previous_state}
-                      />
-                      <ArrowRightIcon aria-hidden="true" className="size-3 text-muted-foreground" />
-                    </>
-                  ) : null}
                   <CheckStateIcon
                     className={`size-4 ${block.state === 'completed' ? 'text-success' : block.state === 'in_progress' ? 'text-warning' : 'text-muted-foreground'}`}
                     state={block.state}
@@ -449,12 +427,15 @@ export function PagedBlock({
   lines,
   groupedBlocks = [block],
   full = false,
+  renderBlock,
 }: {
   block: ToolPresentationBlock;
   lines: number;
   groupedBlocks?: ToolPresentationBlock[];
   /** Reuse an existing details viewer instead of opening a nested result dialog. */
   full?: boolean;
+  /** Reuse a containing result surface while preserving pagination and exact content. */
+  renderBlock?: (block: ToolPresentationBlock, text: string, complete: boolean) => ReactNode;
 }) {
   const repository = useRepository();
   const [contents, setContents] = useState(() =>
@@ -499,14 +480,20 @@ export function PagedBlock({
       }
     }
   };
-  const content = groupedBlocks.map((item) => (
-    <BlockBody
-      key={item.id}
-      block={item}
-      text={contents[item.id].text}
-      complete={item.type !== 'media' || contents[item.id].cursor === null}
-    />
-  ));
+  const content = groupedBlocks.map((item) =>
+    renderBlock ? (
+      <Fragment key={item.id}>
+        {renderBlock(item, contents[item.id].text, contents[item.id].cursor === null)}
+      </Fragment>
+    ) : (
+      <BlockBody
+        key={item.id}
+        block={item}
+        text={contents[item.id].text}
+        complete={item.type !== 'media' || contents[item.id].cursor === null}
+      />
+    ),
+  );
   if (full) {
     const hasMore = Object.values(contents).some((item) => item.cursor !== null);
     const loadComplete = async () => {

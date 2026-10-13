@@ -1,9 +1,10 @@
 import type { ReactNode, RefObject } from 'react';
-import { useCallback, useId, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { PanelRightOpenIcon } from 'lucide-react';
 import { CloseIcon } from '@/lib/icon-vocabulary';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useEvidenceSections } from '@/hooks/use-evidence-disclosures';
 import { Popover, PopoverContent, PopoverAnchor } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ConnectedSourcePicker } from './connected-source-picker';
@@ -25,23 +26,27 @@ export function SessionEvidencePopover({
   evidence: ClioObservabilityDockProps;
   children: (control: {
     layout: EvidenceLayout;
+    visible: boolean;
     buttonRef: RefObject<HTMLButtonElement | null>;
     panelId: string;
     cycle: (direction: 1 | -1) => void;
   }) => ReactNode;
 }) {
-  const [layout, setLayout] = useState<EvidenceLayout>('none');
+  const selection = useEvidenceSections('evidence-layout', []);
+  const top = selection.value.includes('top');
+  const bottom = selection.value.includes('bottom');
+  const layout: EvidenceLayout = top ? (bottom ? 'both' : 'top') : bottom ? 'bottom' : 'none';
+  const setLayout = (next: EvidenceLayout) =>
+    selection.onValueChange(next === 'both' ? ['top', 'bottom'] : next === 'none' ? [] : [next]);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const outsideRef = useRef(false);
-  const [mode, setMode] = useState<'docked' | 'temporary'>('temporary');
+  const [mode, setMode] = useState<'docked' | 'temporary'>(
+    layout === 'none' ? 'temporary' : 'docked',
+  );
   const [selectedSource, setSelectedSource] = useState<{ workspaceId: string; id: string }>();
-  const onGutterLost = useCallback(() => {
-    if (mode === 'docked') setLayout('none');
-  }, [mode]);
   const { gutter, flyoutHeight, dockAnchor, flyoutAnchor, measureNow } = useShowcasePlacement(
     buttonRef,
     evidence.surfaceRef,
-    onGutterLost,
   );
   const docked = mode === 'docked' && Boolean(gutter);
   const open = layout !== 'none' && (mode !== 'docked' || Boolean(gutter));
@@ -51,16 +56,16 @@ export function SessionEvidencePopover({
   const setOpen = (open: boolean) => {
     if (!open) setLayout('none');
   };
-  const dismissTemporary = () => {
-    if (!docked) setOpen(false);
-  };
+  // Opening a workbench tab may take the gutter; preserve the selected panels
+  // so they return when that tab closes. Explicit dismissal still selects none.
+  const suspendForWorkbench = () => setMode('docked');
   const cycle = (direction: 1 | -1) => {
-    if (layout === 'none') setMode(measureNow() ? 'docked' : 'temporary');
-    setLayout((current) => cycleEvidenceLayout(current, direction));
+    if (layout === 'none' || !open) setMode(measureNow() ? 'docked' : 'temporary');
+    setLayout(cycleEvidenceLayout(layout, direction));
   };
   const openWork = evidence.onOpenWork
     ? () => {
-        dismissTemporary();
+        suspendForWorkbench();
         evidence.onOpenWork?.();
       }
     : undefined;
@@ -71,37 +76,37 @@ export function SessionEvidencePopover({
     onOpenWork: openWork,
     onOpenActivity: evidence.onOpenCanvas
       ? () => {
-          dismissTemporary();
+          suspendForWorkbench();
           evidence.onOpenCanvas?.('activity');
         }
       : undefined,
     onOpenArtifact: evidence.onOpenArtifact
       ? (artifact: Parameters<NonNullable<typeof evidence.onOpenArtifact>>[0]) => {
-          dismissTemporary();
+          suspendForWorkbench();
           evidence.onOpenArtifact?.(artifact);
         }
       : undefined,
     onOpenFile: evidence.onOpenFile
       ? (path: string) => {
-          dismissTemporary();
+          suspendForWorkbench();
           evidence.onOpenFile?.(path);
         }
       : undefined,
     onOpenResource: evidence.onOpenResource
       ? (resource: Parameters<NonNullable<typeof evidence.onOpenResource>>[0]) => {
-          dismissTemporary();
+          suspendForWorkbench();
           evidence.onOpenResource?.(resource);
         }
       : undefined,
     onOpenDiff: evidence.onOpenDiff
       ? (diff: Parameters<NonNullable<typeof evidence.onOpenDiff>>[0]) => {
-          dismissTemporary();
+          suspendForWorkbench();
           evidence.onOpenDiff?.(diff);
         }
       : undefined,
     onOpenSubagent: evidence.onOpenSubagent
       ? (...args: Parameters<NonNullable<typeof evidence.onOpenSubagent>>) => {
-          dismissTemporary();
+          suspendForWorkbench();
           evidence.onOpenSubagent?.(...args);
         }
       : undefined,
@@ -109,13 +114,15 @@ export function SessionEvidencePopover({
   return (
     <>
       <Popover open={open} onOpenChange={setOpen}>
-        {children({ layout, buttonRef, panelId, cycle })}
+        {children({ layout, visible: open, buttonRef, panelId, cycle })}
         <PopoverAnchor virtualRef={docked ? dockAnchor : flyoutAnchor} />
         <PopoverContent
           id={panelId}
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => {
-            restoreEvidenceFocus(event, buttonRef.current, outsideRef.current);
+            if (layout === 'none')
+              restoreEvidenceFocus(event, buttonRef.current, outsideRef.current);
+            else event.preventDefault();
             outsideRef.current = false;
           }}
           onInteractOutside={(event) => {
@@ -164,7 +171,7 @@ export function SessionEvidencePopover({
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => {
-                            dismissTemporary();
+                            suspendForWorkbench();
                             evidence.onOpenCanvas?.();
                           }}
                         >
@@ -214,7 +221,7 @@ export function SessionEvidencePopover({
                       aria-label="Open Context tab"
                       className="mb-2 block w-full rounded-sm text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       onClick={() => {
-                        dismissTemporary();
+                        suspendForWorkbench();
                         evidence.onOpenCanvas?.('context');
                       }}
                     >
@@ -234,7 +241,7 @@ export function SessionEvidencePopover({
                     <SessionConnectedSources
                       workspaceId={evidence.workspaceId}
                       onOpenSource={(source) => {
-                        dismissTemporary();
+                        suspendForWorkbench();
                         setSelectedSource({ workspaceId: evidence.workspaceId!, id: source.id });
                       }}
                     />
@@ -247,7 +254,11 @@ export function SessionEvidencePopover({
               layout !== 'top' ? (
                 <>
                   {evidence.sessionId && openWork ? (
-                    <SessionWorkSummary sessionId={evidence.sessionId} onOpen={openWork} />
+                    <SessionWorkSummary
+                      sessionId={evidence.sessionId}
+                      onOpen={openWork}
+                      includeTodos={false}
+                    />
                   ) : null}
                   <ClioEvidenceView {...evidence} {...summaryActions} compact section="work" />
                   {evidence.sessionId ? (

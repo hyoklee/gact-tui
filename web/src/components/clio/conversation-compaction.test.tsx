@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { A2UISurface, Message, PendingCompaction, PendingInteraction } from '@clio/core/v3';
 import type { ReactElement } from 'react';
@@ -63,7 +63,7 @@ function renderConversation(element: ReactElement) {
 const summary =
   'The agent read three workspace files and summarized their contents before continuing. ' +
   'Every archived message stays retrievable through the export path. ' +
-  'This paragraph is long enough that the collapsed preview must clamp instead of showing it all at once, unique-marker-tail.';
+  'The exact summary remains available behind its disclosure, unique-marker-tail.';
 
 type InjectionBlock = Extract<Message['blocks'][number], { type: 'injection' }>;
 
@@ -141,9 +141,14 @@ function conversation(
   {
     interactions,
     surfaces = {},
-  }: { interactions?: PendingInteraction[]; surfaces?: Record<string, A2UISurface> } = {},
+    expandActivity = true,
+  }: {
+    interactions?: PendingInteraction[];
+    surfaces?: Record<string, A2UISurface>;
+    expandActivity?: boolean;
+  } = {},
 ) {
-  return renderConversation(
+  const view = renderConversation(
     <ClioConversation
       artifacts={{}}
       compactions={compactions}
@@ -155,6 +160,14 @@ function conversation(
       tools={{}}
     />,
   );
+  // Content and ownership checks inspect the disclosure the user opens.
+  // The default-state test opts out and verifies the collapsed experience.
+  if (expandActivity) {
+    for (const button of screen.queryAllByRole('button', { name: /^Activity:/u })) {
+      if (button.getAttribute('aria-expanded') === 'false') fireEvent.click(button);
+    }
+  }
+  return view;
 }
 
 function progressRow(): HTMLElement | null {
@@ -162,21 +175,23 @@ function progressRow(): HTMLElement | null {
 }
 
 describe('ClioConversation summarization injection', () => {
-  it('renders a reloaded summary as a Summarization injection with a clamped preview', async () => {
+  it('keeps a reloaded summary inside Activity and discloses its exact text', async () => {
     const user = userEvent.setup();
-    conversation([userMessage, summaryMessage]);
+    conversation([userMessage, summaryMessage], undefined, { expandActivity: false });
 
     expect(
       document.querySelector('[data-slot="harness-injection"][data-source="summarization"]'),
-    ).not.toBeNull();
-    expect(screen.getByText(/gave the agent: Summarization/)).toBeInTheDocument();
+    ).toBeNull();
+    await user.click(screen.getByRole('button', { name: /^Activity:/u }));
+    expect(screen.getByText('Summarization')).toBeInTheDocument();
     expect(screen.getByText('Automatic')).toBeInTheDocument();
-    expect(screen.getByText(/unique-marker-tail/)).toHaveClass('line-clamp-3');
+    expect(screen.queryByText(/unique-marker-tail/u)).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Show more' }));
-    expect(screen.getByText(/unique-marker-tail/)).not.toHaveClass('line-clamp-3');
-    await user.click(screen.getByRole('button', { name: 'Show less' }));
-    expect(screen.getByText(/unique-marker-tail/)).toHaveClass('line-clamp-3');
+    const disclosure = screen.getByRole('button', { name: /Injection Summarization/u });
+    await user.click(disclosure);
+    expect(screen.getByText(/unique-marker-tail/u).textContent).toBe(summary);
+    await user.click(disclosure);
+    expect(screen.queryByText(/unique-marker-tail/u)).not.toBeInTheDocument();
   });
 
   it('renders a mid-turn summary inside the turn, before the work that followed it', () => {
@@ -207,10 +222,11 @@ describe('ClioConversation summarization injection', () => {
     conversation([
       { ...summaryMessage, blocks: [{ ...summaryBlock, text: `${summary}\n\n${recall}` }] },
     ]);
-    // The collapsed preview is the same clamped text; expanding shows the recall line.
-    expect(screen.getByText(/unique-marker-tail/)).toHaveClass('line-clamp-3');
-    await user.click(screen.getByRole('button', { name: 'Show more' }));
-    expect(screen.getByText(/call recall_context to retrieve it/)).toBeInTheDocument();
+    expect(screen.queryByText(/unique-marker-tail/u)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Injection Summarization/u }));
+    expect(screen.getByText(/call recall_context to retrieve it/u).textContent).toBe(
+      `${summary}\n\n${recall}`,
+    );
   });
 
   it('labels a user-requested summary distinctly from an automatic one', () => {
@@ -261,7 +277,7 @@ describe('ClioConversation compaction progress', () => {
       ],
     );
     expect(progressRow()).toBeNull();
-    expect(screen.getByText(/gave the agent: Summarization/)).toBeInTheDocument();
+    expect(screen.getByText('Summarization')).toBeInTheDocument();
   });
 
   it('shows the typed error in place of the shimmer when the compaction fails', () => {
