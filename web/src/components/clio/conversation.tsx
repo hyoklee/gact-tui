@@ -52,7 +52,11 @@ interface ActiveMcpApp {
 import { ConversationMessageRow } from './conversation-message-row';
 import { placeDeliveredFeedback } from './conversation-feedback';
 import { placeHarnessInjections } from './conversation-injection-placement';
-import { foldSubagentReturns, placeContinuedActivity } from './conversation-activity-placement';
+import {
+  foldSubagentReturns,
+  placeContinuedActivity,
+  liveActivityIterationId,
+} from './conversation-activity-placement';
 
 export function ClioConversation(props: ClioConversationProps) {
   const inRouter = useInRouterContext();
@@ -166,6 +170,29 @@ function ConversationBody({
         ),
       ),
     [messages],
+  );
+  const liveActivityId = useMemo(
+    () =>
+      liveActivityIterationId({
+        messages,
+        activeTurnId: preparation?.activeTurnId,
+        sessionState: preparation?.sessionState,
+        presentations: activityPlacement,
+        tools: entities.tools,
+        tasks: entities.tasks,
+        feedback,
+        injections: injectionPlacement.before,
+      }),
+    [
+      messages,
+      preparation?.activeTurnId,
+      preparation?.sessionState,
+      activityPlacement,
+      entities.tools,
+      entities.tasks,
+      feedback,
+      injectionPlacement.before,
+    ],
   );
   const activeMcpApp = useMemo<ActiveMcpApp | undefined>(() => {
     for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
@@ -586,6 +613,7 @@ function ConversationBody({
               if (!message) return null;
               return (
                 <ConversationMessageRow
+                  liveActivityId={liveActivityId}
                   feedbackMessages={feedback.get(message.id)}
                   injectionMessages={injectionPlacement.before.get(message.id)}
                   injectionsGrouped={injectionPlacement.grouped.has(message.id)}
