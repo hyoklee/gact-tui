@@ -1,11 +1,25 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render as renderUI, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LayersIcon } from 'lucide-react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createSelectionActionRegistry } from '@/lib/selection-actions';
 import { SelectionActionsContext } from '@/lib/selection-actions-context';
 import { TranscriptContentPicker } from './transcript-content-picker';
+import { AttentionAvailabilityContext } from '@/lib/attention-availability';
+import type { ReactElement, ReactNode } from 'react';
+
+function CapturedAttention({ children }: { children: ReactNode }) {
+  return (
+    <AttentionAvailabilityContext.Provider value={{ sessionId: 's', available: true }}>
+      {children}
+    </AttentionAvailabilityContext.Provider>
+  );
+}
+
+function render(element: ReactElement) {
+  return renderUI(element, { wrapper: CapturedAttention });
+}
 
 const mocks = vi.hoisted(() => ({ content: vi.fn(), token: 'one' }));
 vi.mock('@/hooks/use-repository', () => ({

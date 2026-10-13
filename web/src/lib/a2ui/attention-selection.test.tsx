@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { createSelectionActionRegistry } from '@/lib/selection-actions';
 import { SelectionActionsContext } from '@/lib/selection-actions-context';
 import { SurfaceAttentionContext, SurfaceAttentionProvider } from './attention-selection';
+import { AttentionAvailabilityContext } from '@/lib/attention-availability';
 
 const mocks = vi.hoisted(() => ({ endpoint: 'http://clio-a', token: 'one', bind: vi.fn() }));
 vi.mock('@/hooks/use-repository', () => ({
@@ -77,11 +78,13 @@ function setup() {
     run,
   });
   const view = () => (
-    <SelectionActionsContext.Provider value={registry}>
-      <SurfaceAttentionProvider surface={surface}>
-        <SelectRow />
-      </SurfaceAttentionProvider>
-    </SelectionActionsContext.Provider>
+    <AttentionAvailabilityContext.Provider value={{ sessionId: 's', available: true }}>
+      <SelectionActionsContext.Provider value={registry}>
+        <SurfaceAttentionProvider surface={surface}>
+          <SelectRow />
+        </SurfaceAttentionProvider>
+      </SelectionActionsContext.Provider>
+    </AttentionAvailabilityContext.Provider>
   );
   return { run, view, ...render(view()) };
 }

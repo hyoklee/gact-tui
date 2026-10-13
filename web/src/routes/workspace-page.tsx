@@ -5,8 +5,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ClioAppShell } from '@/components/clio/app-shell';
 import { ClioCommandMenu } from '@/components/clio/command-menu';
 import { ClioMoreDetails } from '@/components/clio/more-details';
-import { AttentionModeBanner } from '@/components/clio/attention-mode-banner';
-import { AttentionLookupPanel } from '@/components/clio/attention-lookup-panel';
+import { SessionAttentionTools } from '@/components/clio/session-attention-tools';
 import { ClioComposer } from '@/components/clio/composer';
 import { ClioChildSessionFooter } from '@/components/clio/child-session-footer';
 import { ClioConversationWelcome } from '@/components/clio/conversation-welcome';
@@ -485,7 +484,11 @@ export function WorkspacePage() {
     </m.div>
   );
   return (
-    <WorkspaceSessionProviders workspaceId={workspaceId} sessionId={sessionId}>
+    <WorkspaceSessionProviders
+      workspaceId={workspaceId}
+      sessionId={sessionId}
+      attention={attention.availability}
+    >
       <QuestionAnswerContext.Provider value={questionAnswering.context}>
         <ClioCommandMenu onOpenResource={revealWorkbench} />
         <ClioMoreDetails
@@ -707,12 +710,7 @@ export function WorkspacePage() {
               streamError={streamError}
               transcriptError={messageCount > 0 ? transcriptError : undefined}
             />
-            <AttentionModeBanner
-              onDismiss={attention.dismiss}
-              state={attention.state}
-              onProfileChange={attention.changeProfile}
-            />
-            <AttentionLookupPanel sessionId={sessionId} onHeatChange={attention.showLookupHeat} />
+            <SessionAttentionTools attention={attention} sessionId={sessionId} />
             <LayoutGroup id={`session-layout:${sessionId}`}>
               <AnimatePresence initial={false} mode="popLayout">
                 {showConversationWelcome ? (
