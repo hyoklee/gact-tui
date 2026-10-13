@@ -528,6 +528,7 @@ export function ClioComposer({
         />
       ) : null}
       <PromptInput
+        data-evidence-composer
         data-slot="clio-composer"
         className="mx-auto max-w-4xl shrink-0 rounded-2xl bg-composer shadow-sm"
         maxFileSize={250 * 1024 * 1024}

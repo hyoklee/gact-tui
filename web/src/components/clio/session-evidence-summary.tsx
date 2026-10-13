@@ -1,3 +1,4 @@
+import { subagentOpenTarget } from './subagent-navigation';
 import type {
   Artifact,
   AsyncProcess,
@@ -142,8 +143,7 @@ export function SessionEvidenceSummary({
               metadata={clioStatusLabel(agent.state)}
               onOpen={
                 agent.child_session_id && actions.onOpenSubagent
-                  ? (event) =>
-                      actions.onOpenSubagent?.(agent, event.shiftKey ? 'canvas' : 'conversation')
+                  ? (event) => actions.onOpenSubagent?.(agent, subagentOpenTarget(event))
                   : undefined
               }
             />

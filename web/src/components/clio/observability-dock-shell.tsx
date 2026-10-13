@@ -1,3 +1,4 @@
+import { subagentOpenTarget } from './subagent-navigation';
 import type {
   Artifact,
   AsyncProcess,
@@ -250,8 +251,7 @@ export function ClioObservabilityDock(props: ClioObservabilityDockProps) {
             <PopoverHeader className="px-2 pb-1 pt-1">
               <PopoverTitle>Child agents</PopoverTitle>
               <PopoverDescription>
-                Select one to make it central. Use the canvas action to keep this conversation in
-                place.
+                Select one to open a workspace tab. Shift-click to open it in the center.
               </PopoverDescription>
             </PopoverHeader>
             <div className="grid gap-1">
@@ -279,9 +279,7 @@ export function ClioObservabilityDock(props: ClioObservabilityDockProps) {
                     className="min-h-0 px-2 py-2"
                     disabled={!agent.child_session_id || !props.onOpenSubagent}
                     key={agent.id}
-                    onClick={(event) =>
-                      openChildAgent(agent, event.shiftKey ? 'canvas' : 'conversation')
-                    }
+                    onClick={(event) => openChildAgent(agent, subagentOpenTarget(event))}
                     onKeyDown={(event) => {
                       if (
                         event.shiftKey &&
@@ -290,7 +288,7 @@ export function ClioObservabilityDock(props: ClioObservabilityDockProps) {
                         props.onOpenSubagent
                       ) {
                         event.preventDefault();
-                        openChildAgent(agent, 'canvas');
+                        openChildAgent(agent, 'conversation');
                       }
                     }}
                     onMouseDown={(event) => {

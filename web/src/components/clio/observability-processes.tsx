@@ -1,3 +1,4 @@
+import { subagentOpenTarget } from './subagent-navigation';
 import type {
   AsyncProcess,
   ExecutionProvenanceResult,
@@ -163,8 +164,7 @@ export function ClioProcessLanes({
           setSelected(span ?? null);
           if (span?.kind === 'agent') {
             const child = subagents.find((candidate) => candidate.id === span.subagentId);
-            if (child?.child_session_id)
-              onOpenSubagent?.(child, event.shiftKey ? 'canvas' : 'conversation');
+            if (child?.child_session_id) onOpenSubagent?.(child, subagentOpenTarget(event));
           }
         }}
         onResourceClick={({ resource }) =>
@@ -254,7 +254,11 @@ function ExecutionSelection({
           : `${duration.toLocaleString(undefined, { maximumFractionDigits: 3 })} s · ${formatClock(span.start)}${span.end === null ? ' · still running' : ` to ${formatClock(span.end)}`}`}
       </span>
       {child?.child_session_id && onOpenSubagent ? (
-        <Button onClick={() => onOpenSubagent(child, 'conversation')} size="sm" variant="ghost">
+        <Button
+          onClick={(event) => onOpenSubagent(child, subagentOpenTarget(event))}
+          size="sm"
+          variant="ghost"
+        >
           Open agent conversation
         </Button>
       ) : message ? (

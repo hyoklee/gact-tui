@@ -1,3 +1,4 @@
+import { subagentOpenTarget, SUBAGENT_OPEN_HINT } from './subagent-navigation';
 import type {
   Artifact,
   ArtifactProvenanceProviderSummary,
@@ -354,11 +355,7 @@ function SubagentEvidence({
       {subagents.map((subagent) => {
         const assignment = getChildAgentAssignment(subagent);
         const canOpen = Boolean(subagent.child_session_id && onOpenSubagent);
-        // The child-agent semantics every other surface uses (subagent card,
-        // lifecycle line, dock popover, Gantt): a plain click makes the child
-        // the central conversation; Shift-click, Shift+Enter, or the visible
-        // canvas action keeps this conversation central and opens the child
-        // in a canvas tab beside it.
+        // Child activation keeps the parent visible; Shift makes the child central.
         return (
           <ClioInteractiveRow
             actions={
@@ -383,16 +380,14 @@ function SubagentEvidence({
             disabled={!canOpen}
             key={subagent.id}
             onClick={
-              canOpen
-                ? (event) => onOpenSubagent?.(subagent, event.shiftKey ? 'canvas' : 'conversation')
-                : undefined
+              canOpen ? (event) => onOpenSubagent?.(subagent, subagentOpenTarget(event)) : undefined
             }
             onKeyDown={
               canOpen
                 ? (event) => {
                     if (event.shiftKey && (event.key === 'Enter' || event.key === ' ')) {
                       event.preventDefault();
-                      onOpenSubagent?.(subagent, 'canvas');
+                      onOpenSubagent?.(subagent, 'conversation');
                     }
                   }
                 : undefined
@@ -406,9 +401,7 @@ function SubagentEvidence({
             }
             role={canOpen ? 'button' : undefined}
             running={subagent.state === 'running'}
-            title={
-              canOpen ? 'Open child conversation. Shift-click to open it in the canvas.' : undefined
-            }
+            title={canOpen ? SUBAGENT_OPEN_HINT : undefined}
           >
             <EvidenceRecord
               detail={assignment.detail ?? assignment.label}

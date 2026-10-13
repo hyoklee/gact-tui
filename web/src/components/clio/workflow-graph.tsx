@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useContainerQuery } from '@/hooks/use-container-query';
 import { ClioStatus } from './status';
 import type { SubagentOpenTarget } from './subagent-card';
+import { subagentOpenTarget, SUBAGENT_OPEN_HINT } from './subagent-navigation';
 import { workflowDescriptor } from './workflow-tool-presentation';
 import {
   buildWorkflowExecutionGraph,
@@ -80,8 +81,7 @@ export function ClioWorkflowGraph({
         </ReactFlow>
       </div>
       <p className="text-xs text-muted-foreground">
-        Select a child to open its conversation. Shift-click keeps the parent here and opens the
-        child in the canvas.
+        Select a child to open a workspace tab. Shift-click opens the conversation in the center.
       </p>
     </section>
   );
@@ -178,9 +178,15 @@ function WorkflowNodeCard({ data }: NodeProps<WorkflowNode>) {
       {data.openSubagent ? (
         <>
           <button
-            aria-label={`Open ${data.label} conversation`}
+            aria-label={`Open ${data.label} in a workspace tab`}
             className="nodrag nopan block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={(event) => data.openSubagent?.(event.shiftKey ? 'canvas' : 'conversation')}
+            onClick={(event) => data.openSubagent?.(subagentOpenTarget(event))}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              data.openSubagent?.(subagentOpenTarget(event));
+            }}
+            title={SUBAGENT_OPEN_HINT}
             type="button"
           >
             {content}

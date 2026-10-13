@@ -79,15 +79,15 @@ describe('ClioSubagentCard', () => {
     expect(screen.queryByText('Open conversation')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open child conversation geospatial #1' }));
-    expect(onOpen).toHaveBeenLastCalledWith(
-      expect.objectContaining({ id: 'task_geo' }),
-      'conversation',
-    );
+    expect(onOpen).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'task_geo' }), 'canvas');
 
     fireEvent.click(screen.getByRole('button', { name: 'Open child conversation geospatial #1' }), {
       shiftKey: true,
     });
-    expect(onOpen).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'task_geo' }), 'canvas');
+    expect(onOpen).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'task_geo' }),
+      'conversation',
+    );
   });
 
   it('does not reinterpret persisted routing syntax', () => {
@@ -145,7 +145,7 @@ describe('ClioSubagentLifecycleLine', () => {
     expect(screen.getByText(child.task)).toBeVisible();
     expect(screen.queryByText(child.result)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open child conversation' }));
-    expect(onOpen).toHaveBeenCalledWith(child, 'conversation');
+    expect(onOpen).toHaveBeenCalledWith(child, 'canvas');
   });
 
   it('shows a return as a turn ending without claiming the assignment succeeded', () => {
@@ -179,8 +179,8 @@ describe('ClioSubagentProgressLine', () => {
     expect(screen.getByText('Running')).toBeVisible();
     expect(screen.getByText(child.title)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Open subagent main' }));
-    expect(onOpen).toHaveBeenLastCalledWith(child, 'conversation');
-    fireEvent.click(screen.getByRole('button', { name: 'Open subagent main' }), { shiftKey: true });
     expect(onOpen).toHaveBeenLastCalledWith(child, 'canvas');
+    fireEvent.click(screen.getByRole('button', { name: 'Open subagent main' }), { shiftKey: true });
+    expect(onOpen).toHaveBeenLastCalledWith(child, 'conversation');
   });
 });
