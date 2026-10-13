@@ -150,16 +150,18 @@ test('renders reader-controlled causal entries and a truthful completion footer 
     );
     const read = message.getByRole('button', { name: 'Show result for Read' });
     const run = message.getByRole('button', { name: 'Show result for Run' });
-    await expect
-      .poll(async () => {
-        const [reasoningBounds, readBounds] = await Promise.all([
-          reasoning.boundingBox(),
-          read.boundingBox(),
-        ]);
-        if (!reasoningBounds || !readBounds) return -1;
-        return readBounds.y - reasoningBounds.y - reasoningBounds.height;
-      })
-      .toBeGreaterThanOrEqual(10);
+    const reasoningToToolGap = async () => {
+      const [reasoningBounds, readBounds] = await Promise.all([
+        reasoning.boundingBox(),
+        read.boundingBox(),
+      ]);
+      if (!reasoningBounds || !readBounds) return -1;
+      return readBounds.y - reasoningBounds.y - reasoningBounds.height;
+    };
+    // Expanded activity entries stay dense; public text-to-activity separation
+    // is verified independently above.
+    await expect.poll(reasoningToToolGap).toBeGreaterThanOrEqual(4);
+    await expect.poll(reasoningToToolGap).toBeLessThanOrEqual(8);
     await expect(read).toContainText('61 lines');
     await expect(run).toContainText('failed');
     expect((await read.boundingBox())!.y).toBeLessThan((await run.boundingBox())!.y);

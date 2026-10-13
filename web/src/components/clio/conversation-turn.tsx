@@ -253,7 +253,7 @@ export function ConversationTurn({
                   </span>
                 </ChainOfThoughtHeader>
                 <ChainOfThoughtContent
-                  className="ml-1 mt-3 space-y-3 border-l pl-3"
+                  className="ml-1 mt-1 space-y-1 border-l pl-3"
                   data-slot="transcript-activity-timeline"
                 >
                   {group.map((item) => (
