@@ -380,6 +380,7 @@ export function WorkspacePage() {
     >
       {isManagedChildSession(session) ? (
         <ClioChildSessionFooter
+          session={session}
           onHeightChange={variant === 'docked' ? setDockedComposerHeight : undefined}
           onReturnToParent={() => openParentSession(session)}
           parentTitle={parentSession?.title ?? 'Parent conversation'}

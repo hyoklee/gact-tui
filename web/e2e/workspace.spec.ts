@@ -1308,6 +1308,9 @@ test('keeps summarization in collapsed activity and discloses its exact received
   await compactionRow.evaluate((element) =>
     element.scrollIntoView({ behavior: 'instant', block: 'start' }),
   );
+  // Scrolling can move this row under the pointer left by the activity click.
+  // Capture the baseline's unhovered state, independently of its prior position.
+  await page.mouse.move(0, 0);
   await page.evaluate(
     () =>
       new Promise<void>((resolve) =>

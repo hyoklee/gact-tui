@@ -105,7 +105,7 @@ function FollowupForm({
     >
       <Textarea
         aria-label="Message this agent"
-        className="min-h-16 resize-none text-sm"
+        className="max-h-40 min-h-16 resize-none overflow-y-auto text-sm"
         disabled={pending}
         value={draft.value}
         placeholder="Ask about a finding or give a follow-up…"
