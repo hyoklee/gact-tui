@@ -60,6 +60,7 @@ export type ClioQueryNamespace =
   | 'runs'
   | 'runtime-metrics'
   | 'runtime-settings'
+  | 'sandbox-setup'
   | 'sandbox-status'
   | 'saved-servers'
   | 'service-health'

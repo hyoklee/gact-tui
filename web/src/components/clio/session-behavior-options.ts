@@ -71,7 +71,8 @@ export const SESSION_APPROVAL_OPTIONS = [
   {
     value: 'bypass',
     label: 'Bypass checks',
-    description: 'Do not stop for supported action checks.',
+    description:
+      'Skip action approvals. Protected execution and source-access restrictions still apply.',
     icon: ShieldOffIcon,
   },
 ] satisfies readonly SessionBehaviorOption<Session['approval_mode']>[];
@@ -84,9 +85,7 @@ export const SESSION_MODE_PATCHES: Record<Session['mode'], SessionBehaviorPatch>
 };
 
 /** Translate composer behavior into the authoritative session patch it represents. */
-export function sessionPatchForMessageBehavior(
-  behavior: MessageBehavior,
-): SessionBehaviorPatch {
+export function sessionPatchForMessageBehavior(behavior: MessageBehavior): SessionBehaviorPatch {
   const mode =
     behavior.execution_mode === 'plan'
       ? 'plan'

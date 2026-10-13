@@ -1965,6 +1965,18 @@ const server = createServer(async (request, response) => {
     });
     return;
   }
+  if (request.method === 'GET' && url.pathname === '/v1/system/sandbox') {
+    // The app observes setup globally, including outside Infrastructure. This
+    // test-owned server runs no protected processes and has no setup in flight.
+    sendJson(response, {
+      name: 'sandbox',
+      status: 'not_required',
+      detail: 'Protected execution is not required by this test-owned fixture.',
+      required: false,
+      setup_in_progress: false,
+    });
+    return;
+  }
   if (request.method === 'GET' && url.pathname === '/v1/relay/status') {
     sendJson(response, {
       configured: false,
