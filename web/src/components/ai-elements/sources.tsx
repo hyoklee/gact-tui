@@ -1,5 +1,6 @@
-import { BookOpenIcon, ChevronDownIcon, ExternalLinkIcon } from 'lucide-react';
+import { BookOpenIcon, ChevronDownIcon, ExternalLinkIcon, PanelRightIcon } from 'lucide-react';
 import type { ComponentProps } from 'react';
+import { Slot } from 'radix-ui';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ExternalLink } from '@/components/ui/external-link';
 import { cn } from '@/lib/utils';
@@ -52,10 +53,11 @@ export const SourcesContent = ({ className, ...props }: SourcesContentProps) => 
 
 export type SourceProps = ComponentProps<typeof ExternalLink> & {
   description?: string;
+  asChild?: boolean;
 };
 
 function sourceHost(href: string | undefined): string | undefined {
-  if (!href) return undefined;
+  if (!href || !/^https?:\/\//iu.test(href)) return undefined;
   try {
     return new URL(href).hostname.replace(/^www\./u, '');
   } catch {
@@ -69,11 +71,12 @@ export const Source = ({
   href,
   title,
   children,
+  asChild = false,
   ...props
 }: SourceProps) => {
-  const host = sourceHost(href);
+  const Component = asChild ? Slot.Root : ExternalLink;
   return (
-    <ExternalLink
+    <Component
       className={cn(
         'group/source flex min-w-0 items-start gap-2 rounded-md border bg-card px-2.5 py-2 text-foreground shadow-xs outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
         className,
@@ -81,21 +84,41 @@ export const Source = ({
       href={href}
       {...props}
     >
-      {children ?? (
-        <>
-          <BookOpenIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-          <span className="min-w-0 flex-1">
-            <span className="block font-medium leading-5">{title || href}</span>
-            {description || host ? (
-              <span className="mt-0.5 block text-muted-foreground">{description || host}</span>
-            ) : null}
-          </span>
-          <ExternalLinkIcon
-            aria-hidden="true"
-            className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-          />
-        </>
+      {asChild ? (
+        children
+      ) : (
+        <SourceContent href={href} title={title} description={description}>
+          {children}
+        </SourceContent>
       )}
-    </ExternalLink>
+    </Component>
+  );
+};
+
+/** Retain the sourced source-card body when a product supplies its own link routing. */
+export const SourceContent = ({
+  href,
+  title,
+  description,
+  children,
+}: Omit<SourceProps, 'asChild'>) => {
+  const host = sourceHost(href);
+  const DestinationIcon = /^https?:\/\//iu.test(href) ? ExternalLinkIcon : PanelRightIcon;
+  return (
+    children ?? (
+      <>
+        <BookOpenIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+        <span className="min-w-0 flex-1">
+          <span className="block font-medium leading-5">{title || href}</span>
+          {description || host ? (
+            <span className="mt-0.5 block text-muted-foreground">{description || host}</span>
+          ) : null}
+        </span>
+        <DestinationIcon
+          aria-hidden="true"
+          className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+        />
+      </>
+    )
   );
 };

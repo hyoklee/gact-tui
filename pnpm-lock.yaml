@@ -196,6 +196,9 @@ importers:
       html-to-image:
         specifier: ^1.11.13
         version: 1.11.13
+      katex:
+        specifier: 0.16.47
+        version: 0.16.47
       lucide-react:
         specifier: ^1.33.0
         version: 1.33.0(react@19.2.8)

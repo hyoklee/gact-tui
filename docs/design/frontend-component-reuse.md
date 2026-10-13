@@ -13,20 +13,21 @@ The implementation rule is:
 `pnpm check:frontend-reuse` enforces the sourced composition of the major surfaces below. It is a
 regression guard, not a substitute for browser review or accessibility testing.
 
-| Product surface       | Sourced composition                                                                     | CLIO-owned responsibility                                        |
-| --------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Conversation          | AI Elements Conversation, Message, Checkpoint, Chain of Thought, Plan, Task, Code Block | Causal GACT block grouping, virtualization, exact-message focus  |
-| Composer              | AI Elements Prompt Input and Model Selector                                             | Capability gating, service commands, send/steer/stop mutations   |
-| Tool activity         | AI Elements Tool                                                                        | MCP-supplied display title, semantic summary, GACT state mapping |
-| Artifacts and images  | AI Elements Artifact and Attachments                                                    | Artifact byte custody, bounded preview loading, canvas routing   |
-| Child agents          | pinned TheoKit SubAgentDispatch                                                         | GACT state mapping and central-click versus canvas-open behavior |
-| Approvals             | AI Elements Confirmation                                                                | Server-owned approval and question mutations                     |
-| Resource canvas       | shadcn Tabs, AI Elements File Tree, ReUI Frame                                          | Durable tab identity, server file/artifact/blueprint routes      |
-| Observability         | ReUI Timeline and Frame, shadcn Tabs                                                    | Causal grouping, process lanes, evidence correlation             |
-| Context and inspector | AI Elements Context and File Tree, ReUI Timeline                                        | Server snapshots, resource navigation, action availability       |
-| Data and runs         | ReUI Data Grid                                                                          | GACT columns, filtering, run mutations                           |
-| A2UI catalog          | AI Elements Artifact, Code Block, Confirmation; ReUI Frame                              | Protocol validation, bindings, action allowlist                  |
-| Reasoning defaults    | shadcn Select                                                                           | Provider capability and persisted categorical value              |
+| Product surface       | Sourced composition                                                                     | CLIO-owned responsibility                                         |
+| --------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Conversation          | AI Elements Conversation, Message, Checkpoint, Chain of Thought, Plan, Task, Code Block | Causal GACT block grouping, virtualization, exact-message focus   |
+| Composer              | AI Elements Prompt Input and Model Selector                                             | Capability gating, service commands, send/steer/stop mutations    |
+| Tool activity         | AI Elements Tool                                                                        | MCP-supplied display title, semantic summary, GACT state mapping  |
+| Artifacts and images  | AI Elements Artifact and Attachments                                                    | Artifact byte custody, bounded preview loading, canvas routing    |
+| Child agents          | pinned TheoKit SubAgentDispatch                                                         | GACT state mapping and central-click versus canvas-open behavior  |
+| Approvals             | AI Elements Confirmation                                                                | Server-owned approval and question mutations                      |
+| Resource canvas       | shadcn Tabs, AI Elements File Tree, ReUI Frame                                          | Durable tab identity, server file/artifact/blueprint routes       |
+| Observability         | ReUI Timeline and Frame, shadcn Tabs                                                    | Causal grouping, process lanes, evidence correlation              |
+| Context and inspector | AI Elements Context and File Tree, ReUI Timeline                                        | Server snapshots, resource navigation, action availability        |
+| Data and runs         | ReUI Data Grid                                                                          | GACT columns, filtering, run mutations                            |
+| A2UI catalog          | AI Elements Artifact, Code Block, Confirmation; ReUI Frame                              | Protocol validation, bindings, action allowlist                   |
+| Reasoning defaults    | shadcn Select                                                                           | Provider capability and persisted categorical value               |
+| Source citations      | AI Elements Inline Citation and Sources                                                 | Exact service-file, registered-reference and conversation routing |
 
 The following custom composition is deliberate rather than a library imitation:
 
@@ -41,6 +42,13 @@ The following custom composition is deliberate rather than a library imitation:
 
 Raw event JSON, raw artifact URIs, dot-only status, and hand-built copies of a sourced component are
 not valid fallbacks. Missing service data is labeled unavailable.
+
+Inline Citation is sourced from `vercel/ai-elements` at
+`6a9d5b1822ffb10bba4bd97175f01edd7d8651cd`. Its import aliases are adapted and
+its badge trigger accepts an explicit child label/link, allowing the same sourced
+component to represent local files and web sources. The thin CLIO adapter supplies
+actual reference identity and routing. Hover reveals identity and destination;
+click and keyboard activation open the source. Numbered bibliographies use Sources.
 
 Model segments use the upstream AI Elements Checkpoint, sourced from
 `vercel/ai-elements` at `6a9d5b1822ffb10bba4bd97175f01edd7d8651cd`, with only import

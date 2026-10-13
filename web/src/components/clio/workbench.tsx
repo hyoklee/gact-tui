@@ -55,6 +55,9 @@ import { workflowDescriptor } from './workflow-tool-presentation';
 import { CanvasLauncher, type CanvasResourceKind } from './workbench-resource-browser';
 import { WorkbenchTabContent } from './workbench-tab-content';
 import { assertNever, fileName, loadResourceViewers, type WorkbenchTab } from './workbench-shared';
+import { PresentationNavigation } from './presentation-navigation';
+import { workspaceFilePath } from '@/lib/workspace-file-path';
+import { useLiveStore } from '@/store/live-store';
 import { useWorkbenchTabVisibility } from './use-workbench-tab-visibility';
 
 export interface ClioWorkbenchProps {
@@ -344,7 +347,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
     );
 
     const openRequest = useCallback(
-      (request: ClioWorkbenchOpenRequest) => {
+      (request: ClioWorkbenchOpenRequest, targetWorkspaceId: string = workspaceId) => {
         switch (request.kind) {
           case 'knowledge':
             openTab({
@@ -355,15 +358,18 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
               workspaceId,
             });
             return;
-          case 'workspace-file':
+          case 'workspace-file': {
+            const root = useLiveStore.getState().entities.workspaces[targetWorkspaceId]?.path;
+            const path = workspaceFilePath(request.path, root);
             openTab({
-              id: `workspace-file:${request.path}`,
+              id: `workspace-file:${targetWorkspaceId === workspaceId ? '' : `${targetWorkspaceId}:`}${path}`,
               kind: 'workspace-file',
-              label: fileName(request.path),
-              path: request.path,
-              workspaceId,
+              label: fileName(path),
+              path,
+              workspaceId: targetWorkspaceId,
             });
             return;
+          }
           case 'diff':
             openTab({
               id: `diff:${sessionId}:${request.diff.path}`,
@@ -635,41 +641,59 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
             <TabsContent className="m-0 min-h-0 overflow-hidden" key={tab.id} value={tab.id}>
               {canvasVisible ? (
                 <WorkbenchTabErrorBoundary label={tab.label} onClose={() => closeTab(tab.id)}>
-                  <WorkbenchTabContent
-                    artifacts={artifacts}
-                    artifactsError={artifactsError}
-                    artifactsPending={artifactsPending}
-                    artifactsTruncated={artifactsTruncated}
-                    blueprints={blueprints}
-                    blueprintsError={blueprintsError}
-                    blueprintsPending={blueprintsPending}
-                    diffActionError={diffActionError}
-                    diffActionPending={diffActionPending}
-                    diffs={diffs}
-                    files={files}
-                    filesError={filesError}
-                    filesFetching={filesFetching}
-                    filesPending={filesPending}
-                    filesTruncated={filesTruncated}
-                    filesNextOffset={filesNextOffset}
-                    maximized={maximized}
-                    onApplyDiff={onApplyDiff}
-                    onOpenSubagent={onOpenSubagent}
-                    onOpenTab={openTab}
-                    onRefreshFiles={onRefreshFiles}
-                    onRejectDiff={onRejectDiff}
-                    onReplaceTab={replaceTab}
-                    onSelectFilesPath={selectFilesPath}
-                    onSelectWorkspaceFilePath={selectWorkspaceFilePath}
-                    resources={resources}
-                    resourcesError={resourcesError}
-                    resourcesPending={resourcesPending}
-                    sessionId={sessionId}
-                    sessionView={sessionView}
-                    subagents={subagents}
-                    tab={tab}
-                    workspaceId={workspaceId}
-                  />
+                  <PresentationNavigation.Provider
+                    value={{
+                      workspaceId: 'workspaceId' in tab ? tab.workspaceId : workspaceId,
+                      sessionId,
+                      artifacts: Object.fromEntries(artifacts.map((item) => [item.id, item])),
+                      resources: Object.fromEntries(resources.map((item) => [item.id, item])),
+                      subagents: Object.fromEntries(subagents.map((item) => [item.id, item])),
+                      onOpenFile: (path) =>
+                        openRequest(
+                          { kind: 'workspace-file', path },
+                          'workspaceId' in tab ? tab.workspaceId : workspaceId,
+                        ),
+                      onOpenArtifact: (artifact) => openRequest({ kind: 'artifact', artifact }),
+                      onOpenResource: (resource) => openRequest({ kind: 'resource', resource }),
+                      onOpenSubagent,
+                    }}
+                  >
+                    <WorkbenchTabContent
+                      artifacts={artifacts}
+                      artifactsError={artifactsError}
+                      artifactsPending={artifactsPending}
+                      artifactsTruncated={artifactsTruncated}
+                      blueprints={blueprints}
+                      blueprintsError={blueprintsError}
+                      blueprintsPending={blueprintsPending}
+                      diffActionError={diffActionError}
+                      diffActionPending={diffActionPending}
+                      diffs={diffs}
+                      files={files}
+                      filesError={filesError}
+                      filesFetching={filesFetching}
+                      filesPending={filesPending}
+                      filesTruncated={filesTruncated}
+                      filesNextOffset={filesNextOffset}
+                      maximized={maximized}
+                      onApplyDiff={onApplyDiff}
+                      onOpenSubagent={onOpenSubagent}
+                      onOpenTab={openTab}
+                      onRefreshFiles={onRefreshFiles}
+                      onRejectDiff={onRejectDiff}
+                      onReplaceTab={replaceTab}
+                      onSelectFilesPath={selectFilesPath}
+                      onSelectWorkspaceFilePath={selectWorkspaceFilePath}
+                      resources={resources}
+                      resourcesError={resourcesError}
+                      resourcesPending={resourcesPending}
+                      sessionId={sessionId}
+                      sessionView={sessionView}
+                      subagents={subagents}
+                      tab={tab}
+                      workspaceId={workspaceId}
+                    />
+                  </PresentationNavigation.Provider>
                 </WorkbenchTabErrorBoundary>
               ) : null}
             </TabsContent>
