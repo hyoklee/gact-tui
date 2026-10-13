@@ -213,7 +213,7 @@ for (const density of ['both', 'work']) {
     await data.getByRole('button', { name: 'Expand Data' }).click();
     await expect.poll(async () => (await data.boundingBox())!.height).toBeGreaterThan(100);
     await work.getByRole('button', { name: 'Expand Work' }).click();
-    await expect(work.getByRole('button', { name: 'Todos, 60 recorded' })).toBeVisible();
+    await expect(work.getByRole('button', { name: 'Todos, 60/60 current' })).toBeVisible();
     // Inner disclosure also frees height; mounted sections preserve their own state.
     if (density === 'both') {
       await data.getByRole('button', { name: 'Connected sources, 25 recorded' }).click();

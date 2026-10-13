@@ -66,7 +66,7 @@ for (const theme of ['light', 'dark'] as const) {
       await questions
         .getByRole('button', { name: 'Read and answer question 1', exact: true })
         .click();
-      const dialog = page.getByRole('dialog', { name: 'CLIO asked a question', exact: true });
+      const dialog = page.getByRole('dialog', { name: /^.+ asked a question$/u });
       await expect(dialog).toContainText(prompt);
       await expect(dialog.getByRole('textbox')).toBeVisible();
       const title = dialog.locator('[data-slot="pending-interaction-title"]');

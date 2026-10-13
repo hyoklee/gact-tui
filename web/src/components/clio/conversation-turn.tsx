@@ -229,7 +229,7 @@ export function ConversationTurn({
     else groups[groups.length - 1].push(iteration);
   }
   return (
-    <div className="flex min-w-0 flex-col gap-5" data-slot="transcript-entry-sequence">
+    <div className="flex min-w-0 flex-col gap-2" data-slot="transcript-entry-sequence">
       {groups.map((group) => {
         const iteration = group[0];
         const summary = transcriptActivitySummary(group);
@@ -294,8 +294,13 @@ export function ConversationTurn({
  */
 function ActivityChain({ children, id }: { children: ReactNode; id: string }) {
   const [readerOpen, setReaderOpen] = useTranscriptDisclosure(`activity:${id}`);
+  // Only activity boundaries add room; adjacent prose retains its normal gap.
   return (
-    <ChainOfThought className="@container space-y-0" onOpenChange={setReaderOpen} open={readerOpen}>
+    <ChainOfThought
+      className="@container my-3 space-y-0"
+      onOpenChange={setReaderOpen}
+      open={readerOpen}
+    >
       {children}
     </ChainOfThought>
   );

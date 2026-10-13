@@ -609,7 +609,7 @@ function ConversationBody({
             ))}
           </div>
         ) : null}
-        {!autoscroll.engaged && messages.length > 0 ? (
+        {!autoscroll.engaged && autoscroll.scrollable && messages.length > 0 ? (
           // A zero-height sticky rail inside the scroller, so a wheel over the
           // button still scrolls the transcript (and reaches its intent
           // handlers) instead of dying on a sibling overlay. Sticky offsets

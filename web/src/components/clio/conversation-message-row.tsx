@@ -328,7 +328,7 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
             ) : null}
             <MessageContent
               className={cn(
-                message.role === 'assistant' && 'w-full gap-5',
+                message.role === 'assistant' && 'w-full',
                 pendingSteer &&
                   'rounded-xl border border-dashed border-primary/60 bg-primary/[0.025] transition-[border-color,background-color] duration-150',
               )}
