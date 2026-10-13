@@ -198,6 +198,15 @@ const sandboxStatusSchema = z.object({
     .nullish()
     .transform((value) => (value ? value : undefined)),
   setup_in_progress: z.boolean().default(false),
+  setup_progress: z
+    .object({
+      status: z.string(),
+      detail: z.string(),
+      started_at: z.string(),
+      elapsed_seconds: z.number().nonnegative(),
+    })
+    .nullish()
+    .transform((value) => value ?? undefined),
   codex_source: z
     .enum(['bundled', 'path'])
     .nullish()

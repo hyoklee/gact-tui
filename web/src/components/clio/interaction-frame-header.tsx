@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { OwnerAttribution } from './pending-interaction-notices';
 import { TechnicalDetails } from './technical-details';
+import { QuestionMarkdown } from './question-markdown';
 
 interface InteractionFrameHeaderProps {
   interaction: PendingInteraction;
@@ -40,11 +41,15 @@ export function InteractionFrameHeader({
       <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-action" />
       <div className="min-w-0 flex-1">
         <FrameTitle
-          className={showFullPrompt ? 'break-words font-normal leading-relaxed' : 'line-clamp-3'}
+          className={cn(
+            'break-words font-normal',
+            !showFullPrompt && 'clio-scrollbar max-h-28 overflow-y-auto pb-1 pr-1',
+          )}
           data-slot="pending-interaction-title"
-          title={isPlanExit ? interaction.title : (interaction.prompt ?? interaction.title)}
         >
-          {isPlanExit ? interaction.title : (interaction.prompt ?? interaction.title)}
+          <QuestionMarkdown>
+            {isPlanExit ? interaction.title : (interaction.prompt ?? interaction.title)}
+          </QuestionMarkdown>
         </FrameTitle>
         <OwnerAttribution interaction={interaction} ownerLabel={ownerLabel} show={showOwner} />
         {interaction.routing_state === 'agent_elicitation_fallback_to_human' ? (

@@ -15,6 +15,7 @@ import { useConnectionSettings } from '@/providers/connection-provider';
 import { inTauri } from '@/lib/transport/tauri-runtime';
 import { restartClio } from '@/tauri/managed-backend';
 import { vocab } from '@/lib/brand-vocabulary';
+import { formatDuration } from '@/lib/format';
 import {
   foundationSummary,
   foundationTitle,
@@ -86,6 +87,7 @@ export function SandboxFoundationRow({ integration }: { integration: ServiceInte
   const polling = (row?.setup_in_progress ?? false) && !pollGaveUpOnErrors && !pollExhausted;
 
   const setup = useMutation({
+    mutationKey: queryKeys.key('sandbox-setup', settings.endpoint),
     mutationFn: () => repository.setupSandbox(),
     onMutate: () => {
       // A fresh, explicit attempt always gets a fresh poll budget, even
@@ -101,13 +103,15 @@ export function SandboxFoundationRow({ integration }: { integration: ServiceInte
           ? humanizeProtocolValue(result.reason)
           : 'Setup finished. Inspect the current status below.');
       setSetupOutcome(outcome);
-      if (result.row?.status === 'ready' || result.row?.status === 'healthy') {
-        toast.success('Protected execution is ready');
-      } else {
-        toast.message('Protected execution setup finished', {
-          description: outcome,
-        });
-      }
+      toast.message(
+        result.row?.status === 'ready' || result.row?.status === 'healthy'
+          ? 'Protected execution is ready'
+          : 'Protected execution setup finished',
+        {
+          id: `sandbox-setup:${settings.endpoint}`,
+          description: result.row?.next_action || outcome,
+        },
+      );
       // 501: nothing to provision on this platform — hide the button rather
       // than offer a fix that can never work here.
       if (result.reason === 'sandbox_setup_unsupported') setSetupUnsupported(true);
@@ -119,7 +123,10 @@ export function SandboxFoundationRow({ integration }: { integration: ServiceInte
       // up from there — one path for both cases instead of two.
     },
     onError: (error) =>
-      toast.error('Could not set up protected execution', { description: error.message }),
+      toast.message('Setup request disconnected', {
+        id: `sandbox-setup:${settings.endpoint}`,
+        description: `${vocab.agent} may still be setting up protection. Checking its status. ${error.message}`,
+      }),
     onSettled: () => {
       // Unconditional and on BOTH outcomes: the desktop bridge's own
       // request timeout is generous (SANDBOX_SETUP_TIMEOUT_MS, for the UAC
@@ -153,7 +160,11 @@ export function SandboxFoundationRow({ integration }: { integration: ServiceInte
     ? (SANDBOX_REASON_LABELS[row.reason] ?? humanizeProtocolValue(row.reason))
     : undefined;
   const pendingRestart = row?.reason === 'sandbox_fence_pending_restart';
-  const summary = row?.summary || row?.detail || foundationSummary(integration);
+  const summary = pendingRestart
+    ? `Setup finished. Restart ${vocab.agent} to protect tool processes that were already running.`
+    : row?.reason === 'codex_enforcement_unverified'
+      ? 'Protection has not been verified on this computer. Complete setup before retrying commands.'
+      : row?.summary || row?.detail || foundationSummary(integration);
 
   return (
     <details className="group px-1 py-3">
@@ -187,9 +198,22 @@ export function SandboxFoundationRow({ integration }: { integration: ServiceInte
               {setup.isPending || polling ? (
                 <LoaderCircleIcon aria-hidden="true" className="motion-safe:animate-spin" />
               ) : null}
-              Set up protected execution
+              {setup.isPending || polling
+                ? 'Setting up protected execution…'
+                : 'Set up protected execution'}
             </Button>
-            {polling ? <span role="status">Waiting for Windows permission prompt…</span> : null}
+            {polling || setup.isPending ? (
+              <div role="status" className="w-full space-y-1">
+                <p>{row?.setup_progress?.detail || 'Starting setup…'}</p>
+                <p>
+                  {row?.setup_progress
+                    ? `${formatDuration(row.setup_progress.elapsed_seconds * 1000)} elapsed. `
+                    : ''}
+                  Setup continues if you leave this page. {vocab.agent} will notify you when it
+                  finishes.
+                </p>
+              </div>
+            ) : null}
             {!polling && (pollGaveUpOnErrors || pollExhausted) ? (
               <span className="text-destructive" role="status">
                 {pollGaveUpOnErrors

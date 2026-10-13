@@ -21,6 +21,7 @@ import {
 import { UpdateRestartOverlay } from '@/components/clio/update-restart-overlay';
 import { UpdateRestartRecovery } from '@/components/clio/update-restart-recovery';
 import { returnRouteFromState } from '@/lib/workspace-route-memory';
+import { SandboxSetupNotification } from '@/components/clio/sandbox-setup-notification';
 
 const ConnectionPage = lazy(() =>
   import('@/routes/connection-page').then((module) => ({ default: module.ConnectionPage })),
@@ -108,6 +109,7 @@ export default function App() {
   const appContent = (
     <SelectionActionsProvider>
       <ProviderCatalogWarmup />
+      <SandboxSetupNotification />
       <UpdateRestartRecovery />
       <Suspense fallback={<RouteFallback />}>
         <Routes>

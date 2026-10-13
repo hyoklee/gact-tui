@@ -241,6 +241,8 @@ describe('ClioPendingInteractions', () => {
     const onResponse = renderPending([interaction]);
 
     await user.click(screen.getByRole('checkbox', { name: 'Table' }));
+    expect(screen.queryByLabelText('Comment on Table')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add comment on Table' }));
     await user.type(screen.getByLabelText('Comment on Table'), 'Keep sortable columns');
     await user.click(screen.getByRole('checkbox', { name: 'Plot' }));
     await user.click(screen.getByRole('button', { name: 'Send response' }));
@@ -383,13 +385,16 @@ describe('ClioPendingInteractions', () => {
     });
     const onResponse = renderPending([interaction]);
 
-    const title = screen.getByText('Which evidence view should remain primary?');
+    const title = screen
+      .getByText('Which evidence view should remain primary?')
+      .closest('[data-slot="pending-interaction-title"]');
     expect(title).toHaveAttribute('data-slot', 'pending-interaction-title');
-    expect(title).toHaveClass('line-clamp-3');
+    expect(title).toHaveClass('max-h-28');
     expect(title).not.toHaveClass('truncate');
-    expect(title).toHaveAttribute('title', 'Which evidence view should remain primary?');
+    expect(title).not.toHaveAttribute('title');
 
     await user.click(screen.getByRole('radio', { name: 'Station table' }));
+    await user.click(screen.getByRole('button', { name: 'Add comment on Station table' }));
     await user.type(
       screen.getByRole('textbox', { name: 'Comment on Station table' }),
       'Keep the sortable columns visible.',

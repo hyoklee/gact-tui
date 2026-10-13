@@ -1,15 +1,9 @@
 import type { PendingInteraction, PendingInteractionResponse } from '@clio/core/v3';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Frame, FramePanel } from '@/components/reui/frame';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldLabel,
-  FieldTitle,
-} from '@/components/ui/field';
+import { Field, FieldContent, FieldLabel, FieldTitle } from '@/components/ui/field';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -17,6 +11,7 @@ import { pendingInteractionDomId, respondFromControl } from './interaction-contr
 import { InteractionFrameHeader } from './interaction-frame-header';
 import { ResponseErrorNotice } from './pending-interaction-notices';
 import { QuestionSurface } from './question-surface';
+import { QuestionMarkdown } from './question-markdown';
 import { StructuredQuestionResponse, UrlConsentResponse } from './question-interaction-forms';
 
 /**
@@ -97,7 +92,7 @@ export function QuestionResponse({
       data-interaction-kind={interaction.kind}
       dense
       id={pendingInteractionDomId(interaction.id)}
-      spacing="sm"
+      spacing="xs"
       tabIndex={-1}
     >
       <InteractionFrameHeader
@@ -112,13 +107,13 @@ export function QuestionResponse({
         showOwner={showOwner}
         showFullPrompt={showFullPrompt}
       />
-      <FramePanel className="min-w-0 overflow-hidden">
+      <FramePanel className="min-w-0 overflow-hidden [&_[data-slot=field-label]>[data-slot=field]]:p-2 [&_[data-slot=field-label]:has(>[data-slot=field])]:border-0">
         <ResponseErrorNotice error={responseError} />
         <QuestionSurface interaction={interaction} />
         {!canAnswer ? (
           <p className="text-sm text-muted-foreground">Input controls are not available yet.</p>
         ) : usesMulti ? (
-          <div className="grid gap-2" data-slot="checkbox-group">
+          <div className="grid gap-1" data-slot="checkbox-group">
             {options.map((option) => {
               const value = option.value || option.label;
               const selected = multiSelection.includes(value);
@@ -140,40 +135,54 @@ export function QuestionResponse({
                         }
                       />
                       <FieldContent>
-                        <FieldTitle>{option.label}</FieldTitle>
+                        <FieldTitle>
+                          <QuestionMarkdown>{option.label}</QuestionMarkdown>
+                        </FieldTitle>
                         {option.description ? (
-                          <FieldDescription>{option.description}</FieldDescription>
+                          <div className="text-muted-foreground">
+                            <QuestionMarkdown>{option.description}</QuestionMarkdown>
+                          </div>
                         ) : null}
                       </FieldContent>
                     </Field>
                   </FieldLabel>
                   {selected ? (
-                    <div className="grid gap-1 border-t border-border/60 px-2.5 py-2">
-                      <FieldLabel htmlFor={`${interaction.id}-${value}-comment`}>
-                        Comment on {option.label} (optional)
-                      </FieldLabel>
-                      <Textarea
-                        aria-label={`Comment on ${option.label}`}
-                        className="min-h-12 resize-y field-sizing-fixed"
-                        disabled={disabled}
-                        id={`${interaction.id}-${value}-comment`}
-                        onChange={(event) =>
-                          setOptionComments((current) => ({
-                            ...current,
-                            [value]: event.target.value,
-                          }))
-                        }
-                        rows={2}
-                        value={optionComments[value] ?? ''}
-                      />
-                    </div>
+                    <QuestionComment
+                      label={option.label}
+                      hasComment={Boolean(optionComments[value])}
+                    >
+                      <div className="grid gap-1 border-t border-border/60 px-2.5 py-2">
+                        <FieldLabel htmlFor={`${interaction.id}-${value}-comment`}>
+                          Comment on {option.label} (optional)
+                        </FieldLabel>
+                        <Textarea
+                          aria-label={`Comment on ${option.label}`}
+                          className="min-h-12 resize-y field-sizing-fixed"
+                          disabled={disabled}
+                          id={`${interaction.id}-${value}-comment`}
+                          onChange={(event) =>
+                            setOptionComments((current) => ({
+                              ...current,
+                              [value]: event.target.value,
+                            }))
+                          }
+                          rows={2}
+                          value={optionComments[value] ?? ''}
+                        />
+                      </div>
+                    </QuestionComment>
                   ) : null}
                 </div>
               );
             })}
           </div>
         ) : usesOptions ? (
-          <RadioGroup disabled={disabled} onValueChange={setSelection} value={selection}>
+          <RadioGroup
+            className="gap-1"
+            disabled={disabled}
+            onValueChange={setSelection}
+            value={selection}
+          >
             {options.map((option) => {
               const value = option.value || option.label;
               const selected = selection === value;
@@ -197,37 +206,46 @@ export function QuestionResponse({
                         value={value}
                       />
                       <FieldContent>
-                        <FieldTitle>{option.label}</FieldTitle>
+                        <FieldTitle>
+                          <QuestionMarkdown>{option.label}</QuestionMarkdown>
+                        </FieldTitle>
                         {option.description ? (
-                          <FieldDescription>{option.description}</FieldDescription>
+                          <div className="text-muted-foreground">
+                            <QuestionMarkdown>{option.description}</QuestionMarkdown>
+                          </div>
                         ) : null}
                       </FieldContent>
                     </Field>
                   </FieldLabel>
                   {selected ? (
-                    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 border-t border-border/60 px-2.5 py-2">
-                      <FieldLabel
-                        className="w-auto text-xs font-normal text-muted-foreground"
-                        htmlFor={`${interaction.id}-${value}-comment`}
-                      >
-                        Comment on {option.label} (optional)
-                      </FieldLabel>
-                      <Textarea
-                        aria-label={`Comment on ${option.label}`}
-                        className="min-h-12 w-full resize-y field-sizing-fixed bg-background/60"
-                        disabled={disabled}
-                        id={`${interaction.id}-${value}-comment`}
-                        onChange={(event) =>
-                          setOptionComments((current) => ({
-                            ...current,
-                            [value]: event.target.value,
-                          }))
-                        }
-                        placeholder="Add context for the agent"
-                        rows={2}
-                        value={optionComments[value] ?? ''}
-                      />
-                    </div>
+                    <QuestionComment
+                      label={option.label}
+                      hasComment={Boolean(optionComments[value])}
+                    >
+                      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 border-t border-border/60 px-2.5 py-2">
+                        <FieldLabel
+                          className="w-auto text-xs font-normal text-muted-foreground"
+                          htmlFor={`${interaction.id}-${value}-comment`}
+                        >
+                          Comment on {option.label} (optional)
+                        </FieldLabel>
+                        <Textarea
+                          aria-label={`Comment on ${option.label}`}
+                          className="min-h-12 w-full resize-y field-sizing-fixed bg-background/60"
+                          disabled={disabled}
+                          id={`${interaction.id}-${value}-comment`}
+                          onChange={(event) =>
+                            setOptionComments((current) => ({
+                              ...current,
+                              [value]: event.target.value,
+                            }))
+                          }
+                          placeholder="Add context for the agent"
+                          rows={2}
+                          value={optionComments[value] ?? ''}
+                        />
+                      </div>
+                    </QuestionComment>
                   ) : null}
                 </div>
               );
@@ -249,7 +267,6 @@ export function QuestionResponse({
                     />
                     <FieldContent>
                       <FieldTitle>Something else</FieldTitle>
-                      <FieldDescription>Provide a different answer.</FieldDescription>
                     </FieldContent>
                   </Field>
                 </FieldLabel>
@@ -257,7 +274,8 @@ export function QuestionResponse({
                   <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 border-t border-border/60 px-2.5 py-2">
                     <FieldLabel htmlFor={`${interaction.id}-answer`}>Your response</FieldLabel>
                     <Textarea
-                      className="w-full resize-y field-sizing-fixed"
+                      className="min-h-12 w-full resize-y field-sizing-fixed"
+                      rows={2}
                       disabled={disabled}
                       id={`${interaction.id}-answer`}
                       onChange={(event) => setAnswer(event.target.value)}
@@ -273,7 +291,8 @@ export function QuestionResponse({
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
             <FieldLabel htmlFor={`${interaction.id}-answer`}>Your response</FieldLabel>
             <Textarea
-              className="block w-full min-w-0 resize-y field-sizing-fixed"
+              className="block min-h-12 w-full min-w-0 resize-y field-sizing-fixed"
+              rows={2}
               id={`${interaction.id}-answer`}
               onChange={(event) => setAnswer(event.target.value)}
               placeholder="Type your response"
@@ -282,8 +301,9 @@ export function QuestionResponse({
           </div>
         )}
         {canAnswer ? (
-          <div className="mt-4 flex justify-end">
+          <div className="mt-2 flex justify-end">
             <Button
+              size="sm"
               disabled={disabled || !canSubmit}
               onClick={() =>
                 respondFromControl(
@@ -318,5 +338,34 @@ export function QuestionResponse({
         ) : null}
       </FramePanel>
     </Frame>
+  );
+}
+
+function QuestionComment({
+  label,
+  hasComment,
+  children,
+}: {
+  label: string;
+  hasComment: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(hasComment);
+  return (
+    <>
+      <div className="flex justify-end px-2 pb-1">
+        <Button
+          aria-expanded={open}
+          aria-label={`${open ? 'Hide' : 'Add'} comment on ${label}`}
+          className="h-6 text-xs text-muted-foreground"
+          onClick={() => setOpen((value) => !value)}
+          size="sm"
+          variant="ghost"
+        >
+          {open ? 'Hide comment' : '+ Add comment'}
+        </Button>
+      </div>
+      {open ? children : null}
+    </>
   );
 }

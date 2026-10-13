@@ -3,6 +3,26 @@ import { RecordingTransport } from './recording-transport.test-helper.js';
 import { ClioRepository } from './repository.js';
 
 describe('sandbox administration repository', () => {
+  it('preserves service-owned progress when setup outlives its page', async () => {
+    const progress = {
+      status: 'running',
+      detail: 'Verifying protected execution...',
+      started_at: '2026-10-13T20:00:00Z',
+      elapsed_seconds: 367,
+    };
+    const repository = new ClioRepository(
+      new RecordingTransport([
+        {
+          name: 'sandbox',
+          status: 'degraded',
+          required: true,
+          setup_in_progress: true,
+          setup_progress: progress,
+        },
+      ]),
+    );
+    expect((await repository.sandboxStatus()).setup_progress).toEqual(progress);
+  });
   it('decodes the sandbox row including the desktop-panel-only fields', async () => {
     const transport = new RecordingTransport([
       {

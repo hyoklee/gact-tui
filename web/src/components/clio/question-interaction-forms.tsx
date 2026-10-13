@@ -3,10 +3,9 @@ import type {
   PendingInteractionField,
   PendingInteractionResponse,
 } from '@clio/core/v3';
-import { AlertTriangleIcon, ExternalLinkIcon, MessageCircleQuestionIcon } from 'lucide-react';
-import { CloseIcon } from '@/lib/icon-vocabulary';
+import { AlertTriangleIcon, ExternalLinkIcon } from 'lucide-react';
 import { useState, type ChangeEvent, type ReactNode } from 'react';
-import { Frame, FrameHeader, FramePanel, FrameTitle } from '@/components/reui/frame';
+import { Frame, FramePanel } from '@/components/reui/frame';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -25,8 +24,8 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { openExternalUrl } from '@/tauri/external-url';
 import { pendingInteractionDomId } from './interaction-control';
-import { OwnerAttribution, ResponseErrorNotice } from './pending-interaction-notices';
-import { TechnicalDetails } from './technical-details';
+import { ResponseErrorNotice } from './pending-interaction-notices';
+import { InteractionFrameHeader } from './interaction-frame-header';
 
 interface QuestionSurfaceProps {
   interaction: PendingInteraction;
@@ -76,7 +75,7 @@ export function StructuredQuestionResponse(props: QuestionSurfaceProps) {
   return (
     <QuestionFrame {...props}>
       <ResponseErrorNotice error={props.responseError} />
-      <FieldGroup className="gap-4">
+      <FieldGroup className="gap-3">
         {fields.map((field) => (
           <SchemaField
             disabled={props.disabled || sending}
@@ -96,7 +95,7 @@ export function StructuredQuestionResponse(props: QuestionSurfaceProps) {
           />
         ))}
       </FieldGroup>
-      <div className="mt-4 flex justify-end">
+      <div className="mt-2 flex justify-end">
         <Button disabled={props.disabled || sending} onClick={() => void submit()}>
           {sending ? 'Sending…' : 'Send response'}
         </Button>
@@ -156,7 +155,7 @@ export function UrlConsentResponse(props: QuestionSurfaceProps) {
       </dl>
       {navigationError ? <FieldError className="mt-3">{navigationError}</FieldError> : null}
       <ResponseErrorNotice error={props.responseError} />
-      <div className="mt-4 flex flex-wrap justify-end gap-2">
+      <div className="mt-2 flex flex-wrap justify-end gap-2">
         <Button
           disabled={props.disabled || sending}
           onClick={() =>
@@ -188,52 +187,20 @@ function QuestionFrame({ children, ...props }: QuestionSurfaceProps & { children
       data-interaction-kind={props.interaction.kind}
       dense
       id={pendingInteractionDomId(props.interaction.id)}
-      spacing="sm"
+      spacing="xs"
       tabIndex={-1}
     >
-      <FrameHeader className="relative flex-row items-start gap-2 pr-10">
-        <MessageCircleQuestionIcon
-          aria-hidden="true"
-          className="mt-0.5 size-4 shrink-0 text-action"
-        />
-        <div className="min-w-0 flex-1">
-          <FrameTitle className="line-clamp-3">
-            {props.interaction.prompt ?? props.interaction.title}
-          </FrameTitle>
-          <OwnerAttribution
-            interaction={props.interaction}
-            ownerLabel={props.ownerLabel}
-            show={props.showOwner}
-          />
-          {props.interaction.routing_state === 'agent_elicitation_fallback_to_human' ? (
-            <>
-              <p className="mt-1 text-xs text-muted-foreground">
-                The specialist could not answer this, so it needs you.
-              </p>
-              {props.interaction.fallback_detail ? (
-                <TechnicalDetails
-                  className="mt-1 text-xs text-muted-foreground"
-                  title="Technical details"
-                >
-                  <code>{props.interaction.fallback_detail}</code>
-                </TechnicalDetails>
-              ) : null}
-            </>
-          ) : null}
-        </div>
-        {canCancel ? (
-          <Button
-            aria-label="Cancel question"
-            className="absolute right-2 top-1"
-            disabled={props.disabled}
-            onClick={() => void props.onResponse(props.interaction, { action: 'cancel' })}
-            size="icon-sm"
-            variant="ghost"
-          >
-            <CloseIcon aria-hidden="true" />
-          </Button>
-        ) : null}
-      </FrameHeader>
+      <InteractionFrameHeader
+        disabled={props.disabled}
+        interaction={props.interaction}
+        onCancel={
+          canCancel
+            ? () => void props.onResponse(props.interaction, { action: 'cancel' })
+            : undefined
+        }
+        ownerLabel={props.ownerLabel}
+        showOwner={props.showOwner}
+      />
       <FramePanel className="min-w-0 overflow-hidden">{children}</FramePanel>
     </Frame>
   );
