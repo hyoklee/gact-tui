@@ -6,16 +6,21 @@ import { cn } from '@/lib/utils';
 import { defaultRemarkPlugins } from 'streamdown';
 import { ArtifactMarkdownImage } from './artifact-markdown-image';
 import { remarkArtifactImages } from '@/lib/remark-artifact-images';
+import { remarkContentReferences } from '@/lib/markdown-content-reference';
+import { MarkdownContentLink } from './markdown-content-link';
 
-const artifactRemarkPlugins = [...Object.values(defaultRemarkPlugins), remarkArtifactImages];
-const artifactComponents = { img: ArtifactMarkdownImage };
+const artifactComponents = { img: ArtifactMarkdownImage, a: MarkdownContentLink };
 
 /** Render explicit source entries as AI Elements source objects in transcript order. */
 export function GroundedMessageResponse({ children, className, ...options }: MessageResponseProps) {
   const props = {
     ...options,
     components: { ...artifactComponents, ...options.components },
-    remarkPlugins: options.remarkPlugins ?? artifactRemarkPlugins,
+    remarkPlugins: [
+      ...(options.remarkPlugins ?? Object.values(defaultRemarkPlugins)),
+      remarkArtifactImages,
+      remarkContentReferences,
+    ],
   };
   if (typeof children !== 'string') {
     return (
