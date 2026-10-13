@@ -39,10 +39,18 @@ test('renders reader-controlled causal entries and a truthful completion footer 
   const update = message.locator('p').filter({
     hasText: /^Read the fixture notes before preparing the report\.$/u,
   });
-  const updateBounds = (await update.boundingBox())!;
-  expect(
-    (await activity.boundingBox())!.y - updateBounds.y - updateBounds.height,
-  ).toBeGreaterThanOrEqual(18);
+  await expect
+    .poll(async () => {
+      // The streaming fixture changes virtualized row heights. A detached row
+      // has no geometry; wait for its mounted measurements before comparing.
+      const [updateBounds, activityBounds] = await Promise.all([
+        update.boundingBox(),
+        activity.boundingBox(),
+      ]);
+      if (!updateBounds || !activityBounds) return -1;
+      return activityBounds.y - updateBounds.y - updateBounds.height;
+    })
+    .toBeGreaterThanOrEqual(18);
   await activity.click();
   await expect(message.getByRole('button', { name: /^Thinking:/ })).toHaveCount(0);
   await expect(thinking).toBeVisible();
