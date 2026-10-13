@@ -734,6 +734,7 @@ export function WorkspacePage() {
                 ) : (
                   <TranscriptPresenceSurface className="min-h-0 flex-1" key="conversation">
                     <WorkspaceLiveConversation
+                      processes={processes}
                       artifacts={artifacts}
                       attentionData={attention.heat}
                       bottomInset={dockedComposerHeight}

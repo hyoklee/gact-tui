@@ -342,22 +342,11 @@ function HumanQuestionActivity({
           {isMcp && interaction.payload?.mode === 'form' && !declined ? (
             <ActivityStep icon={CircleCheckIcon} title="Validated by MCP schema" />
           ) : null}
-          <ActivityStep
-            icon={ArrowUpToLineIcon}
-            title={
-              isMcp
-                ? 'Response returned to MCP'
-                : interaction.payload?.response_mode === 'async'
-                  ? 'Answer added to the queue'
-                  : 'Answer sent to the agent'
-            }
-          >
-            {isMcp
-              ? 'The waiting request resumed with your response.'
-              : interaction.payload?.response_mode === 'async'
-                ? 'Your answer follows the other queued messages.'
-                : 'The agent continues with your answer.'}
-          </ActivityStep>
+          {isMcp ? (
+            <ActivityStep icon={ArrowUpToLineIcon} title="Response returned to MCP">
+              The waiting request resumed with your response.
+            </ActivityStep>
+          ) : null}
         </>
       ) : null}
       {cancelled || expired ? (
@@ -416,7 +405,16 @@ function answerEntries(interaction: PendingInteraction): AnswerEntry[] {
     });
   }
 
-  if (values.answer !== undefined && values.answer !== null && values.answer !== '') {
+  const answer = formatAnswerValue(values.answer);
+  const repeatsSelection =
+    selectedOptions.length > 0 &&
+    (answer === entries[0]?.value || answer === selectedOptions.map(formatAnswerValue).join(', '));
+  if (
+    values.answer !== undefined &&
+    values.answer !== null &&
+    values.answer !== '' &&
+    !repeatsSelection
+  ) {
     entries.push({
       key: 'answer',
       label: selectedOptions.length > 0 ? 'Comment' : 'Response',

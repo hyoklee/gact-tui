@@ -57,11 +57,16 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(questions).toContainText(prompt);
       // Loading the transcript must preserve an already-open question list.
       await expect(
-        questions.getByRole('button', { name: 'Go to question', exact: true }),
+        questions.getByRole('button', { name: 'Go to question 1', exact: true }),
       ).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath(`question-list-${theme}-${width}.png`) });
-      await questions.getByRole('button', { name: 'Read and answer', exact: true }).click();
-      const dialog = page.getByRole('dialog', { name: 'CLIO asked a question', exact: true });
+      await questions.getByRole('button', { name: 'Expand question 1', exact: true }).click();
+      await expect(questions.getByText('Answer when ready', { exact: true })).toBeVisible();
+      await expect(questions.getByRole('button', { name: 'Collapse question 1' })).toBeVisible();
+      await questions
+        .getByRole('button', { name: 'Read and answer question 1', exact: true })
+        .click();
+      const dialog = page.getByRole('dialog', { name: /^.+ asked a question$/u });
       await expect(dialog).toContainText(prompt);
       await expect(dialog.getByRole('textbox')).toBeVisible();
       const title = dialog.locator('[data-slot="pending-interaction-title"]');
@@ -73,7 +78,7 @@ for (const theme of ['light', 'dark'] as const) {
       // Inspecting or drafting an answer never resolves the question.
       await dialog.getByRole('button', { name: 'Close', exact: true }).click();
       await tracker.click();
-      await questions.getByRole('button', { name: 'Go to question', exact: true }).click();
+      await questions.getByRole('button', { name: 'Go to question 1', exact: true }).click();
       await expect(page).toHaveURL(/#message-msg_stream\/activity-tool_fixture_question$/);
       const summary = page.locator('#question-tool_fixture_question');
       await expect(summary).toBeVisible();

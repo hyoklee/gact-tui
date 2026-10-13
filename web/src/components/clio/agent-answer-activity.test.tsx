@@ -102,6 +102,37 @@ describe('AgentAnswerActivity: transcript link to the pending tray card', () => 
 });
 
 describe('answered record for a composer-message answer (#1448)', () => {
+  it('shows a selected answer once when the transport also repeats it as answer text', () => {
+    render(
+      <AgentAnswerActivity
+        interaction={humanQuestion({
+          status: 'answered',
+          payload: {
+            options: [{ label: 'Yes, rerun and verify', value: 'yes' }],
+            answer_metadata: { selected_options: ['yes'], answer: 'Yes, rerun and verify' },
+          },
+        })}
+      />,
+    );
+    expect(screen.getAllByText('Yes, rerun and verify')).toHaveLength(1);
+    expect(screen.queryByText('Comment')).not.toBeInTheDocument();
+  });
+
+  it('retains an additional human comment alongside the selection', () => {
+    render(
+      <AgentAnswerActivity
+        interaction={humanQuestion({
+          status: 'answered',
+          payload: {
+            options: [{ label: 'Yes', value: 'yes' }],
+            answer_metadata: { selected_options: ['yes'], answer: 'Also verify the saved figure.' },
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText('Comment')).toBeVisible();
+    expect(screen.getByText('Also verify the saved figure.')).toBeVisible();
+  });
   it('shows the text and the attachment chips, never internal fields', () => {
     render(
       <AgentAnswerActivity
@@ -123,7 +154,7 @@ describe('answered record for a composer-message answer (#1448)', () => {
     expect(screen.getByRole('list', { name: 'Attached files' })).toHaveTextContent('stations.csv');
     expect(screen.queryByText(/msg_user_1/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Answer message id/i)).not.toBeInTheDocument();
-    expect(screen.getByText('Answer sent to the agent')).toBeInTheDocument();
-    expect(screen.getByText('The agent continues with your answer.')).toBeInTheDocument();
+    expect(screen.getByText('You responded')).toBeInTheDocument();
+    expect(screen.getAllByText('Use the attached list.')).toHaveLength(1);
   });
 });

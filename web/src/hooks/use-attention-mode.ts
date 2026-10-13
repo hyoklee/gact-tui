@@ -133,14 +133,27 @@ export function useAttentionMode(
       label: 'Understand attention',
       icon: RadarIcon,
       order: 30,
-      kinds: ['agent-answer-text'],
-      // Only this session's answers that the service reports attention for.
+      // Generated text of this session's captured answers: the answer itself, and
+      // other generated blocks of that message (its thinking) as transcript content.
+      kinds: ['agent-answer-text', 'transcript-content'],
       isAvailable: (target) =>
-        target.kind === 'agent-answer-text' &&
-        target.sessionId === sessionId &&
-        availableAnswers?.[target.messageId] === true,
+        target.kind === 'agent-answer-text'
+          ? target.sessionId === sessionId && availableAnswers?.[target.messageId] === true
+          : target.kind === 'transcript-content' &&
+            target.reference.session_id === sessionId &&
+            availableAnswers?.[target.reference.message_id] === true,
       run: (target) => {
         if (target.kind === 'agent-answer-text') void request(target);
+        else if (target.kind === 'transcript-content')
+          void request({
+            kind: 'agent-answer-text',
+            text: target.text,
+            sessionId: target.reference.session_id,
+            messageId: target.reference.message_id,
+            partId: target.reference.part_id,
+            contentRevision: target.reference.content_revision,
+            reference: target.reference,
+          });
       },
     }),
     [availableAnswers, request, sessionId],

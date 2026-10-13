@@ -137,7 +137,10 @@ describe('readable compact tool results', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Show result for Create Artifact' }));
     const result = screen.getByRole('region');
-    expect(result).toHaveTextContent('Created version 1');
+    expect(
+      screen.getByRole('button', { name: 'Show result for Create Artifact' }),
+    ).toHaveTextContent('Created version 1');
+    expect(result).toHaveTextContent('raccoon.svg');
     expect(result).not.toHaveTextContent('RAW SVG DATA');
     await user.click(within(result).getByRole('button', { name: 'raccoon.svg' }));
     expect(opened).toEqual(['D:/workspace/raccoon.svg']);
@@ -158,7 +161,7 @@ describe('readable compact tool results', () => {
       'CreateProcessWithLogonW failed: 2',
     );
     await user.keyboard('{Enter}');
-    const result = screen.getByRole('region');
+    const result = screen.getByRole('region', { name: 'Run: Result' });
     expect(within(result).getByRole('alert')).toHaveTextContent(
       'CreateProcessWithLogonW failed: 2',
     );

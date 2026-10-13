@@ -19,7 +19,6 @@ import type {
 import type { ConversationIteration } from './conversation-turn-model';
 import { ClioStatus } from './status';
 import {
-  ClioSubagentCard,
   ClioAgentMessageLine,
   ClioSubagentLifecycleLine,
   type SubagentOpenTarget,
@@ -230,7 +229,7 @@ export function ConversationTurn({
     else groups[groups.length - 1].push(iteration);
   }
   return (
-    <div className="space-y-4" data-slot="transcript-entry-sequence">
+    <div className="flex min-w-0 flex-col gap-2" data-slot="transcript-entry-sequence">
       {groups.map((group) => {
         const iteration = group[0];
         const summary = transcriptActivitySummary(group);
@@ -254,7 +253,7 @@ export function ConversationTurn({
                   </span>
                 </ChainOfThoughtHeader>
                 <ChainOfThoughtContent
-                  className="ml-1 mt-1 space-y-1 border-l pl-3"
+                  className="ml-1 mt-3 space-y-3 border-l pl-3"
                   data-slot="transcript-activity-timeline"
                 >
                   {group.map((item) => (
@@ -295,8 +294,13 @@ export function ConversationTurn({
  */
 function ActivityChain({ children, id }: { children: ReactNode; id: string }) {
   const [readerOpen, setReaderOpen] = useTranscriptDisclosure(`activity:${id}`);
+  // Only activity boundaries add room; adjacent prose retains its normal gap.
   return (
-    <ChainOfThought className="@container space-y-0" onOpenChange={setReaderOpen} open={readerOpen}>
+    <ChainOfThought
+      className="@container my-3 space-y-0"
+      onOpenChange={setReaderOpen}
+      open={readerOpen}
+    >
       {children}
     </ChainOfThought>
   );
@@ -393,10 +397,11 @@ function IterationDetail({
                 {subagentsForTool(entry.tool, subagents)
                   .filter((subagent) => !explicitSubagentIds.has(subagent.id))
                   .map((subagent) => (
-                    <ClioSubagentCard
+                    <ClioSubagentLifecycleLine
                       key={subagent.id}
                       onOpen={onOpenSubagent}
                       subagent={subagent}
+                      stage="delegate.started"
                     />
                   ))}
               </div>

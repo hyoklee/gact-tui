@@ -1,5 +1,5 @@
 import { CodeBlock, CodeBlockCopyButton } from '@/components/ai-elements/code-block';
-import { MessageResponse } from '@/components/ai-elements/message';
+import { ContentMarkdown } from './content-markdown';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DOCUMENT_MARKDOWN_CLASS_NAME, normalizeConvertedMarkdown } from '@/lib/document-markdown';
@@ -31,9 +31,9 @@ export function MarkdownFilePreview({ name, content }: { name: string; content: 
                 <CodeBlock code={frontmatter[1]} language="yaml" />
               </details>
             ) : null}
-            <MessageResponse className={DOCUMENT_MARKDOWN_CLASS_NAME}>
+            <ContentMarkdown className={DOCUMENT_MARKDOWN_CLASS_NAME}>
               {normalizeConvertedMarkdown(body)}
-            </MessageResponse>
+            </ContentMarkdown>
           </article>
         </ScrollArea>
       </TabsContent>

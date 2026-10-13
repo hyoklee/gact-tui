@@ -41,6 +41,7 @@ import {
   CodeBlockTitle,
 } from '@/components/ai-elements/code-block';
 import { Accordion } from '@/components/ui/accordion';
+import { useEvidenceSections } from '@/hooks/use-evidence-disclosures';
 import { EvidenceSection } from './observability-evidence-section';
 import { Button } from '@/components/ui/button';
 import { ExternalLink } from '@/components/ui/external-link';
@@ -67,6 +68,8 @@ import { getToolActivityTitle, getToolStatus, getToolSummary } from './tool-pres
 import { AsyncTaskList } from './async-task-list';
 import { SessionEvidenceSummary } from './session-evidence-summary';
 import { taskActivity } from './task-activity';
+import { OpenQuestionsSection } from './open-question-list';
+import { openHumanQuestions } from '@/lib/inline-question';
 
 export interface ClioEvidenceViewProps {
   compact?: boolean;
@@ -99,6 +102,7 @@ export interface ClioEvidenceViewProps {
 
 export function ClioEvidenceView(props: ClioEvidenceViewProps) {
   const showActivity = props.section !== 'data';
+  const questions = showActivity ? openHumanQuestions(props.interactions ?? []) : [];
   const showData = props.section !== 'work';
   const outputs = showData
     ? (props.compact ? artifactDeliverables(props.artifacts) : props.artifacts).filter(
@@ -145,25 +149,35 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
       subagents.length ||
       tasks.length ||
       tools.length ||
-      backgroundProcesses.length,
+      backgroundProcesses.length ||
+      questions.length,
   );
   const hasProvenance = Boolean(props.provenanceProvider || props.artifactProvenanceProvider);
+  const sections = useEvidenceSections('evidence-details', [
+    'child-agents',
+    'files',
+    'changes',
+    'sources',
+  ]);
 
   if (props.compact)
     return (
-      <SessionEvidenceSummary
-        {...props}
-        outputs={outputs}
-        files={files}
-        diffs={diffs}
-        plans={plans}
-        sources={sources}
-        runs={runs}
-        tasks={tasks}
-        tools={tools}
-        subagents={subagents}
-        backgroundProcesses={backgroundProcesses}
-      />
+      <>
+        {showActivity ? <OpenQuestionsSection interactions={props.interactions} /> : null}
+        <SessionEvidenceSummary
+          {...props}
+          outputs={outputs}
+          files={files}
+          diffs={diffs}
+          plans={plans}
+          sources={sources}
+          runs={runs}
+          tasks={tasks}
+          tools={tools}
+          subagents={subagents}
+          backgroundProcesses={backgroundProcesses}
+        />
+      </>
     );
 
   if (!hasEvidence && !hasProvenance && !props.compact) {
@@ -185,19 +199,14 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
           "Session evidence" string the redesign deliberately dropped
           (test_observability_evidence.tsx:77 pins its absence). */}
       <h2 aria-label="Session evidence" className="sr-only" />
+      {showActivity ? <OpenQuestionsSection interactions={props.interactions} /> : null}
       <Accordion
         className={
           props.compact
             ? '[&_[data-slot=accordion-content]>div>div]:max-h-none [&_[data-slot=accordion-content]>div>div]:overflow-visible'
             : undefined
         }
-        defaultValue={[
-          ...(props.compact ? ['tasks', 'background', 'artifacts'] : []),
-          ...(subagents.length ? ['child-agents'] : []),
-          'files',
-          'changes',
-          'sources',
-        ]}
+        {...sections}
         type="multiple"
       >
         {runs.length ? (

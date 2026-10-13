@@ -176,11 +176,11 @@ export function ClioObservabilityDock(props: ClioObservabilityDockProps) {
   return (
     <div className="flex min-w-0 items-center gap-1" data-slot="composer-evidence">
       <SessionEvidencePopover evidence={props}>
-        {({ layout, buttonRef, panelId, cycle }) => (
+        {({ layout, visible, buttonRef, panelId, cycle }) => (
           <Button
             ref={buttonRef}
             aria-label={`Evidence layout: ${layout.charAt(0).toUpperCase() + layout.slice(1)}`}
-            aria-expanded={layout !== 'none'}
+            aria-expanded={visible}
             aria-controls={panelId}
             aria-haspopup="dialog"
             data-evidence-layout={layout}

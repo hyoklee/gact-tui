@@ -134,7 +134,10 @@ describe('ClioConversation activity and interactive surfaces', () => {
             state: 'succeeded',
             input: { path: 'D:/campaign/evidence.json' },
             output: 'large payload omitted from the collapsed summary',
-            presentation: { summary: 'Read evidence.json', blocks: [] },
+            presentation: {
+              summary: 'Read evidence.json',
+              blocks: [{ id: 'outcome', type: 'text', text: 'Three station records are available.' }],
+            },
           },
         }}
       />,
@@ -154,7 +157,7 @@ describe('ClioConversation activity and interactive surfaces', () => {
     fireEvent.click(activity);
     expect(
       await screen.findByRole('region', { name: /Read evidence file: Result/ }),
-    ).toHaveTextContent('Read evidence.json');
+    ).toHaveTextContent('Three station records are available.');
     fireEvent.click(
       screen.getByRole('button', { name: 'Technical details for Read evidence file' }),
     );

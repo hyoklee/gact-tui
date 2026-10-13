@@ -67,3 +67,26 @@ it('keeps streaming and interrupted action entries identifiable without a numeri
     running: false,
   });
 });
+
+it('includes received results and reminders in the same ordered action summary', () => {
+  const run = { id: 'run', session_id: 's', name: 'exec_command', state: 'succeeded' as const };
+  expect(
+    transcriptActivitySummary([
+      iteration([run], {
+        activity: [
+          {
+            kind: 'injection',
+            id: 'results',
+            block: { id: 'results', type: 'injection', source: 'task_results', text: 'Result' },
+          },
+          { kind: 'tool', id: run.id, tool: run },
+          {
+            kind: 'injection',
+            id: 'reminder',
+            block: { id: 'reminder', type: 'injection', source: 'plan_mode', text: 'Reminder' },
+          },
+        ],
+      }),
+    ]).label,
+  ).toBe('Received results, ran commands, received reminder');
+});

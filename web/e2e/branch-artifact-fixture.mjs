@@ -58,6 +58,7 @@ export function createBranchArtifactFixture({
             role: index ? 'assistant' : 'user',
             created_at: observedAt,
             completed_at: observedAt,
+            ...(index ? { stop_reason: 'end_turn' } : {}),
             blocks: [{ id: `baseline_text_${index}`, type: 'text', text }],
           }))
         : undefined;

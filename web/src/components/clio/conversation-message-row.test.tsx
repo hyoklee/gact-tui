@@ -26,6 +26,12 @@ function baseRowProps(): ConversationMessageRowProps {
 }
 
 describe('conversationMessageRowPropsEqual', () => {
+  it('updates a resumed response when its header continuity changes', () => {
+    const base = baseRowProps();
+    expect(conversationMessageRowPropsEqual(base, { ...base, responseContinuation: true })).toBe(
+      false,
+    );
+  });
   it('updates this message when its mark changes and ignores unrelated marks', () => {
     const base = baseRowProps();
     expect(

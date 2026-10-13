@@ -13,7 +13,7 @@ it('shows recorded turn usage and zero cost while omitting unreported facts', ()
     created_at: '2026-10-06T12:00:00Z',
     completed_at: '2026-10-06T12:00:45Z',
     stop_reason: 'end_turn',
-    blocks: [],
+    blocks: [{ id: 'answer', type: 'text', text: 'The result is ready.', channel: 'answer' }],
     usage: { input: 129000, output: 3000, cache_read: 0, cache_write: 0 },
     cost_usd: 0,
   };
@@ -64,7 +64,7 @@ const message: Message = {
   created_at: '2026-10-08T00:00:00Z',
   completed_at: '2026-10-08T00:01:00Z',
   stop_reason: 'completed',
-  blocks: [],
+  blocks: [{ id: 'answer', type: 'text', text: 'The result is ready.', channel: 'answer' }],
 };
 
 it('shows failures with the total in the footer and handles a single call', () => {
@@ -145,3 +145,22 @@ it('does not present unfinished calls as final turn statistics', () => {
   expect(screen.queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument();
   expect(view.container).toBeEmptyDOMElement();
 });
+
+it.each([
+  { name: 'empty boundary', blocks: [] },
+  { name: 'tool handoff', blocks: [{ id: 'tool', type: 'tool', tool_id: 'call' }] },
+  {
+    name: 'ongoing update',
+    blocks: [{ id: 'update', type: 'text', channel: 'next_thought', text: 'Inspecting the files.' }],
+  },
+] satisfies { name: string; blocks: Message['blocks'] }[])(
+  'omits a completion footer for an $name without an answer',
+  ({ blocks }) => {
+    const view = render(
+      <MessageCompletionFooter message={{ ...message, blocks }} toolCount={1}>
+        <button>Copy</button>
+      </MessageCompletionFooter>,
+    );
+    expect(view.container).toBeEmptyDOMElement();
+  },
+);

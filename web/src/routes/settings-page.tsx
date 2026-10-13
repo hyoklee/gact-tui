@@ -79,6 +79,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { useRepository } from '@/hooks/use-repository';
 import { useSwitchConnection } from '@/hooks/use-switch-connection';
+import { useKnownConnections, type KnownConnection } from '@/hooks/use-known-connections';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import {
   type AttentionSoundMode,
@@ -249,10 +250,11 @@ const sections: SettingsDestination[] = [
 
 function ConnectionsSettings() {
   const repository = useRepository();
-  const { settings, recents, forget } = useConnectionSettings();
+  const { settings, forget } = useConnectionSettings();
+  const knownConnections = useKnownConnections();
   const switchConnection = useSwitchConnection();
   const connectionSwitch = useMutation({
-    mutationFn: (connection: (typeof recents)[number]) =>
+    mutationFn: (connection: KnownConnection) =>
       switchConnection(connection, { navigateToWorkspace: false }),
   });
   const capabilities = useQuery({
@@ -272,7 +274,7 @@ function ConnectionsSettings() {
   return (
     <div className="grid gap-6">
       <SectionHeading
-        description="Choose where your workspace runs and manage addresses you have connected to before."
+        description="Choose where your workspace runs and manage known services."
         title={`${vocab.agent} connections`}
       />
       <Frame spacing="lg">
@@ -336,13 +338,13 @@ function ConnectionsSettings() {
       </Frame>
       <Frame spacing="lg">
         <FrameHeader>
-          <FrameTitle>Remembered connections</FrameTitle>
+          <FrameTitle>Known services</FrameTitle>
           <FrameDescription>
-            Use the menu on an address to reconnect or remove it from this device.
+            Connect to another service or remove a remembered address from this device.
           </FrameDescription>
         </FrameHeader>
         <FramePanel className="grid gap-1 p-2">
-          {recents.map((connection) => {
+          {knownConnections.map((connection) => {
             const active = connection.endpoint === settings.endpoint;
             return (
               <div
@@ -370,26 +372,34 @@ function ConnectionsSettings() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-52">
                     <DropdownMenuItem
-                      disabled={active || connectionSwitch.isPending}
+                      disabled={
+                        active ||
+                        connectionSwitch.isPending ||
+                        connection.availability.state === 'unavailable'
+                      }
                       onSelect={() => connectionSwitch.mutate(connection)}
                     >
                       <CableIcon aria-hidden="true" /> Connect
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      disabled={active}
-                      onSelect={() => void forget(connection.endpoint)}
-                      variant="destructive"
-                    >
-                      <DeleteIcon aria-hidden="true" /> Forget on this device
-                    </DropdownMenuItem>
+                    {connection.source === 'recent' ? (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          disabled={active}
+                          onSelect={() => void forget(connection.endpoint)}
+                          variant="destructive"
+                        >
+                          <DeleteIcon aria-hidden="true" /> Forget on this device
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
             );
           })}
-          {recents.length === 0 ? (
-            <p className="p-5 text-sm text-muted-foreground">No remembered connections yet.</p>
+          {knownConnections.length === 0 ? (
+            <p className="p-5 text-sm text-muted-foreground">No known services yet.</p>
           ) : null}
           {connectionSwitch.error ? (
             <p className="p-3 text-sm text-destructive sm:col-span-2">

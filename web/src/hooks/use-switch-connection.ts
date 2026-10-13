@@ -2,7 +2,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createRepository, type SavedConnection } from '@/lib/connection';
+import { createRepository, type ConnectionSettings } from '@/lib/connection';
 import {
   connectionSessionRoute,
   connectionSessionTargetForRoute,
@@ -25,7 +25,7 @@ export function useSwitchConnection() {
 
   return useCallback(
     async (
-      connection: SavedConnection,
+      connection: ConnectionSettings,
       { navigateToWorkspace = true }: SwitchConnectionOptions = {},
     ) => {
       const resolvedConnection = await resolveConnection(connection);

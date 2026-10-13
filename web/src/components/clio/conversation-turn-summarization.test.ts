@@ -27,10 +27,12 @@ describe('conversationTurnPresentation compaction records', () => {
   it('keeps a mid-turn summary at its step, between the iterations around it', () => {
     const presentation = conversationTurnPresentation(turn, {});
 
-    expect(presentation.iterations.map((iteration) => iteration.thinking[0]?.id)).toEqual([
-      'r1',
-      'r2',
-    ]);
+    expect(
+      presentation.iterations.flatMap((iteration) => iteration.thinking.map((row) => row.id)),
+    ).toEqual(['r1', 'r2']);
+    expect(
+      presentation.iterations.flatMap((iteration) => iteration.activity.map((entry) => entry.id)),
+    ).toEqual(['part_summary']);
     expect(presentation.compactionRecords).toEqual([{ afterIteration: 1, block: turn.blocks[1] }]);
     expect(presentation.residualBlocks.map((block) => block.id)).toEqual(['answer']);
   });
@@ -53,7 +55,7 @@ describe('conversationTurnPresentation compaction records', () => {
     expect(presentation.residualBlocks.map((block) => block.id)).toEqual(['answer']);
   });
 
-  it('leaves other injections in the residual lane', () => {
+  it('includes other injections in the activity lane', () => {
     const presentation = conversationTurnPresentation(
       {
         ...turn,
@@ -65,6 +67,9 @@ describe('conversationTurnPresentation compaction records', () => {
       {},
     );
     expect(presentation.compactionRecords).toEqual([]);
-    expect(presentation.residualBlocks.map((block) => block.id)).toEqual(['hint']);
+    expect(presentation.residualBlocks).toEqual([]);
+    expect(
+      presentation.iterations.flatMap((iteration) => iteration.activity.map((entry) => entry.id)),
+    ).toEqual(['hint']);
   });
 });

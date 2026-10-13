@@ -7,6 +7,8 @@ import { createContext, useContext } from 'react';
  * the composer's submit routes the next message to that question.
  */
 export interface QuestionAnswerState {
+  /** The workspace's live interaction inventory, shared by transcript and Work. */
+  interactions?: readonly PendingInteraction[];
   /** The interaction id of the question the composer's next message answers. */
   answeringId?: string;
   openQuestion?: (interaction: PendingInteraction) => void;

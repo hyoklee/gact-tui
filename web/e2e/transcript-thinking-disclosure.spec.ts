@@ -94,6 +94,7 @@ for (const theme of ['light', 'dark']) {
         'text',
       );
       await expect(page.getByText('Diagnosing shell issues', { exact: true })).toHaveCount(1);
+      await settleCapture(page);
       await page.getByRole('button', { name: 'Show result for Run' }).click();
       const result = page.getByRole('region', { name: 'Run: Result' });
       await expect(result).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');

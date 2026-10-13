@@ -1,6 +1,7 @@
 import type { MessageBlock } from '@clio/core/v3';
-import { SyringeIcon } from 'lucide-react';
+import { ChevronRightIcon, SyringeIcon } from 'lucide-react';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -21,7 +22,7 @@ const INJECTION_LABELS: Record<string, string> = {
   scheduled_wake: 'Scheduled wake',
   task_completion: 'Background task completion',
   earlier_turns: 'Recovered conversation context',
-  todos: 'Todo list',
+  todos: 'Todo list reminder',
   plan_mode: 'Plan reminder',
   replan: 'Replanning suggestion',
   memory_search: 'Memory search results',
@@ -46,41 +47,54 @@ export function HarnessInjection({
   const [expanded, setExpanded] = useTranscriptDisclosure(`injection:${block.id}`);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const label = INJECTION_LABELS[block.source] ?? humanizeProtocolValue(block.source);
+  const triggerLabel =
+    block.source === 'summarization'
+      ? block.trigger === 'manual'
+        ? 'Requested'
+        : 'Automatic'
+      : '';
   return (
-    <section className="min-w-0 max-w-full" data-slot="harness-injection" data-source={block.source}>
-      <div
+    <section
+      className="min-w-0 max-w-full"
+      data-slot="harness-injection"
+      data-source={block.source}
+    >
+      <Button
+        variant="ghost"
+        aria-label={`Injection ${label}${triggerLabel ? ` ${triggerLabel}` : ''}`}
+        aria-expanded={expanded}
+        onClick={() => setExpanded(!expanded)}
+        type="button"
         className={cn(
-          'flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground',
-          compact ? 'text-xs' : 'text-sm font-medium',
+          'h-auto min-h-7 w-full min-w-0 justify-start gap-2 rounded-sm px-1 py-1 text-left text-muted-foreground',
+          compact ? 'pr-7 text-xs' : 'text-sm font-medium',
         )}
       >
         <SyringeIcon
           aria-hidden="true"
           className={compact ? 'size-3.5 shrink-0' : 'size-4 shrink-0'}
         />
-        <span title={compact ? `${vocab.product} gave the agent` : undefined}>
-          {compact ? label : `${vocab.product} gave the agent: ${label}`}
-        </span>
-        <button
-          aria-expanded={expanded}
-          className="text-xs font-medium text-primary underline-offset-2 hover:text-primary/80 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          onClick={() => setExpanded(!expanded)}
-          type="button"
-        >
-          {expanded ? 'Hide' : 'Show what it got'}
-        </button>
-        <button
-          className="text-xs font-medium text-primary hover:underline"
-          onClick={() => setDetailsOpen(true)}
-          type="button"
-        >
-          Open exact details
-        </button>
-      </div>
+        <span className="shrink-0 text-xs font-normal">Injection</span>
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        {triggerLabel ? <span className="shrink-0 text-xs font-normal">{triggerLabel}</span> : null}
+        <ChevronRightIcon
+          aria-hidden="true"
+          className={cn('size-3 shrink-0 transition-transform', expanded && 'rotate-90')}
+        />
+      </Button>
       {expanded ? (
-        <pre className="mt-2 min-w-0 max-w-full whitespace-pre-wrap break-words rounded-md bg-muted p-2 text-xs leading-5">
-          {block.text}
-        </pre>
+        <div>
+          <pre className="mt-2 min-w-0 max-w-full whitespace-pre-wrap break-words rounded-md bg-muted p-2 text-xs leading-5">
+            {block.text}
+          </pre>
+          <button
+            className="mt-1 text-xs text-primary hover:underline"
+            onClick={() => setDetailsOpen(true)}
+            type="button"
+          >
+            Open exact details
+          </button>
+        </div>
       ) : null}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="flex max-h-[88dvh] flex-col sm:max-w-3xl">

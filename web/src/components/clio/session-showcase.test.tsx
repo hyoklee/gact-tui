@@ -147,6 +147,7 @@ describe('session showcase inventory', () => {
       ],
     });
     expect(screen.queryByText('Saved report')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Tool calls,/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Technical details for/ }));
     const dialog = screen.getByRole('dialog');
     expect(await within(dialog).findByText(/Saved report/)).toBeVisible();

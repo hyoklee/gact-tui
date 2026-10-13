@@ -18,6 +18,7 @@ import {
   WrenchIcon,
 } from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
+import { useEvidenceSections } from '@/hooks/use-evidence-disclosures';
 import { formatBytes, formatDuration } from '@/lib/format';
 import { fileFormatLabel } from '@/lib/media-types';
 import { artifactDisplayName, isDashboardArtifact } from '@/lib/dashboard-presentation';
@@ -69,22 +70,19 @@ export function SessionEvidenceSummary({
   backgroundProcesses: readonly AsyncProcess[];
 }) {
   const activityCount = taskActivity(backgroundProcesses, subagents).length;
+  const sections = useEvidenceSections('evidence-summary', [
+    'runs',
+    'tasks',
+    'child-agents',
+    'background',
+    'files',
+    'changes',
+    'artifacts',
+    'plans',
+    'sources',
+  ]);
   return (
-    <Accordion
-      type="multiple"
-      defaultValue={[
-        'runs',
-        'tasks',
-        'tools',
-        'child-agents',
-        'background',
-        'files',
-        'changes',
-        'artifacts',
-        'plans',
-        'sources',
-      ]}
-    >
+    <Accordion type="multiple" {...sections}>
       {runs.length ? (
         <EvidenceSection
           compact
@@ -173,7 +171,7 @@ export function SessionEvidenceSummary({
               icon={<FileTextIcon />}
               label={file.displayPath}
               metadata={file.size === undefined ? undefined : formatBytes(file.size)}
-              title={[file.path, ...file.facts].join(' · ')}
+              title={[file.path, ...file.facts].join(' — ')}
               onOpen={actions.onOpenFile ? () => actions.onOpenFile?.(file.path) : undefined}
             />
           ))}
@@ -218,7 +216,7 @@ export function SessionEvidenceSummary({
                 artifact.size === undefined ? undefined : formatBytes(artifact.size),
               ]
                 .filter(Boolean)
-                .join(' · ')}
+                .join(' — ')}
               timestamp={artifact.created_at}
               timestampLabel="Created"
               onOpen={actions.onOpenArtifact ? () => actions.onOpenArtifact?.(artifact) : undefined}

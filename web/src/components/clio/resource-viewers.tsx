@@ -21,7 +21,7 @@ import {
   CodeBlockHeader,
   CodeBlockTitle,
 } from '@/components/ai-elements/code-block';
-import { MessageResponse } from '@/components/ai-elements/message';
+import { ContentMarkdown } from './content-markdown';
 import { DOCUMENT_MARKDOWN_CLASS_NAME, normalizeConvertedMarkdown } from '@/lib/document-markdown';
 import {
   Empty,
@@ -316,9 +316,9 @@ export function ArtifactView({
         <HtmlFilePreview name={artifact.name} content={text.data.content} />
       ) : isMarkdownArtifact(artifact.media_type, artifact.name) ? (
         <article className="min-w-0 overflow-hidden rounded-lg border bg-background px-5 py-4">
-          <MessageResponse className={DOCUMENT_MARKDOWN_CLASS_NAME}>
+          <ContentMarkdown className={DOCUMENT_MARKDOWN_CLASS_NAME}>
             {normalizeConvertedMarkdown(text.data.content)}
-          </MessageResponse>
+          </ContentMarkdown>
         </article>
       ) : isCsvPath(artifact.name) || artifact.media_type === 'text/csv' ? (
         <ClioCsvView content={text.data.content} title={artifact.name} />

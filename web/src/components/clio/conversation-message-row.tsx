@@ -45,7 +45,7 @@ import { messageToolCallCounts } from './message-tool-call-counts';
 import { ConversationModelCheckpoint } from './conversation-model-boundary';
 import { modelBoundariesEqual } from './conversation-model-boundaries';
 import { ConversationForkCheckpoint } from './conversation-fork-checkpoint';
-import { HarnessInjection } from './conversation-harness-injection';
+import { ClioSubagentProgressLine } from './subagent-card';
 
 export const ConversationMessageRow = memo(function ConversationMessageRow({
   message,
@@ -60,7 +60,12 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
   messageCompactions,
   modelBoundary,
   feedbackMessages,
+  injectionMessages,
+  injectionsGrouped = false,
   active = false,
+  responseContinued = false,
+  responseContinuation = false,
+  turnPresentation,
   ...entities
 }: ConversationMessageRowProps) {
   useAttentionEvidenceTarget(
@@ -89,8 +94,19 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
     entities.tasks,
     entities.subagents,
     feedbackMessages,
+    injectionMessages,
+    turnPresentation,
   );
   const { linkedSubagentIds, residualBlocks } = turn;
+  const childIds = [
+    ...linkedSubagentIds,
+    ...message.blocks.flatMap((block) => (block.type === 'subagent' ? [block.subagent_id] : [])),
+  ];
+  const pendingChildIds = [...new Set(childIds)].filter((id) => {
+    const child = entities.subagents[id];
+    return child && !['completed', 'failed', 'cancelled', 'interrupted'].includes(child.state);
+  });
+  const awaitingChild = pendingChildIds.length > 0;
   const visibleResidualBlocks = residualBlocks.filter(
     (block) => block.type !== 'subagent' || !linkedSubagentIds.has(block.subagent_id),
   );
@@ -172,16 +188,18 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
           onMark={(marked) => entities.onMarkMessage!(message.id, marked)}
         />
       ) : null}
-      {message.role === 'assistant' ? <ClioMessageHistoryActions
-        forking={entities.forkingMessageId === message.id}
-        onFork={
-          entities.onForkFromMessage ? () => entities.onForkFromMessage?.(message.id) : undefined
-        }
-        onRewind={
-          entities.onRewindToMessage ? () => entities.onRewindToMessage?.(message.id) : undefined
-        }
-        rewinding={entities.rewindingMessageId === message.id}
-      /> : null}
+      {message.role === 'assistant' ? (
+        <ClioMessageHistoryActions
+          forking={entities.forkingMessageId === message.id}
+          onFork={
+            entities.onForkFromMessage ? () => entities.onForkFromMessage?.(message.id) : undefined
+          }
+          onRewind={
+            entities.onRewindToMessage ? () => entities.onRewindToMessage?.(message.id) : undefined
+          }
+          rewinding={entities.rewindingMessageId === message.id}
+        />
+      ) : null}
       <MessageAction
         label="Copy message"
         onClick={() =>
@@ -199,11 +217,35 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
     </MessageActions>
   );
 
+  if (
+    injectionsGrouped ||
+    (responseContinuation && turnPresentation?.segments.length === 0 && !message.error_info)
+  ) {
+    return (
+      <div
+        data-index={index}
+        data-message-id={message.id}
+        data-response-continuation={responseContinuation || undefined}
+        data-session-id={message.session_id}
+        id={`message-${message.id}`}
+        ref={measureElement}
+        className={virtualized ? 'absolute left-0 top-0 h-0 w-full' : 'h-0'}
+        style={virtualized ? { transform: `translateY(${start ?? 0}px)` } : undefined}
+      />
+    );
+  }
+
   return (
     <div
-      className={`${virtualized ? 'absolute left-0 top-0' : 'relative'} w-full px-5 pb-3 pt-1 outline-none target:rounded-xl target:ring-2 target:ring-primary/50 lg:px-8`}
+      className={cn(
+        virtualized ? 'absolute left-0 top-0' : 'relative',
+        'w-full px-5 outline-none target:rounded-xl target:ring-2 target:ring-primary/50 lg:px-8',
+        responseContinued ? 'pb-0' : 'pb-3',
+        responseContinuation ? 'pt-0' : 'pt-1',
+      )}
       data-index={index}
       data-message-id={message.id}
+      data-response-continuation={responseContinuation || undefined}
       data-selection-surface={message.role === 'assistant' ? 'agent-answer' : undefined}
       data-session-id={message.session_id}
       id={`message-${message.id}`}
@@ -218,194 +260,221 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
         />
       ) : null}
       {modelBoundary ? <ConversationModelCheckpoint boundary={modelBoundary} /> : null}
-      {message.role === 'system' && message.blocks.length > 0 &&
-        message.blocks.every((block) => block.type === 'injection') ? (
+      {message.role === 'system' &&
+      message.blocks.length > 0 &&
+      message.blocks.every((block) => block.type === 'injection') ? (
         <div className="py-1">
-          {message.blocks.map((block) => block.type === 'injection' ? (
-            <HarnessInjection block={block} key={block.id} />
-          ) : null)}
+          <ConversationTurn
+            iterations={turn.iterations}
+            mode={displayMode}
+            subagents={entities.subagents}
+            messageSessionId={message.session_id}
+          />
         </div>
-      ) : <m.div
-        animate={{ opacity: 1 }}
-        initial={{ opacity: recent ? 0 : 1 }}
-        transition={{ duration: 0.16 }}
-      >
-        <Message from={message.role === 'unknown' ? 'system' : message.role}>
-          <div className="mb-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            {message.role === 'user' ? (
-              <UserIcon aria-hidden="true" className="size-3.5" />
-            ) : (
-              <BotIcon aria-hidden="true" className="size-3.5 text-primary" />
-            )}
-            <span>
-              {message.role === 'user'
-                ? 'You'
-                : message.role === 'assistant'
-                  ? brand.name
-                  : message.role === 'system'
-                    ? 'System'
-                    : 'Unknown sender'}
-            </span>
-            {entities.markedMessageIds?.has(message.id) ? (
-              <BookmarkIcon
-                aria-label="Marked message"
-                className="size-3 text-muted-foreground"
-                fill="currentColor"
-              />
-            ) : null}
-            {message.role !== 'assistant' ? (
-              <time className="font-mono text-[0.625rem]" dateTime={message.created_at}>
-                {new Date(message.created_at).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </time>
-            ) : null}
-            {executionMode === 'plan' ? (
-              <Badge aria-label="Sent in Plan mode" variant="outline">
-                <MapIcon aria-hidden="true" data-icon="inline-start" />
-                Plan
-              </Badge>
-            ) : executionMode === 'deep_research' ? (
-              <Badge aria-label="Sent in Deep research mode" variant="outline">
-                <Globe2Icon aria-hidden="true" data-icon="inline-start" />
-                Deep research
-              </Badge>
-            ) : null}
-            {message.role !== 'assistant' ? actions : null}
-          </div>
-          <MessageContent
-            className={cn(
-              message.role === 'assistant' && 'w-full',
-              pendingSteer &&
-                'rounded-xl border border-dashed border-primary/60 bg-primary/[0.025] transition-[border-color,background-color] duration-150',
-            )}
-          >
-            {message.blocks.length === 0 && message.role === 'assistant' ? (
-              <Alert
-                className={cn(emptyResponseWasClientCancelled && 'w-fit')}
-                variant="destructive"
+      ) : (
+        <m.div
+          animate={{ opacity: 1 }}
+          initial={{ opacity: recent ? 0 : 1 }}
+          transition={{ duration: 0.16 }}
+        >
+          <Message from={message.role === 'unknown' ? 'system' : message.role}>
+            {!responseContinuation ? (
+              <div
+                className="mb-1 flex items-center gap-2 text-xs font-medium text-muted-foreground"
+                data-slot="conversation-message-sender"
               >
-                <AlertTriangleIcon aria-hidden="true" />
-                <AlertTitle className={cn(emptyResponseWasClientCancelled && 'whitespace-nowrap')}>
-                  {emptyResponseWasClientCancelled
-                    ? 'Response cancelled'
-                    : emptyResponseErrorCode === 'server_restart_interrupted'
-                      ? 'Response interrupted'
-                      : 'Response unavailable'}
-                </AlertTitle>
-                {!emptyResponseWasClientCancelled ? (
-                  <AlertDescription>
-                    {emptyResponseErrorMessage ??
-                      'No response content was recorded for this turn. You can retry the response.'}
-                    {signInProvider ? (
-                      <TurnProviderSignIn
-                        providerId={signInProvider.id}
-                        providerLabel={signInProvider.label}
-                      />
-                    ) : null}
-                  </AlertDescription>
+                {message.role === 'user' ? (
+                  <UserIcon aria-hidden="true" className="size-3.5" />
+                ) : (
+                  <BotIcon aria-hidden="true" className="size-3.5 text-primary" />
+                )}
+                <span>
+                  {message.role === 'user'
+                    ? 'You'
+                    : message.role === 'assistant'
+                      ? brand.name
+                      : message.role === 'system'
+                        ? 'System'
+                        : 'Unknown sender'}
+                </span>
+                {entities.markedMessageIds?.has(message.id) ? (
+                  <BookmarkIcon
+                    aria-label="Marked message"
+                    className="size-3 text-muted-foreground"
+                    fill="currentColor"
+                  />
                 ) : null}
-              </Alert>
-            ) : message.role === 'assistant' &&
-              (turn.iterations.length > 0 || Boolean(feedbackMessages?.length)) ? (
-              <>
-                {turn.segments
-                  .filter(
-                    (segment) =>
-                      segment.kind !== 'block' ||
-                      segment.block.type !== 'subagent' ||
-                      !linkedSubagentIds.has(segment.block.subagent_id),
-                  )
-                  .map((segment) =>
-                    segment.kind === 'feedback' ? (
-                      <ConversationMessageRow
-                        {...entities}
-                        key={segment.message.id}
-                        message={segment.message}
-                        index={-1}
-                        recent={false}
-                        displayMode={displayMode}
-                        onDisplayModeChange={onDisplayModeChange}
-                      />
-                    ) : segment.kind === 'block' ? (
-                      <MessageBlockSequence
-                        blocks={[segment.block]}
-                        key={segment.block.id}
-                        messageId={message.id}
-                        messageAttentionIndex={messageAttentionIndex}
-                        messageSessionId={message.session_id}
-                        {...entities}
-                      />
-                    ) : (
-                      <div key={segment.iterations[0]?.id}>
-                        <ConversationTurn
-                          activeMcpAppId={entities.activeMcpAppId}
-                          answerStarted={answerStarted}
-                          artifacts={entities.artifacts}
-                          interactions={entities.interactions}
-                          iterations={segment.iterations}
-                          mcpAppRepository={entities.mcpAppRepository}
+                {message.role !== 'assistant' ? (
+                  <time className="font-mono text-[0.625rem]" dateTime={message.created_at}>
+                    {new Date(message.created_at).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </time>
+                ) : null}
+                {executionMode === 'plan' ? (
+                  <Badge aria-label="Sent in Plan mode" variant="outline">
+                    <MapIcon aria-hidden="true" data-icon="inline-start" />
+                    Plan
+                  </Badge>
+                ) : executionMode === 'deep_research' ? (
+                  <Badge aria-label="Sent in Deep research mode" variant="outline">
+                    <Globe2Icon aria-hidden="true" data-icon="inline-start" />
+                    Deep research
+                  </Badge>
+                ) : null}
+                {message.role !== 'assistant' ? actions : null}
+              </div>
+            ) : null}
+            <MessageContent
+              className={cn(
+                message.role === 'assistant' && 'w-full',
+                pendingSteer &&
+                  'rounded-xl border border-dashed border-primary/60 bg-primary/[0.025] transition-[border-color,background-color] duration-150',
+              )}
+            >
+              {message.blocks.length === 0 &&
+              message.role === 'assistant' &&
+              !injectionMessages?.length ? (
+                <Alert
+                  className={cn(emptyResponseWasClientCancelled && 'w-fit')}
+                  variant="destructive"
+                >
+                  <AlertTriangleIcon aria-hidden="true" />
+                  <AlertTitle
+                    className={cn(emptyResponseWasClientCancelled && 'whitespace-nowrap')}
+                  >
+                    {emptyResponseWasClientCancelled
+                      ? 'Response cancelled'
+                      : emptyResponseErrorCode === 'server_restart_interrupted'
+                        ? 'Response interrupted'
+                        : 'Response unavailable'}
+                  </AlertTitle>
+                  {!emptyResponseWasClientCancelled ? (
+                    <AlertDescription>
+                      {emptyResponseErrorMessage ??
+                        'No response content was recorded for this turn. You can retry the response.'}
+                      {signInProvider ? (
+                        <TurnProviderSignIn
+                          providerId={signInProvider.id}
+                          providerLabel={signInProvider.label}
+                        />
+                      ) : null}
+                    </AlertDescription>
+                  ) : null}
+                </Alert>
+              ) : message.role === 'assistant' &&
+                (turnPresentation ||
+                  turn.iterations.length > 0 ||
+                  Boolean(feedbackMessages?.length)) ? (
+                <>
+                  {turn.segments
+                    .filter(
+                      (segment) =>
+                        segment.kind !== 'block' ||
+                        segment.block.type !== 'subagent' ||
+                        !linkedSubagentIds.has(segment.block.subagent_id),
+                    )
+                    .map((segment) =>
+                      segment.kind === 'feedback' ? (
+                        <ConversationMessageRow
+                          {...entities}
+                          key={segment.message.id}
+                          message={segment.message}
+                          index={-1}
+                          recent={false}
+                          displayMode={displayMode}
+                          onDisplayModeChange={onDisplayModeChange}
+                        />
+                      ) : segment.kind === 'block' ? (
+                        <MessageBlockSequence
+                          blocks={[segment.block]}
+                          key={segment.block.id}
+                          messageId={message.id}
                           messageAttentionIndex={messageAttentionIndex}
                           messageSessionId={message.session_id}
-                          mode={displayMode}
-                          onOpenSubagent={entities.onOpenSubagent}
-                          onOpenArtifact={entities.onOpenArtifact}
-                          onInteractionResponse={entities.onInteractionResponse}
-                          subagents={entities.subagents}
+                          {...entities}
                         />
-                      </div>
-                    ),
-                  )}
-                <VariantRunsForMessage message={message} />
-              </>
-            ) : (
-              <>
-                <VariantRunsForMessage message={message} />
-                <MessageBlockSequence
-                  blocks={message.blocks}
-                  messageId={message.id}
-                  messageAttentionIndex={messageAttentionIndex}
-                  messageSessionId={message.session_id}
-                  resourcesFirst={message.role === 'user'}
-                  compactReferences={message.role === 'user'}
-                  {...entities}
-                />
-              </>
-            )}
-            {messageCompactions?.map((compaction) => (
-              <ClioCompactionProgress compaction={compaction} key={compaction.compaction_id} />
-            ))}
+                      ) : (
+                        <div key={segment.iterations[0]?.id}>
+                          <ConversationTurn
+                            activeMcpAppId={entities.activeMcpAppId}
+                            answerStarted={answerStarted}
+                            artifacts={entities.artifacts}
+                            interactions={entities.interactions}
+                            iterations={segment.iterations}
+                            mcpAppRepository={entities.mcpAppRepository}
+                            messageAttentionIndex={messageAttentionIndex}
+                            messageSessionId={message.session_id}
+                            mode={displayMode}
+                            onOpenSubagent={entities.onOpenSubagent}
+                            onOpenArtifact={entities.onOpenArtifact}
+                            onInteractionResponse={entities.onInteractionResponse}
+                            subagents={entities.subagents}
+                          />
+                        </div>
+                      ),
+                    )}
+                  <VariantRunsForMessage message={message} />
+                </>
+              ) : (
+                <>
+                  <VariantRunsForMessage message={message} />
+                  <MessageBlockSequence
+                    blocks={message.blocks}
+                    messageId={message.id}
+                    messageAttentionIndex={messageAttentionIndex}
+                    messageSessionId={message.session_id}
+                    resourcesFirst={message.role === 'user'}
+                    compactReferences={message.role === 'user'}
+                    {...entities}
+                  />
+                </>
+              )}
+              {messageCompactions?.map((compaction) => (
+                <ClioCompactionProgress compaction={compaction} key={compaction.compaction_id} />
+              ))}
+              {message.role === 'assistant' &&
+              message.blocks.length > 0 &&
+              emptyResponseErrorMessage &&
+              !emptyResponseWasClientCancelled &&
+              !message.blocks.some((block) => block.type === 'error') ? (
+                <Alert variant="destructive" className="mt-3">
+                  <AlertTriangleIcon aria-hidden="true" />
+                  <AlertTitle>Work interrupted</AlertTitle>
+                  <AlertDescription>{emptyResponseErrorMessage}</AlertDescription>
+                </Alert>
+              ) : null}
+            </MessageContent>
             {message.role === 'assistant' &&
-            message.blocks.length > 0 &&
-            emptyResponseErrorMessage &&
-            !emptyResponseWasClientCancelled &&
-            !message.blocks.some((block) => block.type === 'error') ? (
-              <Alert variant="destructive" className="mt-3">
-                <AlertTriangleIcon aria-hidden="true" />
-                <AlertTitle>Work interrupted</AlertTitle>
-                <AlertDescription>{emptyResponseErrorMessage}</AlertDescription>
-              </Alert>
+            message.blocks.some((block) => block.type === 'text' && block.text.trim())
+              ? pendingChildIds.map((id) => (
+                  <ClioSubagentProgressLine
+                    key={id}
+                    subagent={entities.subagents[id]}
+                    onOpen={entities.onOpenSubagent}
+                  />
+                ))
+              : null}
+            {message.role === 'assistant' ? (
+              <MessageCompletionFooter
+                active={active || awaitingChild || responseContinued}
+                message={message}
+                {...messageToolCallCounts(message, entities.tools)}
+              >
+                {actions}
+              </MessageCompletionFooter>
             ) : null}
-          </MessageContent>
-          {message.role === 'assistant' ? (
-            <MessageCompletionFooter
-              active={active}
-              message={message}
-              {...messageToolCallCounts(message, entities.tools)}
-            >
-              {actions}
-            </MessageCompletionFooter>
-          ) : null}
-          {message.role === 'assistant' &&
-          canRetry &&
-          !active &&
-          !message.completed_at &&
-          !message.stop_reason ? (
-            <div className="mt-3">{actions}</div>
-          ) : null}
-        </Message>
-      </m.div>}
+            {message.role === 'assistant' &&
+            canRetry &&
+            !active &&
+            !message.completed_at &&
+            !message.stop_reason ? (
+              <div className="mt-3">{actions}</div>
+            ) : null}
+          </Message>
+        </m.div>
+      )}
       {entities.forkOrigin?.message_id === message.id ? (
         <ConversationForkCheckpoint
           origin={entities.forkOrigin}
@@ -491,7 +560,14 @@ export function conversationMessageRowPropsEqual(
   if (
     left.message !== right.message ||
     left.active !== right.active ||
+    left.responseContinued !== right.responseContinued ||
+    left.responseContinuation !== right.responseContinuation ||
+    left.turnPresentation !== right.turnPresentation ||
+    (Boolean(left.turnPresentation) &&
+      (left.subagents !== right.subagents || left.interactions !== right.interactions)) ||
     left.feedbackMessages !== right.feedbackMessages ||
+    left.injectionMessages !== right.injectionMessages ||
+    left.injectionsGrouped !== right.injectionsGrouped ||
     left.displayMode !== right.displayMode ||
     left.index !== right.index ||
     left.start !== right.start ||

@@ -91,12 +91,14 @@ export function conversationTurnPresentation(
   tools: Record<string, ToolInvocation>,
   tasks: Record<string, Task> = {},
   feedback: readonly Message[] = [],
+  injections: readonly Message[] = [],
 ): ConversationTurnPresentation {
   const { iterations, compactionRecords, consumed, segments } = fallbackIterations(
     message,
     tools,
     tasks,
     feedback,
+    injections,
   );
   return {
     iterations,
@@ -111,6 +113,7 @@ function fallbackIterations(
   tools: Record<string, ToolInvocation>,
   tasks: Record<string, Task>,
   feedback: readonly Message[],
+  injections: readonly Message[],
 ): {
   iterations: ConversationIteration[];
   compactionRecords: ConversationTurnCompactionRecord[];
@@ -122,9 +125,15 @@ function fallbackIterations(
   const consumed = new Set<string>();
   const segments: ConversationTurnSegment[] = [];
   const indexed = message.blocks.map((block, position) => ({ block, position }));
-  const ordered = indexed.some(({ block }) => block.sequence === undefined)
+  const messageParts = indexed.some(({ block }) => block.sequence === undefined)
     ? indexed
     : indexed.sort((left, right) => (left.block.sequence ?? 0) - (right.block.sequence ?? 0));
+  // Standalone harness entries precede this response. Their local sequence values
+  // must not be sorted against sequence values from a different message.
+  const ordered = [
+    ...injections.flatMap((entry) => entry.blocks.map((block, position) => ({ block, position }))),
+    ...messageParts,
+  ];
   let current = emptyIteration(message, iterations.length);
   let publicThought: string | undefined;
 
@@ -168,20 +177,20 @@ function fallbackIterations(
     previousPartId = block.id;
     // Transport-only instructions have no visible boundary to split.
     if (block.type === 'injection' && (block.source === 'tool_use' || block.variants_id)) continue;
-    if (
-      (block.type === 'injection' && block.source === 'summarization') ||
-      (block.type === 'notice' && block.source === 'compaction_failed')
-    ) {
+    if (block.type === 'notice' && block.source === 'compaction_failed') {
       flush();
       compactionRecords.push({ afterIteration: iterations.length, block });
       consumed.add(block.id);
       segments.push({ kind: 'block', block });
       continue;
     }
-    // Tool-scoped harness additions belong to the activity lane at their
-    // recorded position. The call identity is authoritative even while the
-    // invocation has not arrived; turn-wide reminders remain visible boundaries.
-    if (block.type === 'injection' && block.call_id?.trim()) {
+    // Harness additions belong to the same activity lane as thinking and tools,
+    // including reminders and delivered results without an owning tool call.
+    if (block.type === 'injection') {
+      if (block.source === 'summarization') {
+        flush();
+        compactionRecords.push({ afterIteration: iterations.length, block });
+      }
       if (!alreadyInLane(current, 'injection', block.id)) {
         current.activity.push({ kind: 'injection', id: block.id, block });
       }
@@ -403,7 +412,7 @@ function compactSentence(value: string): string {
   // Some providers emit consecutive summary headings without whitespace. Keep
   // their boundaries readable without rewriting the stored reasoning text.
   const plain = value
-    .replace(/(\*\*|__)\s*\1/gu, '$1 · $1')
+    .replace(/(\*\*|__)\s*\1/gu, '$1 $1')
     .replace(/(\*\*|__|`)/gu, '')
     .replace(/^\s*#{1,6}\s+/gmu, '');
   const line = plain.replace(/\s+/gu, ' ').trim();

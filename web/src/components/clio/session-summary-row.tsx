@@ -40,7 +40,7 @@ export function SessionSummaryRow({
       {timestamp ? <ClioRelativeTime timestamp={timestamp} label={timestampLabel} compact /> : null}
     </>
   );
-  const description = title ?? [label, metadata].filter(Boolean).join(' · ');
+  const description = title ?? [label, metadata].filter(Boolean).join(' — ');
   if (onOpen)
     return (
       <Button
