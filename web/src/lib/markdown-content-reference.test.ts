@@ -6,6 +6,12 @@ import {
 } from './markdown-content-reference';
 
 describe('Markdown content references', () => {
+  it('leaves a malformed Unicode reference unavailable without crashing the transcript', () => {
+    const tree = { type: 'link', url: 'workspace-file:/data/\ud800.md' };
+    expect(() => remarkContentReferences()(tree)).not.toThrow();
+    expect(tree.url).toBe(CONTENT_REFERENCE_PATH);
+    expect(parseMarkdownContentReference('')).toBeUndefined();
+  });
   it('retains resource identity and an explicit workspace binding', () => {
     expect(parseMarkdownContentReference('resource://w/res_doc')).toEqual({
       kind: 'resource',

@@ -54,7 +54,12 @@ export function remarkContentReferences() {
   return (tree: MarkdownNode) => {
     const visit = (node: MarkdownNode) => {
       if (node.type === 'link' && node.url && isMarkdownContentReference(node.url)) {
-        node.url = `${CONTENT_REFERENCE_PATH}${encodeURIComponent(node.url)}`;
+        try {
+          node.url = `${CONTENT_REFERENCE_PATH}${encodeURIComponent(node.url)}`;
+        } catch {
+          // Malformed Unicode from untrusted prose must not crash the transcript.
+          node.url = CONTENT_REFERENCE_PATH;
+        }
       }
       node.children?.forEach(visit);
     };
