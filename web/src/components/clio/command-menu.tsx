@@ -375,7 +375,7 @@ export function ClioCommandMenu({
                     <CommandItem
                       key={artifact.id}
                       onSelect={() => openResource({ kind: 'artifact', artifact })}
-                        value={`artifact:${artifact.id}`}
+                      value={`artifact:${artifact.id}`}
                     >
                       <BoxIcon aria-hidden="true" />
                       <span className="min-w-0 flex-1 truncate">
