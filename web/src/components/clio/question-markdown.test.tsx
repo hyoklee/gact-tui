@@ -12,7 +12,7 @@ it('renders emphasis, code, math and navigable links in question text', async ()
       }
     </QuestionMarkdown>,
   );
-  expect(await screen.findByText('control')).toHaveProperty('tagName', 'STRONG');
+  expect(await screen.findByText('control')).toHaveAttribute('data-streamdown', 'strong');
   expect(screen.getByText('leaf_area')).toHaveProperty('tagName', 'CODE');
   expect(await screen.findByRole('link', { name: 'the guide' })).toHaveAttribute(
     'href',
