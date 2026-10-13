@@ -44,7 +44,9 @@ export function InlineQuestionCard({
   const options = interaction.payload?.options ?? [];
   const multi = interaction.payload?.question_kind === 'multi_choice';
   const canAnswer = (interaction.actions ?? []).includes('answer');
-  const canCancel = (interaction.actions ?? []).includes('cancel');
+  // Task cancellation belongs to Work's identifying confirmation, not dismissal.
+  const canCancel =
+    !interaction.payload?.task_handle && (interaction.actions ?? []).includes('cancel');
   const allowsOther = options.length === 0 || interaction.payload?.allow_freeform === true;
   const answeringHere = answerState?.answeringId === interaction.id;
   const disabled = responding || !canAnswer;

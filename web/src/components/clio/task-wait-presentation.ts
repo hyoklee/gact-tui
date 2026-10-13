@@ -67,7 +67,11 @@ export function withTaskWaitPresentation(tool: ToolInvocation): ToolInvocation {
   ];
   const mode = args?.return_when === 'any' ? 'any' : 'all';
   const poll = args?.timeout_s === 0;
-  const action = `${poll ? 'Check' : 'Wait for'} ${mode} ${mode === 'any' ? 'task' : 'tasks'}`;
+  const activeSummary = tool.state === 'running' ? tool.presentation?.summary : undefined;
+  const action =
+    !poll && activeSummary?.startsWith('Waiting for ')
+      ? activeSummary
+      : `${poll ? 'Check' : 'Wait for'} ${mode} ${mode === 'any' ? 'task' : 'tasks'}`;
   let policy =
     mode === 'any'
       ? 'Return when any requested task settles.'

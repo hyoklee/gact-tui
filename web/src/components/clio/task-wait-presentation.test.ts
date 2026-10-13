@@ -89,6 +89,27 @@ describe('retained task wait receipts', () => {
     expect(shown.presentation?.blocks.some((block) => block.result_kind)).toBe(false);
   });
 
+  it('uses the authorized active wait label without changing handles or inventing answers', () => {
+    const waiting = {
+      ...tool,
+      state: 'running' as const,
+      output: undefined,
+      input: { tasks: 'question_handle' },
+      presentation: { summary: 'Waiting for your answer', blocks: [] },
+    };
+    const shown = withTaskWaitPresentation(waiting);
+    expect(shown.presentation?.action).toBe('Waiting for your answer');
+    expect(shown.presentation?.summary).toBe('Waiting for your answer');
+    expect(shown.presentation?.blocks[0].text).toBe('question_handle');
+    expect(shown.presentation?.blocks.some((block) => block.result_kind)).toBe(false);
+    expect(shown.input).toBe(waiting.input);
+    expect(shown.output).toBeUndefined();
+    expect(
+      withTaskWaitPresentation({ ...waiting, input: { tasks: 'question_handle', timeout_s: 0 } })
+        .presentation?.action,
+    ).toBe('Check all tasks');
+  });
+
   it('exposes failed work and handle errors', () => {
     const shown = withTaskWaitPresentation({
       ...tool,

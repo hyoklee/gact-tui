@@ -104,7 +104,7 @@ export function QuestionResponse({
         disabled={disabled}
         interaction={interaction}
         onCancel={
-          (interaction.actions ?? []).includes('cancel')
+          !interaction.payload?.task_handle && (interaction.actions ?? []).includes('cancel')
             ? () => respondFromControl(onResponse(interaction, { action: 'cancel' }))
             : undefined
         }
