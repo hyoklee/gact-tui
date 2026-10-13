@@ -293,7 +293,7 @@ export function ClioCommandMenu({
                       onSelect={() =>
                         openRoute(`/workspaces/${session.workspace_id}/sessions/${session.id}`)
                       }
-                      value={`${session.title} ${workspaceNames.get(session.workspace_id) ?? ''}`}
+                      value={`session:${session.id}`}
                     >
                       <MessageSquareTextIcon aria-hidden="true" />
                       <span className="min-w-0 flex-1">
@@ -375,7 +375,7 @@ export function ClioCommandMenu({
                     <CommandItem
                       key={artifact.id}
                       onSelect={() => openResource({ kind: 'artifact', artifact })}
-                      value={`${artifact.name} ${artifact.media_type}`}
+                        value={`artifact:${artifact.id}`}
                     >
                       <BoxIcon aria-hidden="true" />
                       <span className="min-w-0 flex-1 truncate">
