@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { useRepository } from '@/hooks/use-repository';
 import { useSelectionAction } from '@/hooks/use-selection-action';
+import { useAttentionAvailable } from '@/lib/attention-availability';
 import type { SelectionAction, SelectionTarget } from '@/lib/selection-actions';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { AttentionProfileEditor } from './attention-profile-editor';
@@ -39,9 +40,11 @@ export function AttentionLookupPanel({
   onHeatChange?: (data: AttentionAvailable | undefined) => void;
 }) {
   const { settings } = useConnectionSettings();
+  const available = useAttentionAvailable(sessionId);
   // Never persist the credential. Its digest separates authenticated users on one endpoint.
   const identity = bytesToHex(sha256(utf8ToBytes(settings.token ?? '')));
   const scope = `clio:attention-inspector:${JSON.stringify([settings.endpoint, identity, sessionId])}`;
+  if (!available) return null;
   return (
     <ScopedAttentionLookup
       key={scope}
