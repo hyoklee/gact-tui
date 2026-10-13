@@ -67,7 +67,7 @@ export function ClioConversation(props: ClioConversationProps) {
 
 function RoutedConversationBody(props: ClioConversationProps) {
   const location = useLocation();
-  return <ConversationBody {...props} searchHash={location.hash} />;
+  return <ConversationBody {...props} searchHash={location.hash} searchKey={location.key} />;
 }
 
 function ConversationBody({
@@ -78,8 +78,9 @@ function ConversationBody({
   compactions,
   preparation,
   searchHash,
+  searchKey,
   ...entities
-}: ClioConversationProps & { searchHash?: string }) {
+}: ClioConversationProps & { searchHash?: string; searchKey?: string }) {
   const mcpAppResponses = useMemo(
     () => mcpAppResponsesForMessages(sourceMessages),
     [sourceMessages],
@@ -427,6 +428,7 @@ function ConversationBody({
     disengage,
     revealDisclosure,
     searchHash,
+    searchKey,
     setTurnDisplayMode,
   ]);
 
