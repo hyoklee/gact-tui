@@ -36,7 +36,17 @@ it('does not join by matching titles, cross-kind IDs, or ambiguous identities', 
   const different = { ...child, id: 'other', child_session_id: 'other-session' };
   expect(taskActivity([task], [different])).toHaveLength(2);
   expect(taskActivity([{ ...task, kind: 'mcp-task', task_kind: 'MCP' }], [child])).toHaveLength(2);
-  expect(taskActivity([task], [child, { ...child, id: 'ambiguous' }])).toHaveLength(3);
+  expect(
+    taskActivity([task], [child, { ...child, task: 'Conflicting duplicate identity' }]),
+  ).toHaveLength(3);
+});
+
+it('pins an exact assignment even when a successor shares its stable conversation', () => {
+  const successor = { ...child, id: 'successor-run' };
+  const entries = taskActivity([task], [child, successor]);
+  expect(entries).toHaveLength(2);
+  expect(entries[0].subagent).toBe(child);
+  expect(entries[1].subagent).toBe(successor);
 });
 
 it('uses a unique recorded legacy ID only when a child session identity is absent', () => {

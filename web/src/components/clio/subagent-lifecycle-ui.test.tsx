@@ -72,7 +72,7 @@ it('requires confirmation before creating a linked successor', async () => {
   await userEvent.click(screen.getByRole('button', { name: `restart Subagent: ${task.title}` }));
   expect(control).not.toHaveBeenCalled();
   expect(screen.getByRole('alertdialog')).toHaveTextContent(
-    'Accepted operations will not be replayed',
+    'An active assignment is cancelled and settled first. The linked assignment keeps its context. Check uncertain effects before retrying operations.',
   );
   expect(screen.getByRole('alertdialog')).toHaveTextContent(task.title);
   expect(screen.queryByRole('region', { name: 'Task assignment' })).toBeNull();

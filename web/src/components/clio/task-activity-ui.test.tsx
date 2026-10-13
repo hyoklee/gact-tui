@@ -237,5 +237,11 @@ it('retains one navigable durable child row in the full evidence view', async ()
   await userEvent.click(screen.getByRole('button', { name: 'Background tasks, 1 recorded' }));
   await userEvent.click(screen.getByRole('button', { name: 'Task details: Worker #1' }));
   await userEvent.click(screen.getByRole('button', { name: 'Open child conversation Worker #1' }));
-  expect(open).toHaveBeenCalledWith(child, 'conversation');
+  expect(open).toHaveBeenLastCalledWith(child, 'canvas');
+  const user = userEvent.setup();
+  await user.keyboard('{Shift>}');
+  await user.click(screen.getByRole('button', { name: 'Open child conversation Worker #1' }));
+  await user.keyboard('{/Shift}');
+  expect(open).toHaveBeenLastCalledWith(child, 'conversation');
+  expect(open).toHaveBeenCalledTimes(2);
 });

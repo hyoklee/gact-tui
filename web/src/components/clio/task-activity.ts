@@ -15,7 +15,13 @@ export function taskActivity(
   const entries: TaskActivity[] = processes.map((process) => {
     const childTask =
       process.task_kind === 'Subagent' || (!process.task_kind && process.kind === 'agent');
-    const exact = childTask ? subagents.filter((child) => child.id === process.id) : [];
+    const exact = childTask
+      ? subagents.filter(
+          (child) =>
+            child.id === process.id &&
+            (!process.child_session_id || child.child_session_id === process.child_session_id),
+        )
+      : [];
     const sameSession = processes.filter(
       (other) => other.child_session_id === process.child_session_id,
     );
