@@ -105,6 +105,8 @@ export const runStateSchema = forwardCompatibleEnum([
   'running',
   'pause_requested',
   'paused',
+  'yielded',
+  'recovery_required',
   'waiting_permission',
   'waiting_user',
   'completed',

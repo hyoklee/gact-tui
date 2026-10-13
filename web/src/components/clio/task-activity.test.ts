@@ -50,4 +50,12 @@ it('keeps linked runs with distinct handles even when they share a conversation'
     'task_opaque',
     'task_successor',
   ]);
+  expect(taskActivity([task, next], [child])[1].subagent).toBeUndefined();
+});
+
+it('does not attach a child conversation projection to a root assignment', () => {
+  const root = { ...task, task_kind: 'Session' as const };
+  const entries = taskActivity([root], [child]);
+  expect(entries).toHaveLength(2);
+  expect(entries[0].subagent).toBeUndefined();
 });

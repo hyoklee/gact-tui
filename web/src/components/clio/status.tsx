@@ -75,6 +75,16 @@ const statusPresentation: Record<
     icon: PauseCircleIcon,
     className: 'text-muted-foreground border-border bg-muted/50',
   },
+  yielded: {
+    label: 'Yielded',
+    icon: CircleDashedIcon,
+    className: 'text-muted-foreground border-border bg-muted/50',
+  },
+  recovery_required: {
+    label: 'Needs inspection',
+    icon: CircleAlertIcon,
+    className: 'text-warning border-warning/30 bg-warning/10',
+  },
   waiting_permission: {
     label: 'Permission needed',
     icon: ShieldQuestionIcon,

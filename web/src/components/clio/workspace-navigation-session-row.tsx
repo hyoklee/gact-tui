@@ -225,6 +225,8 @@ function sessionStateLabel(state: Session['state']): string {
       running: 'Working now',
       pause_requested: 'Pause requested',
       paused: 'Paused',
+      yielded: 'Assignment waiting for results or messages',
+      recovery_required: 'Inspect work before continuing',
       waiting_permission: 'Waiting for approval',
       waiting_user: 'Waiting for you',
       completed: 'Completed',

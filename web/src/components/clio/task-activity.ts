@@ -13,13 +13,16 @@ export function taskActivity(
 ): TaskActivity[] {
   const represented = new Set<SubagentRun>();
   const entries: TaskActivity[] = processes.map((process) => {
-    const candidates =
-      process.task_kind === 'Subagent' || process.kind === 'agent'
-        ? subagents.filter((child) =>
-            process.child_session_id
-              ? child.child_session_id === process.child_session_id
-              : child.id === process.id,
-          )
+    const childTask =
+      process.task_kind === 'Subagent' || (!process.task_kind && process.kind === 'agent');
+    const exact = childTask ? subagents.filter((child) => child.id === process.id) : [];
+    const sameSession = processes.filter(
+      (other) => other.child_session_id === process.child_session_id,
+    );
+    const candidates = exact.length
+      ? exact
+      : childTask && process.child_session_id && sameSession.length === 1
+        ? subagents.filter((child) => child.child_session_id === process.child_session_id)
         : [];
     const subagent = candidates.length === 1 ? candidates[0] : undefined;
     if (subagent) represented.add(subagent);

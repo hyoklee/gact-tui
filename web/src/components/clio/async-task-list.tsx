@@ -128,7 +128,7 @@ export function AsyncTaskList({
                             key={action}
                             variant="ghost"
                             size="icon"
-                            aria-label={`${action} Subagent: ${task.title}`}
+                            aria-label={`${action} ${kind}: ${task.title}`}
                             title={
                               action === 'pause'
                                 ? 'Pause agent'
@@ -184,7 +184,9 @@ export function AsyncTaskList({
             <AlertDialogTitle>Cancel this task?</AlertDialogTitle>
             <p className="text-sm font-medium [overflow-wrap:anywhere]">{selected?.title}</p>
             <AlertDialogDescription>
-              {selected?.task_kind === 'Subagent' || selected?.kind === 'agent'
+              {selected?.task_kind === 'Subagent' ||
+              selected?.task_kind === 'Session' ||
+              selected?.kind === 'agent'
                 ? 'This also cancels all descendant agents, downloads and shell processes.'
                 : 'Cancellation is requested from its owner and may take time to finish.'}
             </AlertDialogDescription>
@@ -204,11 +206,13 @@ export function AsyncTaskList({
       >
         <AlertDialogContent layer="task-confirmation" className="flex flex-col overflow-hidden">
           <AlertDialogHeader className="shrink-0">
-            <AlertDialogTitle>Restart this subagent?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Restart this {restart?.task_kind === 'Session' ? 'assignment' : 'subagent'}?
+            </AlertDialogTitle>
             <p className="text-sm font-medium [overflow-wrap:anywhere]">{restart?.title}</p>
             <AlertDialogDescription>
-              Create a linked new run with retained context. Accepted operations will not be
-              replayed.
+              An active assignment is cancelled and settled first. The linked assignment keeps its
+              context. Check uncertain effects before retrying operations.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <TaskAssignmentDisclosure assignment={restart?.description || restart?.title} />
@@ -219,7 +223,7 @@ export function AsyncTaskList({
                 if (restart) void control(restart, 'restart');
               }}
             >
-              Restart subagent
+              Restart {restart?.task_kind === 'Session' ? 'assignment' : 'subagent'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

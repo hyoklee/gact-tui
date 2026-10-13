@@ -490,7 +490,10 @@ export interface ContextFrame {
 
 export interface AsyncProcess {
   handle?: string;
-  task_kind?: 'Subagent' | 'MCP' | 'Download' | 'Indexing' | 'Shell';
+  task_kind?: 'Subagent' | 'Session' | 'MCP' | 'Download' | 'Indexing' | 'Shell';
+  activity?: string;
+  recording?: 'confirmed' | 'unconfirmed';
+  result_reference?: Record<string, unknown> | string;
   description?: string;
   description_missing?: boolean;
   effective_status?: string;

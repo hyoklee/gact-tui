@@ -24,13 +24,49 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
-it.each(['MCP', 'Subagent'] as const)(
+it('discloses yielded root assignment and provisional recording without calling it completed', async () => {
+  const task: AsyncProcess = {
+    id: 'root-assignment',
+    handle: 'task_root',
+    kind: 'agent',
+    task_kind: 'Session',
+    title: 'Collect results',
+    description: 'Collect the five scheduled job results.',
+    status: 'running',
+    live_state: 'yielded',
+    effective_status: 'yielded',
+    recording: 'unconfirmed',
+    supported_actions: ['pause', 'cancel'],
+    metadata: {},
+  };
+  const control = vi.fn();
+  render(<AsyncTaskList processes={[task]} onControlTask={control} />);
+  expect(screen.getByText('Session · Yielded')).toBeVisible();
+  expect(
+    screen.queryByText(
+      'The assignment is still open. New messages and task results can continue it.',
+    ),
+  ).toBeNull();
+  await userEvent.click(screen.getByRole('button', { name: 'Task details: Collect results' }));
+  expect(
+    screen.getByText(
+      'The assignment is still open. New messages and task results can continue it.',
+    ),
+  ).toBeVisible();
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'History recording is unconfirmed. Check the task before retrying.',
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'pause Session: Collect results' }));
+  expect(control).toHaveBeenCalledWith(task, 'pause');
+});
+
+it.each(['MCP', 'Subagent', 'Session'] as const)(
   'keeps shared %s controls in the compact Work inventory',
   async (kind) => {
     const task: AsyncProcess = {
       id: 'owned-task',
       handle: 'task_owned',
-      kind: kind === 'Subagent' ? 'agent' : 'mcp-task',
+      kind: kind === 'Subagent' || kind === 'Session' ? 'agent' : 'mcp-task',
       task_kind: kind,
       title: 'Owned work',
       description: 'Inspect the original owned assignment',
@@ -79,7 +115,7 @@ it.each(['MCP', 'Subagent'] as const)(
     expect(screen.getByRole('region', { name: 'Task assignment' })).toHaveTextContent(
       task.description!,
     );
-    if (kind === 'Subagent') {
+    if (kind === 'Subagent' || kind === 'Session') {
       expect(screen.getByRole('alertdialog')).toHaveTextContent(
         'all descendant agents, downloads and shell processes',
       );

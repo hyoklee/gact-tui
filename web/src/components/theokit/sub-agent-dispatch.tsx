@@ -10,6 +10,8 @@ export type SubAgentState =
   | 'running'
   | 'pause_requested'
   | 'paused'
+  | 'yielded'
+  | 'recovery_required'
   | 'completed'
   | 'failed'
   | 'cancelled'
@@ -42,6 +44,11 @@ const STATE_CONFIG: Record<SubAgentState, { label: string; class: string }> = {
     class: 'border-border bg-muted text-muted-foreground',
   },
   paused: { label: 'Paused', class: 'border-border bg-muted text-muted-foreground' },
+  yielded: { label: 'Yielded', class: 'border-border bg-muted text-muted-foreground' },
+  recovery_required: {
+    label: 'Needs inspection',
+    class: 'border-border bg-muted text-muted-foreground',
+  },
   completed: { label: 'Completed', class: 'border-success/40 bg-success/10 text-success' },
   failed: { label: 'Failed', class: 'border-destructive/40 bg-destructive/10 text-destructive' },
   cancelled: { label: 'Cancelled', class: 'border-border bg-muted text-muted-foreground' },

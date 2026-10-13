@@ -4,6 +4,7 @@ import {
   CheckCircle2Icon,
   ChevronRightIcon,
   CircleAlertIcon,
+  CircleDashedIcon,
   LoaderCircleIcon,
   PauseIcon,
   PanelRightOpenIcon,
@@ -34,6 +35,7 @@ export function TaskActivityRow({
   const assignment = task?.description || subagent?.task;
   const progress = taskProgressLabel(task?.progress, kind);
   const held = status === 'paused' || status === 'pause_requested';
+  const yielded = status === 'yielded';
   const running =
     status === 'running' ||
     status === 'working' ||
@@ -41,13 +43,15 @@ export function TaskActivityRow({
     status === 'resume_requested';
   const Icon = held
     ? PauseIcon
-    : running
-      ? LoaderCircleIcon
-      : status === 'completed'
-        ? CheckCircle2Icon
-        : status === 'cancelled'
-          ? BanIcon
-          : CircleAlertIcon;
+    : yielded || status === 'queued'
+      ? CircleDashedIcon
+      : running
+        ? LoaderCircleIcon
+        : status === 'completed'
+          ? CheckCircle2Icon
+          : status === 'cancelled'
+            ? BanIcon
+            : CircleAlertIcon;
   const label = status.replaceAll('_', ' ').replace(/^./u, (letter) => letter.toUpperCase());
   return (
     <Collapsible className="group/task min-w-0 rounded-lg data-[state=open]:bg-muted/35">
@@ -93,6 +97,16 @@ export function TaskActivityRow({
           ) : null}
           {task?.error_reason ? (
             <p className="text-sm text-destructive [overflow-wrap:anywhere]">{task.error_reason}</p>
+          ) : null}
+          {yielded ? (
+            <p className="text-xs text-muted-foreground">
+              The assignment is still open. New messages and task results can continue it.
+            </p>
+          ) : null}
+          {task?.recording === 'unconfirmed' ? (
+            <p role="status" className="text-xs text-muted-foreground">
+              History recording is unconfirmed. Check the task before retrying.
+            </p>
           ) : null}
           {task?.result?.answer_excerpt || subagent?.result ? (
             <div
