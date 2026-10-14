@@ -9,6 +9,7 @@ type Navigation = Pick<
   | 'onOpenArtifact'
   | 'onOpenResource'
   | 'onOpenFile'
+  | 'onOpenFileReference'
   | 'onOpenWork'
   | 'onOpenSubagent'
   | 'onOpenWorkflow'
@@ -16,7 +17,13 @@ type Navigation = Pick<
   Partial<
     Pick<
       ClioConversationProps,
-      'surfaces' | 'tools' | 'workspaceId' | 'messages' | 'interactions' | 'onInteractionResponse'
+      | 'surfaces'
+      | 'tools'
+      | 'workspaceId'
+      | 'sessionId'
+      | 'messages'
+      | 'interactions'
+      | 'onInteractionResponse'
     >
   >;
 export const PresentationNavigation = createContext<Navigation | null>(null);

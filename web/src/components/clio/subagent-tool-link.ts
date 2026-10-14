@@ -35,7 +35,7 @@ export function subagentsForTool(
 }
 
 function isAgentSpawnTool(name: string): boolean {
-  return ['spawn_agent_task', 'spawn_agents_parallel'].includes(name);
+  return ['spawn_agent_task', 'spawn_agents_parallel', 'spawn_skill_task'].includes(name);
 }
 
 function taskIds(value: unknown): Set<string> {

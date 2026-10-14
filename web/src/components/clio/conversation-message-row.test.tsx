@@ -26,6 +26,24 @@ function baseRowProps(): ConversationMessageRowProps {
 }
 
 describe('conversationMessageRowPropsEqual', () => {
+  it('updates a resumed response when its header continuity changes', () => {
+    const base = baseRowProps();
+    expect(conversationMessageRowPropsEqual(base, { ...base, responseContinuation: true })).toBe(
+      false,
+    );
+  });
+  it('updates this message when its mark changes and ignores unrelated marks', () => {
+    const base = baseRowProps();
+    expect(
+      conversationMessageRowPropsEqual(base, { ...base, markedMessageIds: new Set(['message_1']) }),
+    ).toBe(false);
+    expect(
+      conversationMessageRowPropsEqual(base, {
+        ...base,
+        markedMessageIds: new Set(['another_message']),
+      }),
+    ).toBe(true);
+  });
   it('rerenders a changed model boundary but accepts equivalent reconstructed boundaries', () => {
     const base = baseRowProps();
     const modelBoundary = { model: { provider_id: 'codex', model_id: 'gpt-6-luna' } };

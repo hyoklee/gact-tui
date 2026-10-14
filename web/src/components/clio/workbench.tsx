@@ -23,13 +23,13 @@ import {
   WorkflowIcon,
 } from 'lucide-react';
 import { CloseIcon } from '@/lib/icon-vocabulary';
-import { FileTypeIcon } from './file-type-icon';
+import { ArtifactTypeIcon } from './artifact-type-icon';
+import { artifactDisplayName } from '@/lib/dashboard-presentation';
 import {
   forwardRef,
   useCallback,
   useEffect,
   useImperativeHandle,
-  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -55,6 +55,10 @@ import { workflowDescriptor } from './workflow-tool-presentation';
 import { CanvasLauncher, type CanvasResourceKind } from './workbench-resource-browser';
 import { WorkbenchTabContent } from './workbench-tab-content';
 import { assertNever, fileName, loadResourceViewers, type WorkbenchTab } from './workbench-shared';
+import { PresentationNavigation } from './presentation-navigation';
+import { workspaceFilePath } from '@/lib/workspace-file-path';
+import { useLiveStore } from '@/store/live-store';
+import { useWorkbenchTabVisibility } from './use-workbench-tab-visibility';
 
 export interface ClioWorkbenchProps {
   workspaceId: string;
@@ -90,7 +94,8 @@ export interface ClioWorkbenchProps {
 }
 
 export type ClioWorkbenchOpenRequest =
-  | { kind: 'workspace-file'; path: string }
+  | { kind: 'knowledge'; sourceId: string; label: string }
+  | { kind: 'workspace-file'; path: string; workspaceId?: string; line?: number; find?: string }
   | { kind: 'diff'; diff: SessionDiff }
   | { kind: 'artifact'; artifact: ArtifactEntity }
   | {
@@ -140,7 +145,15 @@ function restoredWorkbenchState(
     if (!parsed || typeof parsed !== 'object')
       return { tabs: [defaultTab], activeTabId: defaultTab.id };
     const record = parsed as Record<string, unknown>;
-    const storedTabs = Array.isArray(record.tabs) ? record.tabs.filter(isWorkbenchTab) : [];
+    const storedTabs = Array.isArray(record.tabs)
+      ? record.tabs
+          .filter(isWorkbenchTab)
+          .map((tab) =>
+            tab.kind === 'knowledge'
+              ? { ...tab, label: tab.label.replace(/ · Knowledge$/, '') }
+              : tab,
+          )
+      : [];
     const tabs = storedTabs.length ? storedTabs : [defaultTab];
     const requestedActive = typeof record.activeTabId === 'string' ? record.activeTabId : '';
     return {
@@ -180,6 +193,7 @@ const canvasResourceTabs = {
 } satisfies Record<CanvasResourceKind, WorkbenchTab>;
 
 const workbenchTabIcons = {
+  knowledge: BoxesIcon,
   work: ActivityIcon,
   session: ActivityIcon,
   files: FolderIcon,
@@ -263,17 +277,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
       return () => onFilesViewActiveChange?.(false);
     }, [activeTabId, onFilesViewActiveChange]);
 
-    useLayoutEffect(() => {
-      const strip = tabStripRef.current;
-      const activeTab = activeTabRef.current;
-      if (!strip || !activeTab) return;
-      const left = activeTab.offsetLeft;
-      const right = left + activeTab.offsetWidth;
-      if (left < strip.scrollLeft) strip.scrollTo({ behavior: 'smooth', left });
-      else if (right > strip.scrollLeft + strip.clientWidth) {
-        strip.scrollTo({ behavior: 'smooth', left: right - strip.clientWidth });
-      }
-    }, [activeTabId, tabs.length]);
+    useWorkbenchTabVisibility(tabStripRef, activeTabRef, activeTabId, tabs, maximized);
 
     const openTab = useCallback((tab: WorkbenchTab) => {
       setTabs((current) =>
@@ -313,7 +317,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
       setTabs((current) =>
         current.map((candidate) =>
           candidate.id === tabId && candidate.kind === 'workspace-file'
-            ? { ...candidate, label: fileName(path), path }
+            ? { ...candidate, label: fileName(path), path, line: undefined, find: undefined }
             : candidate,
         ),
       );
@@ -343,17 +347,32 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
     );
 
     const openRequest = useCallback(
-      (request: ClioWorkbenchOpenRequest) => {
+      (request: ClioWorkbenchOpenRequest, targetWorkspaceId: string = workspaceId) => {
         switch (request.kind) {
-          case 'workspace-file':
+          case 'knowledge':
             openTab({
-              id: `workspace-file:${request.path}`,
-              kind: 'workspace-file',
-              label: fileName(request.path),
-              path: request.path,
+              id: `knowledge:${request.sourceId}`,
+              kind: 'knowledge',
+              sourceId: request.sourceId,
+              label: request.label,
               workspaceId,
             });
             return;
+          case 'workspace-file': {
+            targetWorkspaceId = request.workspaceId ?? targetWorkspaceId;
+            const root = useLiveStore.getState().entities.workspaces[targetWorkspaceId]?.path;
+            const path = workspaceFilePath(request.path, root);
+            openTab({
+              id: `workspace-file:${targetWorkspaceId === workspaceId ? '' : `${targetWorkspaceId}:`}${path}`,
+              kind: 'workspace-file',
+              label: fileName(path),
+              path,
+              workspaceId: targetWorkspaceId,
+              line: request.line,
+              find: request.find,
+            });
+            return;
+          }
           case 'diff':
             openTab({
               id: `diff:${sessionId}:${request.diff.path}`,
@@ -368,7 +387,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
             openTab({
               id: `artifact:${request.artifact.id}`,
               kind: 'artifact',
-              label: request.artifact.name,
+              label: artifactDisplayName(request.artifact),
               artifact: request.artifact,
               workspaceId: request.artifact.workspace_id ?? workspaceId,
             });
@@ -459,7 +478,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
             data-slot="canvas-header"
           >
             <div
-              className="no-scrollbar min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
+              className="@container no-scrollbar min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
               ref={tabStripRef}
             >
               <Sortable
@@ -509,7 +528,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
                         value={tab.id}
                       >
                         <div
-                          className="group/canvas-tab relative flex min-w-24 max-w-56 shrink-0"
+                          className="group/canvas-tab relative flex min-w-[min(6rem,100cqw)] max-w-[min(14rem,100cqw)] shrink-0"
                           ref={active ? activeTabRef : undefined}
                         >
                           <SortableItemHandle asChild>
@@ -558,7 +577,11 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
                               value={tab.id}
                             >
                               <TabIcon tab={tab} />
-                              <span className="truncate">{tab.label}</span>
+                              <span className="truncate">
+                                {tab.kind === 'artifact'
+                                  ? artifactDisplayName(tab.artifact)
+                                  : tab.label}
+                              </span>
                             </TabsTrigger>
                           </SortableItemHandle>
                           {/*
@@ -580,7 +603,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
                               event.stopPropagation();
                               closeTab(tab.id);
                             }}
-                            title={`Close ${tab.label}`}
+                            title={`Close ${tab.kind === 'artifact' ? artifactDisplayName(tab.artifact) : tab.label}`}
                           >
                             <CloseIcon aria-hidden="true" className="size-3.5" />
                           </span>
@@ -621,41 +644,64 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
             <TabsContent className="m-0 min-h-0 overflow-hidden" key={tab.id} value={tab.id}>
               {canvasVisible ? (
                 <WorkbenchTabErrorBoundary label={tab.label} onClose={() => closeTab(tab.id)}>
-                  <WorkbenchTabContent
-                    artifacts={artifacts}
-                    artifactsError={artifactsError}
-                    artifactsPending={artifactsPending}
-                    artifactsTruncated={artifactsTruncated}
-                    blueprints={blueprints}
-                    blueprintsError={blueprintsError}
-                    blueprintsPending={blueprintsPending}
-                    diffActionError={diffActionError}
-                    diffActionPending={diffActionPending}
-                    diffs={diffs}
-                    files={files}
-                    filesError={filesError}
-                    filesFetching={filesFetching}
-                    filesPending={filesPending}
-                    filesTruncated={filesTruncated}
-                    filesNextOffset={filesNextOffset}
-                    maximized={maximized}
-                    onApplyDiff={onApplyDiff}
-                    onOpenSubagent={onOpenSubagent}
-                    onOpenTab={openTab}
-                    onRefreshFiles={onRefreshFiles}
-                    onRejectDiff={onRejectDiff}
-                    onReplaceTab={replaceTab}
-                    onSelectFilesPath={selectFilesPath}
-                    onSelectWorkspaceFilePath={selectWorkspaceFilePath}
-                    resources={resources}
-                    resourcesError={resourcesError}
-                    resourcesPending={resourcesPending}
-                    sessionId={sessionId}
-                    sessionView={sessionView}
-                    subagents={subagents}
-                    tab={tab}
-                    workspaceId={workspaceId}
-                  />
+                  <PresentationNavigation.Provider
+                    value={{
+                      workspaceId: 'workspaceId' in tab ? tab.workspaceId : workspaceId,
+                      sessionId,
+                      artifacts: Object.fromEntries(artifacts.map((item) => [item.id, item])),
+                      resources: Object.fromEntries(resources.map((item) => [item.id, item])),
+                      subagents: Object.fromEntries(subagents.map((item) => [item.id, item])),
+                      onOpenFile: (path) =>
+                        openRequest(
+                          { kind: 'workspace-file', path },
+                          'workspaceId' in tab ? tab.workspaceId : workspaceId,
+                        ),
+                      onOpenFileReference: (path, location) =>
+                        openRequest(
+                          { ...location, kind: 'workspace-file', path },
+                          'workspaceId' in tab ? tab.workspaceId : workspaceId,
+                        ),
+                      onOpenArtifact: (artifact) => openRequest({ kind: 'artifact', artifact }),
+                      onOpenResource: (resource) => openRequest({ kind: 'resource', resource }),
+                      onOpenSubagent,
+                    }}
+                  >
+                    <WorkbenchTabContent
+                      artifacts={artifacts}
+                      artifactsError={artifactsError}
+                      artifactsPending={artifactsPending}
+                      artifactsTruncated={artifactsTruncated}
+                      blueprints={blueprints}
+                      blueprintsError={blueprintsError}
+                      blueprintsPending={blueprintsPending}
+                      diffActionError={diffActionError}
+                      diffActionPending={diffActionPending}
+                      diffs={diffs}
+                      files={files}
+                      filesError={filesError}
+                      filesFetching={filesFetching}
+                      filesPending={filesPending}
+                      filesTruncated={filesTruncated}
+                      filesNextOffset={filesNextOffset}
+                      maximized={maximized}
+                      onApplyDiff={onApplyDiff}
+                      onOpenSubagent={onOpenSubagent}
+                      onOpenTab={openTab}
+                      onRefreshFiles={onRefreshFiles}
+                      onRejectDiff={onRejectDiff}
+                      onReplaceTab={replaceTab}
+                      onSelectFilesPath={selectFilesPath}
+                      onSelectWorkspaceFilePath={selectWorkspaceFilePath}
+                      resources={resources}
+                      resourcesError={resourcesError}
+                      resourcesPending={resourcesPending}
+                      sessionId={sessionId}
+                      sessionView={sessionView}
+                      subagents={subagents}
+                      tab={tab}
+                      workspaceId={workspaceId}
+                    />
+                  </PresentationNavigation.Provider>
                 </WorkbenchTabErrorBoundary>
               ) : null}
             </TabsContent>
@@ -707,7 +753,7 @@ function WorkbenchRequestDispatcher({
 
 function TabIcon({ tab }: { tab: WorkbenchTab }) {
   if (tab.kind === 'artifact' && tab.artifact)
-    return <FileTypeIcon name={tab.artifact.name} mediaType={tab.artifact.media_type} />;
+    return <ArtifactTypeIcon artifact={tab.artifact} className="size-3.5" />;
   const Icon = workbenchTabIcons[tab.kind];
   return <Icon aria-hidden="true" className="size-3.5" />;
 }

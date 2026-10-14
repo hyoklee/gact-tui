@@ -241,6 +241,8 @@ function ReferenceMedia({ componentId, kind, label, objectFit, url, variant }: A
         aria-label={label}
         className="w-full rounded-md"
         controls
+        playsInline
+        preload="metadata"
         onError={onError}
         src={state.objectUrl}
       />

@@ -1,4 +1,7 @@
 import gallerySampleUrl from '../../tests/fixtures/gallery-sample.png';
+import guideFindUrl from '../../tests/fixtures/docs-media/docs-message-preview.png';
+import guideMarkUrl from '../../tests/fixtures/docs-media/docs-marked-messages.png';
+import guideExportUrl from '../../tests/fixtures/docs-media/docs-session-export.mp4';
 import type { ArtifactRasterQueryRequest, ArtifactRasterQueryResult, ArtifactTableQueryRequest, ArtifactTableQueryResult } from '@clio/core/v3';
 import type { createRepository } from '@/lib/connection';
 import { galleryStormTracks } from './gallery-storm-tracks';
@@ -7,6 +10,11 @@ import galleryHurricaneTracks from './gallery-hurricane-tracks.json';
 type Repository = ReturnType<typeof createRepository>;
 const BOUNDS = [0, 0, 100, 100] as const;
 const galleryAsset = (name: string) => `${import.meta.env.BASE_URL}${name}`;
+const guideMedia: Record<string, { name: string; media_type: string; size_bytes: number; url: string }> = {
+  artifact_guide_find: { name: 'docs-message-preview.png', media_type: 'image/png', size_bytes: 11188, url: guideFindUrl },
+  artifact_guide_mark: { name: 'docs-marked-messages.png', media_type: 'image/png', size_bytes: 25269, url: guideMarkUrl },
+  artifact_guide_export: { name: 'docs-session-export.mp4', media_type: 'video/mp4', size_bytes: 719141, url: guideExportUrl },
+};
 
 function rasterSample(query: ArtifactRasterQueryRequest): ArtifactRasterQueryResult {
   const width = Math.min(768, Math.max(1, Math.floor(query.width)));
@@ -100,15 +108,25 @@ export function createGalleryRepository(base: Repository): Repository {
         };
       }
       if (property === 'resolveA2uiReference') {
-        return (sessionId: string, uri: string, signal?: AbortSignal) =>
-          uri === 'artifact://artifact_plot'
+        return (sessionId: string, uri: string, signal?: AbortSignal) => {
+          const id = uri.replace(/^artifact:\/\//, '');
+          const media = guideMedia[id];
+          if (media) return Promise.resolve({ uri, kind: 'artifact' as const, workspace_id: 'gallery', ...media, artifact_id: id, fetch_path: media.url });
+          return uri === 'artifact://artifact_plot'
             ? Promise.resolve({ uri, kind: 'artifact' as const, workspace_id: 'gallery',
               name: 'gallery-sample.png', media_type: 'image/png', size_bytes: 53953, artifact_id: 'artifact_plot',
               fetch_path: '/v1/artifacts/artifact_plot/bytes' })
             : target.resolveA2uiReference(sessionId, uri, signal);
+        };
       }
       if (property === 'readA2uiReferenceBytes') {
         return async (resolution: { artifact_id?: string }, signal?: AbortSignal) => {
+          const media = guideMedia[resolution.artifact_id ?? ''];
+          if (media) {
+            const response = await fetch(media.url, { signal });
+            if (!response.ok) throw new Error(`Guide media unavailable (${response.status}).`);
+            return new Uint8Array(await response.arrayBuffer());
+          }
           if (resolution.artifact_id !== 'artifact_plot') {
             return target.readA2uiReferenceBytes(resolution as Parameters<Repository['readA2uiReferenceBytes']>[0], signal);
           }

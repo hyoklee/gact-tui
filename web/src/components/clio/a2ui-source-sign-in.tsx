@@ -90,7 +90,7 @@ export function A2uiSourceSignIn({
         {matches && !owner.isFetching && (!provider || !provider.configured) ? (
           <p role="alert">Sign-in for this provider is unavailable on this {vocab.agent}.</p>
         ) : null}
-        {matches && provider?.configured && !owner.isFetching ? (
+        {matches && provider?.configured && !owner.error ? (
           <ConnectedAccountSignIn
             key={`${scope}:${intent?.clioId}:${provider.id}`}
             provider={provider.id}

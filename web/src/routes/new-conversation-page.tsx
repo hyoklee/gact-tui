@@ -2,7 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import type { WorkspaceReference } from '@clio/core/v3';
 import { toast } from 'sonner';
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { connectionScope } from '@/lib/connection-scope';
+import { ConnectedSourcePicker } from '@/components/clio/connected-source-picker';
+import type { ObsidianChoice } from '@/components/clio/obsidian-source-form';
 import { ClioAppShell } from '@/components/clio/app-shell';
 import { ClioComposer } from '@/components/clio/composer';
 import { ClioConversationWelcome } from '@/components/clio/conversation-welcome';
@@ -47,6 +50,13 @@ export function NewConversationPage() {
 function WorkspaceDraft({ workspaceId }: { workspaceId: string }) {
   const { settings } = useConnectionSettings();
   const navigate = useNavigate();
+  const location = useLocation();
+  const intent = (
+    location.state as {
+      sourceConnection?: { scope: string; providerId: string; choice?: ObsidianChoice };
+    } | null
+  )?.sourceConnection;
+  const connectSource = intent?.scope === connectionScope(settings) ? intent : undefined;
   const connection = useConnectionIndicatorState();
   const repository = useRepository();
   const draft = useComposerDraft(workspaceId, { persist: false });
@@ -279,6 +289,17 @@ function WorkspaceDraft({ workspaceId }: { workspaceId: string }) {
           />
         </ClioConversationWelcome>
       </div>
+      {connectSource && workspace && (
+        <ConnectedSourcePicker
+          workspaceId={workspaceId}
+          open
+          initialProviderId={connectSource.providerId}
+          initialObsidianChoice={connectSource.choice}
+          onOpenChange={(open) => {
+            if (!open) void navigate(location.pathname, { replace: true, state: null });
+          }}
+        />
+      )}
     </ClioAppShell>
   );
 }

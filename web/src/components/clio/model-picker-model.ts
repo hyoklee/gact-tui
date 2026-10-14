@@ -44,8 +44,7 @@ export interface ProviderGroup {
   detail?: string;
   /** The provider's typed failure reason (untranslated), when it reported one. */
   failure?: string;
-  /** The CLI its SDK runs (installed vs bundled) -- Claude Code only; its
-   * presence is what offers the SDK update check. */
+  /** The CLI its SDK runs (installed vs bundled), when the provider uses one. */
   client?: ProviderClientFact;
 }
 
@@ -54,12 +53,19 @@ export interface ProviderNodeData {
   group: ProviderGroup;
 }
 
+export interface ProviderFamilyNodeData {
+  kind: 'provider-family';
+  group: ProviderGroup;
+  serverIds: string[];
+  expanded: boolean;
+}
+
 export interface ModelNodeData {
   kind: 'model';
   choice: ClioModelOption;
 }
 
-export type PickerNodeData = ProviderNodeData | ModelNodeData;
+export type PickerNodeData = ProviderNodeData | ProviderFamilyNodeData | ModelNodeData;
 
 export function providerHealthPresentation(
   health: ProviderHealth,

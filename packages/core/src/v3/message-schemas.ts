@@ -3,6 +3,7 @@ import { messageBlockGeneratedSchema } from '../generated/clio-schemas/message-b
 import type { MessageBlock } from './domain.js';
 import { contextReferenceKindSchema } from './composer-schemas.js';
 import { forwardCompatibleEnum } from './schema-utils.js';
+import { projectAutomaticMessage } from './automatic-message.js';
 
 function omitGeneratedNulls(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(omitGeneratedNulls);
@@ -280,4 +281,4 @@ export const messageSchema = z.object({
   cost_usd: z.number().nonnegative().optional(),
   stop_reason: z.string().optional(),
   error_info: z.record(z.string(), z.unknown()).optional(),
-});
+}).transform(projectAutomaticMessage);

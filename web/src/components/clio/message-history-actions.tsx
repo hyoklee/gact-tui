@@ -49,18 +49,20 @@ export function ClioMessageHistoryActions({
 
   return (
     <>
-      <MessageAction
-        disabled={!onFork || forkPending || rewindPending}
-        label={forkPending ? 'Branching from this message' : 'Branch from here'}
-        onClick={() => void run('fork', onFork)}
-        tooltip={forkPending ? 'Branching from this message' : 'Branch from here'}
-      >
-        {forkPending ? (
-          <LoaderCircleIcon aria-hidden="true" className="size-3.5 animate-spin" />
-        ) : (
-          <GitForkIcon aria-hidden="true" className="size-3.5" />
-        )}
-      </MessageAction>
+      {onFork ? (
+        <MessageAction
+          disabled={forkPending || rewindPending}
+          label={forkPending ? 'Branching from this message' : 'Branch from here'}
+          onClick={() => void run('fork', onFork)}
+          tooltip={forkPending ? 'Branching from this message' : 'Branch from here'}
+        >
+          {forkPending ? (
+            <LoaderCircleIcon aria-hidden="true" className="size-3.5 animate-spin" />
+          ) : (
+            <GitForkIcon aria-hidden="true" className="size-3.5" />
+          )}
+        </MessageAction>
+      ) : null}
       <MessageAction
         disabled={!onRewind || forkPending || rewindPending}
         label="Rewind to here"
@@ -74,8 +76,8 @@ export function ClioMessageHistoryActions({
           <AlertDialogHeader>
             <AlertDialogTitle>Rewind this conversation?</AlertDialogTitle>
             <AlertDialogDescription>
-              The service will permanently remove every message after this point. The selected
-              message remains as the new end of the conversation.
+              Remove every later message from this conversation. The selected message remains as the
+              new end. Files and artifacts already created or edited are kept.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

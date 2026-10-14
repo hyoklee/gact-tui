@@ -321,7 +321,7 @@ describe('VariantTabsBlock after a reload', () => {
     // (once: its recorded step that carries the same advice is not repeated).
     const panel = within(block).getByRole('tabpanel');
     expect(panel).toHaveTextContent('Refined from Draft 2');
-    expect(within(panel).getAllByText(/gave the agent: Advice for this draft/u)).toHaveLength(1);
+    expect(within(panel).getAllByText('Advice for this draft')).toHaveLength(1);
     expect(panel).toHaveTextContent('1,610 tokens');
     await userEvent.click(within(panel).getByRole('button', { name: '1 recorded step' }));
     expect(within(panel).queryByText('Given to this try')).not.toBeInTheDocument();

@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { useRepository } from '@/hooks/use-repository';
 import { useSelectionAction } from '@/hooks/use-selection-action';
+import { useAttentionAvailable } from '@/lib/attention-availability';
 import type { SelectionAction, SelectionTarget } from '@/lib/selection-actions';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { AttentionProfileEditor } from './attention-profile-editor';
@@ -39,9 +40,11 @@ export function AttentionLookupPanel({
   onHeatChange?: (data: AttentionAvailable | undefined) => void;
 }) {
   const { settings } = useConnectionSettings();
+  const available = useAttentionAvailable(sessionId);
   // Never persist the credential. Its digest separates authenticated users on one endpoint.
   const identity = bytesToHex(sha256(utf8ToBytes(settings.token ?? '')));
   const scope = `clio:attention-inspector:${JSON.stringify([settings.endpoint, identity, sessionId])}`;
+  if (!available) return null;
   return (
     <ScopedAttentionLookup
       key={scope}
@@ -70,9 +73,11 @@ function ScopedAttentionLookup({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [heatCall, setHeatCall] = useState<string>();
+  // A new basket or direction invalidates the painted heat. A profile adopted from a
+  // result must not: it would wipe the heat that result just painted.
   useEffect(() => {
     onHeatChange?.(undefined);
-  }, [items, direction, profile, onHeatChange]);
+  }, [items, direction, onHeatChange]);
   const request = useRef<AbortController | undefined>(undefined);
   const expectedEvidence = useRef<AttentionEvidenceInspection | undefined>(undefined);
   const inspectedHash = useRef('');
@@ -156,6 +161,19 @@ function ScopedAttentionLookup({
         );
         if ('profile' in data) setProfile(data.profile);
         if (expected) setHeatCall(expected.lm_call_id);
+        else if (!cursor && 'views' in data) {
+          // The quick paths (trace later use, add to set) paint the first view's heat
+          // right away instead of hiding it behind "Show transcript heat".
+          const first = data.views.find(
+            (view) =>
+              view.kind === 'generated' ||
+              (view.kind === 'source' && (view.heat?.blocks.length ?? 0) > 0),
+          );
+          if (first) {
+            setHeatCall(first.lm_call_id);
+            onHeatChange?.((first.kind === 'generated' ? first : first.heat) as AttentionAvailable);
+          }
+        }
       } catch (failure) {
         if (!controller.signal.aborted)
           setError(failure instanceof Error ? failure.message : 'Attention lookup failed.');
@@ -220,10 +238,13 @@ function ScopedAttentionLookup({
       setBusy(false);
       setResult(undefined);
       setItems(next);
-      if (trace) {
-        setDirection('source_to_generation');
-        void inspect(next, 'source_to_generation');
-      }
+      // Generated text explains its sources; user text can only be traced forward.
+      const mode: AttentionLookupDirection =
+        trace || next.some((entry) => entry.reference.message_id.startsWith('msg_user_'))
+          ? 'source_to_generation'
+          : 'generated_to_source';
+      setDirection(mode);
+      void inspect(next, mode);
       return true;
     },
     [items, inspect, leaveEvidenceLink],

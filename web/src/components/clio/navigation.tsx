@@ -18,6 +18,8 @@ import {
 } from '@/components/ui/sidebar';
 import { useSwitchConnection } from '@/hooks/use-switch-connection';
 import { useConnectionAvailabilities } from '@/hooks/use-connection-availability';
+import { useKnownConnections } from '@/hooks/use-known-connections';
+import type { ConnectionSettings } from '@/lib/connection';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { useMenuAction } from '@/tauri/menu-actions';
 import { ClioArchivedSessionsDialog } from './archived-sessions-dialog';
@@ -27,7 +29,7 @@ import { NavigationInfrastructure } from './navigation-infrastructure';
 import { ClioResourceDialogs, type ResourceActions, type ResourceTarget } from './resource-dialogs';
 import { WorkspaceEditorDialog } from './workspace-editor-dialog';
 import { WorkspaceNavigation } from './workspace-navigation';
-import { downloadUrl } from './surface-export';
+import { downloadSessionExport } from './session-export-download';
 import type { SessionAttention } from '@/lib/session-attention';
 
 export interface ClioNavigationProps {
@@ -54,15 +56,19 @@ export function ClioNavigation({
   attentions,
 }: ClioNavigationProps) {
   const location = useLocation();
-  const { settings, recents } = useConnectionSettings();
-  const knownConnections = useMemo(
-    () =>
-      recents.some((connection) => connection.endpoint === endpoint)
-        ? recents
-        : [{ endpoint, label: settings.label }, ...recents],
-    [endpoint, recents, settings.label],
+  const { settings } = useConnectionSettings();
+  const knownConnections = useKnownConnections();
+  const activeConnection = useMemo(() => [{ ...settings, endpoint }], [endpoint, settings]);
+  const activeAvailability = useConnectionAvailabilities(activeConnection);
+  const connectionAvailabilities = useMemo(
+    () => ({
+      ...Object.fromEntries(
+        knownConnections.map((connection) => [connection.endpoint, connection.availability]),
+      ),
+      ...activeAvailability,
+    }),
+    [activeAvailability, knownConnections],
   );
-  const connectionAvailabilities = useConnectionAvailabilities(knownConnections);
   const switchConnection = useSwitchConnection();
   const [createKind, setCreateKind] = useState<'workspace' | 'session' | null>(null);
   const [createWorkspaceId, setCreateWorkspaceId] = useState(activeWorkspaceId);
@@ -80,18 +86,7 @@ export function ClioNavigation({
     sessionId: string,
     title: string,
     mode: import('@clio/core/v3').SessionExportMode,
-  ) => {
-    const preparing = toast.loading(
-      `Preparing ${mode === 'transcript' ? 'HTML' : 'ZIP'} export for ${title}…`,
-    );
-    try {
-      const value = await actions.exportSession(sessionId, mode);
-      // Retain a service's base path (including the Desktop/dev remote proxy).
-      downloadUrl(`${settings.endpoint.replace(/\/$/u, '')}${value.download_path}`, value.filename);
-    } finally {
-      toast.dismiss(preparing);
-    }
-  };
+  ) => downloadSessionExport(actions, settings.endpoint, sessionId, title, mode);
   const runNavigationAction = (action: () => Promise<void>, success: string) => {
     void action()
       .then(() => toast.success(success))
@@ -103,9 +98,9 @@ export function ClioNavigation({
         });
       });
   };
-  const switchService = async (recent: (typeof recents)[number]) => {
+  const switchService = async (connection: ConnectionSettings) => {
     try {
-      await switchConnection(recent);
+      await switchConnection(connection);
     } catch (error) {
       toast.error('Could not switch agent service', {
         description: error instanceof Error ? error.message : String(error),
@@ -152,7 +147,7 @@ export function ClioNavigation({
             onNewSession={() => openNewSession()}
             onNewWorkspace={() => setCreateKind('workspace')}
             onOpenArchived={() => setArchivedOpen(true)}
-            recentConnections={recents}
+            connections={knownConnections}
           />
           <SidebarContent>
             <WorkspaceNavigation

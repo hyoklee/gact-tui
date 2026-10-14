@@ -1,6 +1,5 @@
 import { CircleAlertIcon, FileIcon } from 'lucide-react';
 import type { ToolInvocation, ToolPresentationBlock } from '@clio/core/v3';
-import { Terminal, TerminalCommand, TerminalContent } from '@/components/ai-elements/terminal';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { BoundedResult } from './bounded-result';
 import { useTranscriptPreviewLines } from '@/providers/appearance-provider';
@@ -25,9 +24,10 @@ import {
 } from './tool-result-resource-memory';
 import { isProvenanceBlock } from './tool-result-shared';
 import { WorkspaceFilePresentationBlock } from './tool-result-workspace-file';
-import { SavedTerminalOutput } from './tool-result-saved-output';
+import { ToolTerminalResult } from './tool-terminal-result';
+import { TodoList } from './todo-list';
 import { belongsToTerminal, savedOutputsAfter } from './tool-result-saved-output-blocks';
-import { isA2uiCatalogLookup } from './tool-presentation';
+import { getToolStatus, isA2uiCatalogLookup } from './tool-presentation';
 
 /** Render only the declared presentation contract. Raw results stay technical. */
 export function ToolResultPresentation({
@@ -65,7 +65,7 @@ export function ToolResultPresentation({
   const summary = summaryInHeader ? '' : (tool.presentation?.summary?.trim() ?? '');
   // The schema itself is useful to the agent, but it overwhelms the human
   // activity lane. The info button on the tool row retains the exact result.
-  if (isA2uiCatalogLookup(tool) && tool.state === 'succeeded') return null;
+  if (isA2uiCatalogLookup(tool) && getToolStatus(tool) === 'succeeded') return null;
   // An explicitly declared file subject owns one document preview, including
   // metadata. Do not give each constituent block another preview-line budget.
   // Provenance blocks are ignored for this decision (see isProvenanceBlock)
@@ -88,6 +88,7 @@ export function ToolResultPresentation({
         <div
           className="min-w-0 overflow-hidden rounded-md border bg-muted/40"
           data-slot="tool-result-panel"
+          role={contentBlocks.some((block) => block.severity === 'error') ? 'alert' : undefined}
         >
           {contentBlocks.some((block) => block.content_ref) ? (
             <PagedBlock block={contentBlocks[0]} groupedBlocks={contentBlocks} lines={budget} />
@@ -256,19 +257,15 @@ export function ToolResultPresentation({
           const checks: ToolPresentationBlock[] = [];
           for (let i = index; i < blocks.length && blocks[i].type === 'check'; i++)
             checks.push(blocks[i]);
+          const removed = checks.filter((check) => check.change === 'removed');
           return (
-            <BoundedResult
-              key={block.id}
-              lines={3}
-              unit="items"
-              title={
-                checks.some((check) => check.change && check.change !== 'unchanged')
-                  ? 'Task changes'
-                  : 'Task list'
-              }
-            >
-              <ul className="list-none">
-                {checks.map((check) => (
+            <div key={block.id} className="min-w-0 space-y-1" data-slot="todo-changes">
+              <TodoList
+                items={checks.filter((check) => check.change !== 'removed')}
+                status={(check) => check.state}
+                scope="transcript"
+                summary
+                renderItem={(check) => (
                   <li key={check.id}>
                     {check.content_ref ? (
                       <PagedBlock block={check} lines={lines} />
@@ -276,47 +273,31 @@ export function ToolResultPresentation({
                       <BlockBody block={check} text={check.text ?? ''} />
                     )}
                   </li>
-                ))}
-              </ul>
-            </BoundedResult>
+                )}
+              />
+              {removed.length ? (
+                <BoundedResult title="Removed todos" lines={1} unit="items">
+                  <ul aria-label="Removed todos">
+                    {removed.map((check) => (
+                      <li key={check.id}>
+                        <BlockBody block={check} text={check.text ?? ''} />
+                      </li>
+                    ))}
+                  </ul>
+                </BoundedResult>
+              ) : null}
+            </div>
           );
         }
         if (block.type === 'terminal')
           return (
-            <Terminal
+            <ToolTerminalResult
               key={`${block.id}:${running}`}
-              output={block.text ?? ''}
-              autoScroll={false}
-              isStreaming={running}
-            >
-              {block.content_ref && !running ? (
-                <>
-                  {block.command ? (
-                    <BoundedResult lines={budget} title="Terminal command">
-                      <TerminalCommand command={block.command} />
-                    </BoundedResult>
-                  ) : null}
-                  <PagedBlock block={block} lines={budget} />
-                </>
-              ) : (
-                <BoundedResult lines={budget} running={running} title="Terminal output">
-                  {block.command ? <TerminalCommand command={block.command} /> : null}
-                  <TerminalContent className="max-h-none overflow-visible bg-zinc-950 p-3 text-zinc-100" />
-                </BoundedResult>
-              )}
-              {running
-                ? null
-                : savedOutputsAfter(blocks, index).map((saved) => (
-                    <SavedTerminalOutput key={saved.id} block={saved} lines={budget} />
-                  ))}
-              {!running && (block.timed_out || block.exit_code !== undefined) ? (
-                <p className="border-t border-zinc-800 px-3 py-2 text-sm text-zinc-400">
-                  {block.timed_out
-                    ? 'Process timed out.'
-                    : `Process exited with code ${block.exit_code}.`}
-                </p>
-              ) : null}
-            </Terminal>
+              block={block}
+              saved={savedOutputsAfter(blocks, index)}
+              lines={budget}
+              running={running}
+            />
           );
         const boxed =
           block.severity === 'error' ||
@@ -355,6 +336,7 @@ export function ToolResultPresentation({
                   : 'bg-muted/40',
             )}
             data-slot="tool-result-panel"
+            role={block.severity === 'error' ? 'alert' : undefined}
           >
             {block.label ? (
               <p

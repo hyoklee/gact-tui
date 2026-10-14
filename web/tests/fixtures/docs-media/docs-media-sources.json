@@ -1,0 +1,20 @@
+[
+  {
+    "source_repo": "iowarp/clio-agent",
+    "source_path": "site/src/assets/captures/docs-message-preview.png",
+    "source_revision": "a0be514ba4f6069a8a2355a1c2388fd2a11cf1a8",
+    "sha256": "a9aa7141a2498761f7ff2b9381d8934cc146b8ee9acbb9454bbcf15449f25d88"
+  },
+  {
+    "source_repo": "iowarp/clio-agent",
+    "source_path": "site/src/assets/captures/docs-marked-messages.png",
+    "source_revision": "a0be514ba4f6069a8a2355a1c2388fd2a11cf1a8",
+    "sha256": "26ab68947518ba4fb2ef4d5c1eaf124802167a1ec5643187b71ae3511629d96d"
+  },
+  {
+    "source_repo": "iowarp/clio-agent",
+    "source_path": "site/public/media/docs-session-export.mp4",
+    "source_revision": "a0be514ba4f6069a8a2355a1c2388fd2a11cf1a8",
+    "sha256": "e460eb51009efec721240c1e1ef5458261e4c71215fa02cafa042873b6277acc"
+  }
+]

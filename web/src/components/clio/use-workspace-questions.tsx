@@ -93,6 +93,7 @@ export function useWorkspaceQuestions({
       ...questionAnswering,
       context: {
         ...questionAnswering.context,
+        interactions,
         openQuestion: (interaction: PendingInteraction) => setOpenedId(interaction.id),
         surfaces: tray.surfaces,
         refetchSurfaces: tray.onRefetchSurfaces,

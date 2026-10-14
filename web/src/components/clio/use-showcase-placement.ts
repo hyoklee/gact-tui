@@ -1,11 +1,10 @@
-import { useCallback, useLayoutEffect, useMemo, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useState, type RefObject } from 'react';
 import { showcaseGutter, type ShowcaseGutter } from './showcase-placement';
 
 /** Measure the actual free gutter; never narrow or move the conversation to make room. */
 export function useShowcasePlacement(
   buttonRef: RefObject<HTMLButtonElement | null>,
   surfaceRef?: RefObject<HTMLElement | null>,
-  onGutterLost?: () => void,
 ) {
   const [gutter, setGutter] = useState<ShowcaseGutter>();
   const [flyoutHeight, setFlyoutHeight] = useState<number>();
@@ -13,7 +12,7 @@ export function useShowcasePlacement(
     const button = buttonRef.current;
     const surface = surfaceRef?.current ?? button?.closest('[data-slot="session-transcript"]');
     const column = surface?.querySelector('[data-slot="transcript-column"]');
-    const composer = surface?.querySelector('[data-slot="clio-composer-stack"] form');
+    const composer = surface?.querySelector('[data-evidence-composer]');
     const next =
       surface && column && composer
         ? showcaseGutter(
@@ -42,19 +41,20 @@ export function useShowcasePlacement(
     );
     return next;
   }, [buttonRef, surfaceRef]);
-  useLayoutEffect(() => {
+  // The launcher mounts in the toolbar before the sibling transcript's ref is
+  // attached. Observe after the complete commit so initial hydration is covered.
+  useEffect(() => {
     const button = buttonRef.current;
     const surface = surfaceRef?.current ?? button?.closest('[data-slot="session-transcript"]');
     if (!surface) return;
     let frame: number | undefined;
     const measure = () => {
       const column = surface.querySelector('[data-slot="transcript-column"]');
-      const composer = surface.querySelector('[data-slot="clio-composer-stack"] form');
+      const composer = surface.querySelector('[data-evidence-composer]');
       if (column) resize.observe(column);
       if (composer) resize.observe(composer);
-      const next = measureNow();
-      // A disappearing gutter closes the dock; a resize never converts it into an overlay.
-      if (!next) onGutterLost?.();
+      // Visibility follows available space; measuring never changes user selection.
+      measureNow();
     };
     const schedule = () => {
       if (frame !== undefined) cancelAnimationFrame(frame);
@@ -74,7 +74,7 @@ export function useShowcasePlacement(
       window.removeEventListener('resize', schedule);
       if (frame !== undefined) cancelAnimationFrame(frame);
     };
-  }, [buttonRef, surfaceRef, onGutterLost, measureNow]);
+  }, [buttonRef, surfaceRef, measureNow]);
   const dockAnchor = useMemo(
     () => ({
       current: {

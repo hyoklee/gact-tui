@@ -50,6 +50,13 @@ import { useProviderPanel } from './model-picker-provider-panel';
 import { ModelPickerSearch } from './model-picker-search';
 import { PickerRowLabel } from './model-picker-row-label';
 import { useModelPickerTree } from './model-picker-tree';
+import {
+  ALCF_FAMILY_VALUE,
+  ALCF_SERVERS,
+  groupAlcfProviders,
+  isAlcfServer,
+} from './model-picker-provider-families';
+import { ProviderFamilyRow } from './model-picker-provider-family-row';
 import { useModelPickerFacets } from './use-model-picker-facets';
 import { useModelPickerSearchView } from './use-model-picker-search-view';
 
@@ -92,7 +99,8 @@ export function ClioModelPicker({
   // and the eye toggle on each becomes interactive. Off: hidden providers
   // (and not-yet-configured presets) drop back out of the list.
   const [managingVisibility, setManagingVisibility] = useState(false);
-  const { hiddenProviders, setProviderHidden } = useHiddenProviders();
+  const { hiddenProviders, setProviderHidden, setProvidersHidden } = useHiddenProviders();
+  const [alcfExpanded, setAlcfExpanded] = useState(() => isAlcfServer(provider));
   const showColumns = useMediaQuery('(min-width: 768px)');
   const repository = useRepository();
   const { settings } = useConnectionSettings();
@@ -105,14 +113,15 @@ export function ClioModelPicker({
   });
   const presetsData = configuration.data?.presets;
   const presets = useMemo(() => presetsData ?? [], [presetsData]);
-  // A preset the service reports but that has never had a catalog/model
-  // entry of its own (never checked, never configured) gets a zero-model
-  // placeholder row of its own -- but ONLY while managing, so browsing the
-  // picker normally never shows a provider with nothing to offer yet.
-  const providers = useMemo(
-    () => providerGroupsFromOptions(options, presets, false),
-    [options, presets],
-  );
+  // ALCF's shared sign-in exposes four server destinations, including ones
+  // whose catalog has not been checked yet. Other unconfigured presets stay
+  // in visibility management until the service reports a catalog entry.
+  const providers = useMemo(() => {
+    const reported = new Set(options.map((option) => option.providerId));
+    return providerGroupsFromOptions(options, presets, true).filter(
+      (group) => reported.has(group.id) || isAlcfServer(group.id),
+    );
+  }, [options, presets]);
   const sortedProviders = useMemo(
     () => (managingVisibility ? providerGroupsFromOptions(options, presets, true) : providers),
     [managingVisibility, options, presets, providers],
@@ -131,7 +140,6 @@ export function ClioModelPicker({
   const [tokens, setTokens] = useState<ModelFilterToken[]>(() => [...DEFAULT_FILTER_TOKENS]);
   const [notice, setNotice] = useState<string>();
   const tree = useModelPickerTree(visibleProviders, tokens);
-  const providerNodes = tree.nodes;
   const activeGroup = sortedProviders.find((item) => providerNodeValue(item.id) === path[0]);
   // Provider rows live only at depth 0, and the tree is exactly two levels
   // (provider -> model), so once a provider is drilled into, the ROOT column
@@ -153,6 +161,10 @@ export function ClioModelPicker({
     query,
   });
   const { resetCollapsed, toggleCollapsed, matchesText, searching } = search;
+  const providerNodes = useMemo(
+    () => (searching ? tree.nodes : groupAlcfProviders(tree.nodes, alcfExpanded)),
+    [tree.nodes, alcfExpanded, searching],
+  );
   const { facetTabs, maxInputPrice } = useModelPickerFacets(
     tree.entries,
     tokens,
@@ -165,9 +177,19 @@ export function ClioModelPicker({
   // group instead, so the clear that follows is dropped.
   const keepQueryOnce = useRef(false);
   const activePreset = presetsById.get(activeGroup?.id ?? '');
+  const closingForSettings = useRef(false);
   // The provider in view's right-hand panel: its setup state and
   // action row, from the SAME shared action hook every provider surface uses.
-  const panel = useProviderPanel({ group: activeGroup, preset: activePreset, open, notice });
+  const panel = useProviderPanel({
+    group: activeGroup,
+    preset: activePreset,
+    open,
+    notice,
+    onClose: () => {
+      closingForSettings.current = true;
+      handleOpenChange(false);
+    },
+  });
   const activeStage = panel.stage;
 
   function hideProvider(group: ProviderGroup): void {
@@ -181,6 +203,13 @@ export function ClioModelPicker({
   }
 
   function toggleProviderVisibility(node: CascaderNode<PickerNodeData>): void {
+    if (node.data?.kind === 'provider-family') {
+      const ids = Object.keys(ALCF_SERVERS);
+      const hide = !ids.every((id) => hiddenProviders.has(id));
+      setProvidersHidden(ids, hide);
+      if (hide && isAlcfServer(activeGroup?.id)) setPath([]);
+      return;
+    }
     if (node.data?.kind !== 'provider') return;
     const group = node.data.group;
     if (hiddenProviders.has(group.id)) showProvider(group);
@@ -193,8 +222,10 @@ export function ClioModelPicker({
     setFacetsOpen(false);
     resetCollapsed();
     if (nextOpen) {
+      closingForSettings.current = false;
       setTokens([...DEFAULT_FILTER_TOKENS]);
       const preferred = providers.find((item) => item.id === provider);
+      setAlcfExpanded(isAlcfServer(preferred?.id));
       setPath(preferred ? [providerNodeValue(preferred.id)] : []);
       return;
     }
@@ -222,6 +253,10 @@ export function ClioModelPicker({
       <ModelSelectorContent
         className="h-[min(38rem,calc(100dvh-2rem))] w-[min(56rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-hidden sm:h-[min(42rem,calc(100dvh-3rem))] sm:max-w-[56rem]"
         commandProps={{ className: 'min-h-0 p-0', shouldFilter: false }}
+        onCloseAutoFocus={(event) => {
+          // Settings owns focus after navigation; ordinary dismissal returns to the trigger.
+          if (closingForSettings.current) event.preventDefault();
+        }}
         onEscapeKeyDown={(event) => {
           // Escape closes the filter panel first, the picker second.
           if (!facetsOpen) return;
@@ -252,6 +287,11 @@ export function ClioModelPicker({
             onInputValueChange={handleQueryChange}
             onPathChange={(nextPath, details) => {
               const header = nextPath.length === 1 ? nextPath[0] : undefined;
+              if (header === ALCF_FAMILY_VALUE) {
+                setAlcfExpanded(!alcfExpanded);
+                if (alcfExpanded && isAlcfServer(activeGroup?.id)) setPath([]);
+                return;
+              }
               if (
                 search.searching &&
                 details.reason === 'drill' &&
@@ -278,6 +318,18 @@ export function ClioModelPicker({
               setQuery('');
             }}
             path={path}
+            renderItem={(node) =>
+              node.data?.kind === 'provider-family' ? (
+                <ProviderFamilyRow
+                  data={node.data}
+                  hidden={Object.keys(ALCF_SERVERS).every((id) => hiddenProviders.has(id))}
+                  eyeAsStaticElement={providerRowsAreTrailButtons}
+                  onToggleVisibility={
+                    managingVisibility ? () => toggleProviderVisibility(node) : undefined
+                  }
+                />
+              ) : undefined
+            }
             renderLabel={(node, state) => (
               <PickerRowLabel
                 stage={

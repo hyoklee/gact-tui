@@ -1,32 +1,39 @@
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { ChevronDownIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { useEvidenceDisclosure } from '@/hooks/use-evidence-disclosures';
 import { sessionSectionHeights, untransformedBorderBoxHeight } from './session-section-layout';
 
-/** Data sits at the top, Work by the composer; each gets only the space it needs. */
+/** Anchor docked sections independently; keep popup sections together in one scrollable view. */
 export function SessionEvidenceColumn({
   data,
   work,
   actions,
   workActions,
+  docked = true,
 }: {
   data?: ReactNode;
   work?: ReactNode;
   actions?: ReactNode;
   workActions?: ReactNode;
+  docked?: boolean;
 }) {
   const column = useRef<HTMLDivElement>(null);
   const dataHeader = useRef<HTMLDivElement>(null);
   const workHeader = useRef<HTMLDivElement>(null);
   const dataContent = useRef<HTMLDivElement>(null);
   const workContent = useRef<HTMLDivElement>(null);
-  const [dataCollapsed, setDataCollapsed] = useState(false);
-  const [workCollapsed, setWorkCollapsed] = useState(false);
+  const [dataOpen, setDataOpen] = useEvidenceDisclosure('evidence-column:data');
+  const [workOpen, setWorkOpen] = useEvidenceDisclosure('evidence-column:work');
+  const dataCollapsed = !dataOpen;
+  const workCollapsed = !workOpen;
   const [sizes, setSizes] = useState<{ data?: number; work?: number }>({});
   const hasData = data !== undefined;
   const hasWork = work !== undefined;
 
   useLayoutEffect(() => {
+    if (!docked) return;
     let frame: number | undefined;
     const measure = () => {
       const demand = (
@@ -68,20 +75,24 @@ export function SessionEvidenceColumn({
       observer.disconnect();
       if (frame !== undefined) cancelAnimationFrame(frame);
     };
-  }, [hasData, hasWork, dataCollapsed, workCollapsed]);
+  }, [docked, hasData, hasWork, dataCollapsed, workCollapsed]);
 
   return (
     <div
       ref={column}
       data-slot="session-evidence-column"
-      className="flex min-h-0 flex-1 flex-col justify-between gap-3"
+      className={cn(
+        'flex min-h-0 flex-1 flex-col',
+        docked ? 'justify-between gap-3' : 'clio-scrollbar overflow-y-auto',
+      )}
     >
       {hasData ? (
         <SessionEvidenceSection
           name="Data"
           collapsed={dataCollapsed}
-          onToggle={() => setDataCollapsed((value) => !value)}
-          height={sizes.data}
+          onToggle={() => setDataOpen(!dataOpen)}
+          height={docked ? sizes.data : undefined}
+          docked={docked}
           headerRef={dataHeader}
           contentRef={dataContent}
           actions={actions}
@@ -93,8 +104,9 @@ export function SessionEvidenceColumn({
         <SessionEvidenceSection
           name="Work"
           collapsed={workCollapsed}
-          onToggle={() => setWorkCollapsed((value) => !value)}
-          height={sizes.work}
+          onToggle={() => setWorkOpen(!workOpen)}
+          height={docked ? sizes.work : undefined}
+          docked={docked}
           headerRef={workHeader}
           contentRef={workContent}
           actions={
@@ -120,6 +132,7 @@ function SessionEvidenceSection({
   headerRef,
   contentRef,
   actions,
+  docked,
 }: {
   name: 'Data' | 'Work';
   children: ReactNode;
@@ -129,13 +142,19 @@ function SessionEvidenceSection({
   headerRef: RefObject<HTMLDivElement | null>;
   contentRef: RefObject<HTMLDivElement | null>;
   actions: ReactNode;
+  docked: boolean;
 }) {
   return (
     <section
       aria-label={name}
       data-showcase-section={name === 'Data' ? 'top' : 'bottom'}
       data-section-collapsed={collapsed}
-      className="flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden rounded-lg bg-popover shadow-md ring-1 ring-foreground/10"
+      className={cn(
+        'flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden',
+        docked
+          ? 'rounded-lg bg-popover shadow-md ring-1 ring-foreground/10'
+          : 'border-t first:border-t-0',
+      )}
       style={{ height }}
     >
       <div

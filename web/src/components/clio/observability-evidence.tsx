@@ -1,3 +1,4 @@
+import { subagentOpenTarget, SUBAGENT_OPEN_HINT } from './subagent-navigation';
 import type {
   Artifact,
   ArtifactProvenanceProviderSummary,
@@ -41,6 +42,7 @@ import {
   CodeBlockTitle,
 } from '@/components/ai-elements/code-block';
 import { Accordion } from '@/components/ui/accordion';
+import { useEvidenceSections } from '@/hooks/use-evidence-disclosures';
 import { EvidenceSection } from './observability-evidence-section';
 import { Button } from '@/components/ui/button';
 import { ExternalLink } from '@/components/ui/external-link';
@@ -64,7 +66,10 @@ import {
 import { ClioStatus, type ClioStatusValue } from './status';
 import type { SubagentOpenTarget } from './subagent-card';
 import { getToolActivityTitle, getToolStatus, getToolSummary } from './tool-presentation';
+import { AsyncTaskList } from './async-task-list';
 import { SessionEvidenceSummary } from './session-evidence-summary';
+import { OpenQuestionsSection } from './open-question-list';
+import { openHumanQuestions } from '@/lib/inline-question';
 
 export interface ClioEvidenceViewProps {
   compact?: boolean;
@@ -74,6 +79,7 @@ export interface ClioEvidenceViewProps {
   diffs: readonly SessionDiff[];
   messages: readonly Message[];
   processes: readonly AsyncProcess[];
+  onCancelTask?: (task: AsyncProcess) => Promise<void>;
   interactions?: readonly PendingInteraction[];
   runs?: readonly Run[];
   subagents?: readonly SubagentRun[];
@@ -95,15 +101,14 @@ export interface ClioEvidenceViewProps {
 
 export function ClioEvidenceView(props: ClioEvidenceViewProps) {
   const showActivity = props.section !== 'data';
+  const questions = showActivity ? openHumanQuestions(props.interactions ?? []) : [];
   const showData = props.section !== 'work';
   const outputs = showData
     ? (props.compact ? artifactDeliverables(props.artifacts) : props.artifacts).filter(
         (artifact) => artifact.session_relation !== 'used',
       )
     : [];
-  const backgroundProcesses = showActivity
-    ? props.processes.filter((process) => process.kind !== 'agent')
-    : [];
+  const backgroundProcesses = showActivity ? props.processes : [];
   const runs = showActivity ? (props.runs ?? []) : [];
   const subagents = showActivity ? (props.subagents ?? []) : [];
   const tasks = showActivity ? (props.tasks ?? []) : [];
@@ -136,25 +141,35 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
       subagents.length ||
       tasks.length ||
       tools.length ||
-      backgroundProcesses.length,
+      backgroundProcesses.length ||
+      questions.length,
   );
   const hasProvenance = Boolean(props.provenanceProvider || props.artifactProvenanceProvider);
+  const sections = useEvidenceSections('evidence-details', [
+    'child-agents',
+    'files',
+    'changes',
+    'sources',
+  ]);
 
   if (props.compact)
     return (
-      <SessionEvidenceSummary
-        {...props}
-        outputs={outputs}
-        files={files}
-        diffs={diffs}
-        plans={plans}
-        sources={sources}
-        runs={runs}
-        tasks={tasks}
-        tools={tools}
-        subagents={subagents}
-        backgroundProcesses={backgroundProcesses}
-      />
+      <>
+        {showActivity ? <OpenQuestionsSection interactions={props.interactions} /> : null}
+        <SessionEvidenceSummary
+          {...props}
+          outputs={outputs}
+          files={files}
+          diffs={diffs}
+          plans={plans}
+          sources={sources}
+          runs={runs}
+          tasks={tasks}
+          tools={tools}
+          subagents={subagents}
+          backgroundProcesses={backgroundProcesses}
+        />
+      </>
     );
 
   if (!hasEvidence && !hasProvenance && !props.compact) {
@@ -176,19 +191,14 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
           "Session evidence" string the redesign deliberately dropped
           (test_observability_evidence.tsx:77 pins its absence). */}
       <h2 aria-label="Session evidence" className="sr-only" />
+      {showActivity ? <OpenQuestionsSection interactions={props.interactions} /> : null}
       <Accordion
         className={
           props.compact
             ? '[&_[data-slot=accordion-content]>div>div]:max-h-none [&_[data-slot=accordion-content]>div>div]:overflow-visible'
             : undefined
         }
-        defaultValue={[
-          ...(props.compact ? ['tasks', 'background', 'artifacts'] : []),
-          ...(subagents.length ? ['child-agents'] : []),
-          'files',
-          'changes',
-          'sources',
-        ]}
+        {...sections}
         type="multiple"
       >
         {runs.length ? (
@@ -227,7 +237,7 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
             value="background"
             count={backgroundProcesses.length}
           >
-            <BackgroundEvidence processes={backgroundProcesses} />
+            <AsyncTaskList processes={backgroundProcesses} onCancelTask={props.onCancelTask} />
           </EvidenceSection>
         ) : null}
         {files.length ? (
@@ -345,11 +355,7 @@ function SubagentEvidence({
       {subagents.map((subagent) => {
         const assignment = getChildAgentAssignment(subagent);
         const canOpen = Boolean(subagent.child_session_id && onOpenSubagent);
-        // The child-agent semantics every other surface uses (subagent card,
-        // lifecycle line, dock popover, Gantt): a plain click makes the child
-        // the central conversation; Shift-click, Shift+Enter, or the visible
-        // canvas action keeps this conversation central and opens the child
-        // in a canvas tab beside it.
+        // Child activation keeps the parent visible; Shift makes the child central.
         return (
           <ClioInteractiveRow
             actions={
@@ -374,16 +380,14 @@ function SubagentEvidence({
             disabled={!canOpen}
             key={subagent.id}
             onClick={
-              canOpen
-                ? (event) => onOpenSubagent?.(subagent, event.shiftKey ? 'canvas' : 'conversation')
-                : undefined
+              canOpen ? (event) => onOpenSubagent?.(subagent, subagentOpenTarget(event)) : undefined
             }
             onKeyDown={
               canOpen
                 ? (event) => {
                     if (event.shiftKey && (event.key === 'Enter' || event.key === ' ')) {
                       event.preventDefault();
-                      onOpenSubagent?.(subagent, 'canvas');
+                      onOpenSubagent?.(subagent, 'conversation');
                     }
                   }
                 : undefined
@@ -397,9 +401,7 @@ function SubagentEvidence({
             }
             role={canOpen ? 'button' : undefined}
             running={subagent.state === 'running'}
-            title={
-              canOpen ? 'Open child conversation. Shift-click to open it in the canvas.' : undefined
-            }
+            title={canOpen ? SUBAGENT_OPEN_HINT : undefined}
           >
             <EvidenceRecord
               detail={assignment.detail ?? assignment.label}
@@ -424,23 +426,6 @@ function ToolEvidence({ tools }: { tools: readonly ToolInvocation[] }) {
             icon={WrenchIcon}
             label={getToolActivityTitle(tool)}
             state={getToolStatus(tool)}
-          />
-        </ClioInteractiveRow>
-      ))}
-    </div>
-  );
-}
-
-function BackgroundEvidence({ processes }: { processes: readonly AsyncProcess[] }) {
-  return (
-    <div className="grid gap-1">
-      {processes.map((process) => (
-        <ClioInteractiveRow key={process.id} running={process.live_state === 'running'}>
-          <EvidenceRecord
-            detail={[process.host, process.placement].filter(Boolean).join(', ') || undefined}
-            icon={ServerIcon}
-            label={process.title}
-            state={process.live_state}
           />
         </ClioInteractiveRow>
       ))}

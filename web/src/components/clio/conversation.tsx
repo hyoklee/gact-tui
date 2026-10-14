@@ -1,3 +1,7 @@
+import { useContext } from 'react';
+import { useInRouterContext, useLocation } from 'react-router-dom';
+import { TranscriptDisclosureContext } from './transcript-disclosure-context';
+import { highlightSearchPassage } from '@/lib/search-passage';
 import { inlineQuestionDomId } from '@/lib/inline-question';
 import { focusAttentionEvidence } from '@/lib/attention-evidence-navigation';
 import type { McpAppIdentity } from '@clio/core/v3';
@@ -14,12 +18,14 @@ import { ClioCompactionProgress } from './conversation-summarization';
 import { ClioTurnPreparation } from './turn-preparation';
 import { placeCompactions } from './conversation-compaction-placement';
 import { conversationModelBoundaries } from './conversation-model-boundaries';
+import { ConversationForkCheckpoint } from './conversation-fork-checkpoint';
 import { OpenQuestionsTracker } from './open-questions-tracker';
 import { ClioTranscriptMinimap } from './transcript-minimap';
 import { useAttentionHighlights } from '@/hooks/use-attention-highlights';
 import type { ClioConversationProps } from './conversation-types';
 import {
   foldA2UIRevisionBlocks,
+  conversationResponseContinuity,
   isProjectionOnlyA2UIMessage,
   isProjectedQuestionResumeEnvelope,
   mcpAppResponsesForMessages,
@@ -27,6 +33,7 @@ import {
   surfaceAwaitsPendingResponse,
 } from './conversation-message-projection';
 import { PresentationNavigation } from './presentation-navigation';
+import { TranscriptDisclosures } from './transcript-disclosures';
 import { useTranscriptAutoscroll } from './use-transcript-autoscroll';
 import {
   useTranscriptReadingPosition,
@@ -43,13 +50,28 @@ interface ActiveMcpApp {
 }
 
 import { ConversationMessageRow } from './conversation-message-row';
+import { placeDeliveredFeedback } from './conversation-feedback';
+import { placeHarnessInjections } from './conversation-injection-placement';
+import {
+  foldSubagentReturns,
+  placeContinuedActivity,
+  liveActivityIterationId,
+} from './conversation-activity-placement';
 
 export function ClioConversation(props: ClioConversationProps) {
+  const inRouter = useInRouterContext();
   return (
     <PresentationNavigation.Provider value={props}>
-      <ConversationBody {...props} />
+      <TranscriptDisclosures sessionId={props.sessionId ?? props.messages[0]?.session_id}>
+        {inRouter ? <RoutedConversationBody {...props} /> : <ConversationBody {...props} />}
+      </TranscriptDisclosures>
     </PresentationNavigation.Provider>
   );
+}
+
+function RoutedConversationBody(props: ClioConversationProps) {
+  const location = useLocation();
+  return <ConversationBody {...props} searchHash={location.hash} searchKey={location.key} />;
 }
 
 function ConversationBody({
@@ -59,25 +81,38 @@ function ConversationBody({
   bottomInset = 0,
   compactions,
   preparation,
+  searchHash,
+  searchKey,
   ...entities
-}: ClioConversationProps) {
+}: ClioConversationProps & { searchHash?: string; searchKey?: string }) {
   const mcpAppResponses = useMemo(
     () => mcpAppResponsesForMessages(sourceMessages),
     [sourceMessages],
   );
-  const messages = useMemo(
+  const projectedMessages = useMemo(
     () =>
-      foldA2UIRevisionBlocks(
-        projectA2UIActionMessages(
-          sourceMessages.filter(
-            (message) =>
-              !isProjectionOnlyA2UIMessage(message) &&
-              !isProjectedQuestionResumeEnvelope(message, entities.interactions),
+      foldSubagentReturns(
+        foldA2UIRevisionBlocks(
+          projectA2UIActionMessages(
+            sourceMessages.filter(
+              (message) =>
+                !isProjectionOnlyA2UIMessage(message) &&
+                !isProjectedQuestionResumeEnvelope(message, entities.interactions),
+            ),
           ),
         ),
       ),
     [entities.interactions, sourceMessages],
   );
+  const { messages, feedback } = useMemo(
+    () => placeDeliveredFeedback(projectedMessages),
+    [projectedMessages],
+  );
+  const responseContinuity = useMemo(
+    () => conversationResponseContinuity(messages, entities.tools, entities.processes),
+    [messages, entities.tools, entities.processes],
+  );
+  const injectionPlacement = useMemo(() => placeHarnessInjections(messages), [messages]);
   const compactionPlacement = useMemo(
     () => placeCompactions(compactions ?? [], messages),
     [compactions, messages],
@@ -85,6 +120,8 @@ function ConversationBody({
   const modelBoundaries = useMemo(() => conversationModelBoundaries(messages), [messages]);
   const { conversationWidth } = useAppearancePreferences();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const disclosure = useContext(TranscriptDisclosureContext);
+  const revealDisclosure = disclosure?.setOpen;
   const initialScrollComplete = useRef(false);
   const autoscroll = useTranscriptAutoscroll(scrollRef);
   const { followingRef, scrollToBottom, disengage } = autoscroll;
@@ -94,8 +131,37 @@ function ConversationBody({
     {},
   );
   const setTurnDisplayMode = useCallback((messageId: string, mode: ConversationDisplayMode) => {
-    setTurnDisplayModes((current) => ({ ...current, [messageId]: mode }));
+    setTurnDisplayModes((current) =>
+      current[messageId] === mode ? current : { ...current, [messageId]: mode },
+    );
   }, []);
+  const activityPlacement = useMemo(
+    () =>
+      placeContinuedActivity(
+        messages,
+        responseContinuity.continuations,
+        entities.tools,
+        entities.tasks,
+        feedback,
+        injectionPlacement.before,
+        new Set([
+          ...modelBoundaries.keys(),
+          ...Object.keys(turnDisplayModes).filter((id) => turnDisplayModes[id] === 'full'),
+          ...compactionPlacement.byMessage.keys(),
+        ]),
+      ),
+    [
+      messages,
+      responseContinuity,
+      entities.tools,
+      entities.tasks,
+      feedback,
+      injectionPlacement,
+      modelBoundaries,
+      turnDisplayModes,
+      compactionPlacement,
+    ],
+  );
   const referencedSurfaceIds = useMemo(
     () =>
       new Set(
@@ -104,6 +170,29 @@ function ConversationBody({
         ),
       ),
     [messages],
+  );
+  const liveActivityId = useMemo(
+    () =>
+      liveActivityIterationId({
+        messages,
+        activeTurnId: preparation?.activeTurnId,
+        sessionState: preparation?.sessionState,
+        presentations: activityPlacement,
+        tools: entities.tools,
+        tasks: entities.tasks,
+        feedback,
+        injections: injectionPlacement.before,
+      }),
+    [
+      messages,
+      preparation?.activeTurnId,
+      preparation?.sessionState,
+      activityPlacement,
+      entities.tools,
+      entities.tasks,
+      feedback,
+      injectionPlacement.before,
+    ],
   );
   const activeMcpApp = useMemo<ActiveMcpApp | undefined>(() => {
     for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
@@ -150,28 +239,45 @@ function ConversationBody({
       (block) => (block.type === 'text' || block.type === 'reasoning') && block.streaming,
     ),
   );
+  const activeStreamingMessageId = messages[activeStreamingIndex]?.id;
+  const activeActivityIndex = activeStreamingMessageId
+    ? messages.findIndex((message) =>
+        activityPlacement
+          .get(message.id)
+          ?.iterations.some((iteration) =>
+            iteration.id.startsWith(`${activeStreamingMessageId}:iteration:`),
+          ),
+      )
+    : -1;
   const virtualized = messages.length >= VIRTUALIZATION_THRESHOLD;
   // oxlint-disable-next-line react/incompatible-library -- TanStack owns these functions.
   const virtualizer = useVirtualizer({
     count: messages.length,
+    // Height corrections can scroll during commit; let React batch the range
+    // update instead of trying to flush another render inside that commit.
+    useFlushSync: false,
     estimateSize: () => 180,
     getScrollElement: () => scrollRef.current,
     overscan: 7,
     rangeExtractor: useCallback(
       (range) => {
         const indexes = defaultRangeExtractor(range);
-        if (activeStreamingIndex >= 0 && !indexes.includes(activeStreamingIndex)) {
-          indexes.push(activeStreamingIndex);
-          indexes.sort((left, right) => left - right);
+        for (const index of [activeStreamingIndex, activeActivityIndex]) {
+          if (index >= 0 && !indexes.includes(index)) indexes.push(index);
         }
-        const anchorIndex = readingAnchorRef.current?.index;
-        if (anchorIndex !== undefined && !indexes.includes(anchorIndex)) {
+        const anchor = readingAnchorRef.current;
+        // Persisted history may prepend rows after a live message was selected.
+        // Its durable identity remains authoritative when its index changes.
+        const anchorIndex = anchor
+          ? messages.findIndex((message) => `message-${message.id}` === anchor.id)
+          : -1;
+        if (anchorIndex >= 0 && !indexes.includes(anchorIndex)) {
           indexes.push(anchorIndex);
           indexes.sort((left, right) => left - right);
         }
-        return indexes;
+        return indexes.sort((left, right) => left - right);
       },
-      [activeStreamingIndex],
+      [activeActivityIndex, activeStreamingIndex, messages],
     ),
   });
   const virtualRows = virtualizer.getVirtualItems();
@@ -179,22 +285,14 @@ function ConversationBody({
   const lastVirtualRow = virtualRows.at(-1);
   const virtualRangeKey = `${firstVirtualRow?.index ?? -1}:${firstVirtualRow?.start ?? -1}:${lastVirtualRow?.index ?? -1}:${lastVirtualRow?.end ?? -1}`;
 
-  // A detached surface (#1533 coordinator review) renders as a normal-flow
-  // sibling right after the virtualized message list, whose own height is
-  // set from `virtualizer.getTotalSize()` — the library's own cached/
-  // estimated size for the last row, not a live DOM read. That cache can
-  // persistently undercount a row (observed directly: a real session's last
-  // message, expanded to show a completed subagent card, measured ~53px
-  // taller than the virtualizer believed, with no further resize event ever
-  // arriving to correct it), which overlaps the detached surface behind it.
-  // Independently measuring the messages container's own real last child and
-  // padding the gap to match closes that regardless of why the cache was
-  // wrong — a correction, not a guess at the library's own internal cause.
+  // The virtualizer can retain an underestimated final row height. Account
+  // for its actual bottom in the list height so neither the composer nor
+  // following surfaces cover the row, even without detached surfaces.
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const [detachedSurfacesGap, setDetachedSurfacesGap] = useState(0);
+  const [virtualizedRowsOverflow, setVirtualizedRowsOverflow] = useState(0);
   useLayoutEffect(() => {
-    if (!virtualized || detachedSurfaces.length === 0) {
-      setDetachedSurfacesGap(0);
+    if (!virtualized) {
+      setVirtualizedRowsOverflow(0);
       return undefined;
     }
     const container = messagesContainerRef.current;
@@ -205,7 +303,7 @@ function ConversationBody({
       const realBottom = lastChild.getBoundingClientRect().bottom;
       const containerTop = container.getBoundingClientRect().top;
       const declaredHeight = virtualizer.getTotalSize();
-      setDetachedSurfacesGap(Math.max(0, realBottom - containerTop - declaredHeight));
+      setVirtualizedRowsOverflow(Math.max(0, realBottom - containerTop - declaredHeight));
     };
     recompute();
     if (typeof ResizeObserver === 'undefined') return undefined;
@@ -213,7 +311,7 @@ function ConversationBody({
     observer.observe(container);
     if (container.lastElementChild) observer.observe(container.lastElementChild);
     return () => observer.disconnect();
-  }, [detachedSurfaces.length, virtualRangeKey, virtualized, virtualizer]);
+  }, [virtualRangeKey, virtualized, virtualizer]);
 
   const { scrollIntentVersionRef, captureReadingAnchor, markUserScrollIntent } =
     useTranscriptReadingPosition({
@@ -241,7 +339,9 @@ function ConversationBody({
       .getVirtualItems()
       .find((item) => item.end >= element.scrollTop);
     if (firstVisible) setActiveMessageIndex(firstVisible.index);
-    captureReadingAnchor();
+    // Layout scrolls after expanding a disclosure must retain its exact row.
+    // New wheel/key/pointer navigation clears the anchor before this handler.
+    if (!readingAnchorRef.current?.disclosure) captureReadingAnchor();
   }, [messages.length, virtualizer, captureReadingAnchor, onAutoscroll, followingRef]);
 
   const jumpToMessage = useCallback(
@@ -296,14 +396,33 @@ function ConversationBody({
 
   useEffect(() => {
     let frame = 0;
+    let clearSearch: (() => void) | undefined;
     const focusSearchResult = () => {
+      clearSearch?.();
+      clearSearch = undefined;
       if (!window.location.hash.startsWith('#message-')) return;
       const [target, query] = window.location.hash.slice('#message-'.length).split('?', 2);
       const [encodedMessageId, encodedActivityId] = target.split('/activity-', 2);
       const messageId = decodeURIComponent(encodedMessageId);
       const activityId = encodedActivityId ? decodeURIComponent(encodedActivityId) : undefined;
+      const parameters = new URLSearchParams(query);
+      const find = parameters.get('find');
+      const part = parameters.get('part');
       const index = messages.findIndex((message) => message.id === messageId);
       if (index < 0) return;
+      if (find) {
+        setTurnDisplayMode(messageId, 'full');
+        if (part) {
+          const message = messages[index];
+          for (const field of ['text', 'thought'])
+            revealDisclosure?.(
+              `thinking:${message.session_id}:${messageId}:${part}:${field}`,
+              true,
+            );
+        }
+        if (scrollRef.current)
+          clearSearch = highlightSearchPassage(scrollRef.current, messageId, part, find);
+      }
       markUserScrollIntent();
       disengage();
       virtualizer.scrollToIndex(index, { align: 'center' });
@@ -325,10 +444,20 @@ function ConversationBody({
     focusSearchResult();
     window.addEventListener('hashchange', focusSearchResult);
     return () => {
+      clearSearch?.();
       window.removeEventListener('hashchange', focusSearchResult);
       window.cancelAnimationFrame(frame);
     };
-  }, [messages, virtualizer, markUserScrollIntent, disengage]);
+  }, [
+    messages,
+    virtualizer,
+    markUserScrollIntent,
+    disengage,
+    revealDisclosure,
+    searchHash,
+    searchKey,
+    setTurnDisplayMode,
+  ]);
 
   // Streamed deltas and a changed composer inset follow before paint while
   // engaged; the autoscroll hook's ResizeObserver catches later layout growth.
@@ -345,6 +474,9 @@ function ConversationBody({
             activeIndex={activeMessageIndex}
             attention={entities.attentionData}
             messages={messages}
+            markedMessageIds={entities.markedMessageIds}
+            markingMessageId={entities.markingMessageId}
+            onMarkMessage={entities.onMarkMessage}
             onJump={jumpToMessage}
             visible={minimapVisible}
             maxMarkerWidth={minimapMarkerWidth}
@@ -365,6 +497,7 @@ function ConversationBody({
           if (['Enter', ' '].includes(event.key) && target.closest('button[aria-expanded]')) {
             markUserScrollIntent();
             disengage();
+            captureReadingAnchor(target);
           }
           const ownsKey = target.closest(
             'input, textarea, select, [contenteditable="true"], [role="combobox"], [role="listbox"], [role="menu"], [role="tablist"], [role="radiogroup"]',
@@ -386,6 +519,9 @@ function ConversationBody({
           if (event.target instanceof Element && event.target.closest('button[aria-expanded]')) {
             markUserScrollIntent();
             disengage();
+            // A streaming row can finish before a native scroll event fires.
+            // Keep the visible reader anchor mounted through that transition.
+            captureReadingAnchor(event.target);
           }
           if (event.target === event.currentTarget) markUserScrollIntent();
           autoscroll.onPointerDown(event);
@@ -403,13 +539,14 @@ function ConversationBody({
         }}
         ref={scrollRef}
         role="log"
-        style={{ paddingBottom: bottomInset }}
+        style={{ paddingBottom: bottomInset, scrollPaddingBottom: bottomInset }}
         tabIndex={0}
       >
         {messages.length > 0 && loading ? (
+          // Background refreshes must not change the transcript's reading position.
           <div
             aria-live="polite"
-            className="sticky top-2 z-20 mx-auto flex w-fit items-center gap-1.5 rounded-full border bg-background/90 px-2.5 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur"
+            className="pointer-events-none absolute left-1/2 top-2 z-20 flex w-fit -translate-x-1/2 items-center gap-1.5 rounded-full border bg-background/90 px-2.5 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur"
             role="status"
           >
             <LoaderCircleIcon aria-hidden="true" className="size-3 animate-spin" />
@@ -435,12 +572,22 @@ function ConversationBody({
             </Alert>
           </div>
         ) : messages.length === 0 ? (
-          <ConversationEmptyState
-            className="h-full"
-            description="Send a message to begin. Live reasoning, tools, approvals, and artifacts will stay in causal order here."
-            icon={<GitBranchIcon className="size-7" />}
-            title="This session has no messages"
-          />
+          <>
+            {entities.forkOrigin?.message_count === 0 ? (
+              <div className="mx-auto max-w-4xl px-5 lg:px-8">
+                <ConversationForkCheckpoint
+                  origin={entities.forkOrigin}
+                  workspaceId={entities.workspaceId}
+                />
+              </div>
+            ) : null}
+            <ConversationEmptyState
+              className="h-full"
+              description="Send a message to begin. Live reasoning, tools, approvals, and artifacts will stay in causal order here."
+              icon={<GitBranchIcon className="size-7" />}
+              title="This session has no messages"
+            />
+          </>
         ) : (
           <div
             ref={(node) => {
@@ -449,7 +596,11 @@ function ConversationBody({
             }}
             data-slot="transcript-column"
             className={`${virtualized ? 'relative' : ''} mx-auto w-full ${conversationWidth === 'wide' ? 'max-w-6xl' : 'max-w-4xl'}`}
-            style={virtualized ? { height: virtualizer.getTotalSize() } : undefined}
+            style={
+              virtualized
+                ? { height: virtualizer.getTotalSize() + virtualizedRowsOverflow }
+                : undefined
+            }
           >
             {(virtualized
               ? virtualRows.map((virtualRow) => ({
@@ -462,6 +613,21 @@ function ConversationBody({
               if (!message) return null;
               return (
                 <ConversationMessageRow
+                  liveActivityId={liveActivityId}
+                  feedbackMessages={feedback.get(message.id)}
+                  injectionMessages={injectionPlacement.before.get(message.id)}
+                  injectionsGrouped={injectionPlacement.grouped.has(message.id)}
+                  responseContinued={responseContinuity.continued.has(message.id)}
+                  responseContinuation={responseContinuity.continuations.has(message.id)}
+                  turnPresentation={activityPlacement.get(message.id)}
+                  active={
+                    (preparation?.sessionState === 'running' ||
+                      preparation?.sessionState === 'queued' ||
+                      preparation?.sessionState === 'waiting_permission' ||
+                      preparation?.sessionState === 'waiting_user') &&
+                    (message.run_id ?? message.turn_id) === preparation?.activeTurnId &&
+                    Boolean(preparation?.activeTurnId)
+                  }
                   {...entities}
                   activeMcpAppId={activeMcpAppId}
                   displayMode={turnDisplayModes[message.id] ?? 'chain'}
@@ -504,7 +670,6 @@ function ConversationBody({
           <div
             ref={autoscroll.observeContent}
             className={`mx-auto grid w-full gap-4 px-5 pb-8 lg:px-8 ${conversationWidth === 'wide' ? 'max-w-6xl' : 'max-w-4xl'}`}
-            style={detachedSurfacesGap ? { marginTop: detachedSurfacesGap } : undefined}
           >
             {detachedSurfaces.map((surface) => (
               <DeferredA2UISurface
@@ -515,7 +680,7 @@ function ConversationBody({
             ))}
           </div>
         ) : null}
-        {!autoscroll.engaged && messages.length > 0 ? (
+        {!autoscroll.engaged && autoscroll.scrollable && messages.length > 0 ? (
           // A zero-height sticky rail inside the scroller, so a wheel over the
           // button still scrolls the transcript (and reaches its intent
           // handlers) instead of dying on a sibling overlay. Sticky offsets

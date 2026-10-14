@@ -7,6 +7,8 @@ export const workRecordSchema = z.object({
   created_at: z.string(),
   iterations: z.number().int().nonnegative(),
   reason: z.string(),
+  phase: z.string().default(''),
+  details: z.record(z.string(), z.unknown()).default({}),
 });
 
 export const workTodoSchema = z.object({
@@ -40,6 +42,9 @@ export const sessionWorkSchema = z.object({
   goal_next_cursor: z.number().int().nullable(),
   loop_next_cursor: z.number().int().nullable(),
   todos: z.array(workTodoSchema),
+  schedules: z
+    .array(z.object({ id: z.string(), question: z.string(), enabled: z.boolean() }))
+    .default([]),
   todo_history: z.array(workTodoSnapshotSchema).default([]),
   todo_history_next_cursor: z.number().int().nullable().default(null),
   schedule_history: z.array(workScheduleHistorySchema).default([]),

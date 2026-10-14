@@ -23,6 +23,7 @@ import {
   type GanttColumn,
 } from "@/components/reui/gantt/gantt"
 import { GanttBar } from "@/components/reui/gantt/gantt-bar"
+import { relationGeometry, type RelationObstacle } from "./gantt-relation-geometry"
 import {
   cancelActiveGanttGestures,
   markGestureEnd,
@@ -348,6 +349,8 @@ const EMPTY_ID_SET: ReadonlySet<string> = new Set()
 
 /** One finish-to-start arrow, both anchors in track rem coordinates. */
 interface DependencyEdge {
+  relation?: { line: string; arrow: string }
+  relationKind?: "fork" | "delegation"
   key: string
   /** Predecessor and dependent event ids, so a gesture can re-anchor its own
    * endpoints live. */
@@ -422,7 +425,7 @@ function GanttView({
 
   const scale = useGanttSelector((state) => state.scale)
   const interval = Math.min(
-    Math.max(intervalProp ?? viewConfig.interval, 15),
+    Math.max(intervalProp ?? viewConfig.interval, 1),
     240
   )
   // Every layout metric is consumer-overridable; unset keys keep defaults.
@@ -1203,6 +1206,8 @@ function GanttView({
     }
     const anchors = new Map<string, { endX: number; y: number }>()
     const pending: Pending[] = []
+    const parents: { id: string; parentId: string; at: number; x: number; y: number; kind?: "fork" | "delegation" }[] = []
+    const obstacles: RelationObstacle[] = []
     let topRem = 0
     for (const row of rows) {
       const bars = rowBars.get(row.resource.id)
@@ -1219,6 +1224,16 @@ function GanttView({
           const startX = ((segment.startMin ?? 0) / totalMin) * trackRemWidth
           const endX = ((segment.endMin ?? 0) / totalMin) * trackRemWidth
           anchors.set(occ.eventId, { endX, y })
+          const milestone = occ.start.getTime() === occ.end.getTime()
+          // The milestone body is the rotated size-2.5 diamond, not its wider hit target.
+          const half = milestone ? Math.SQRT2 * 0.625 / 2 : laneHeightRem / 2
+          const visualStart = milestone ? startX - half : startX
+          obstacles.push({ id: occ.eventId, left: visualStart, right: milestone ? startX + half : endX,
+            top: y - half, bottom: y + half })
+          if (occ.event.parentActivity) {
+            parents.push({ id: occ.eventId, parentId: occ.event.parentActivity.eventId,
+              at: occ.event.parentActivity.at.getTime(), x: visualStart, y, kind: occ.event.parentActivity.kind })
+          }
           if (occ.event.dependencies?.length) {
             pending.push({
               id: occ.eventId,
@@ -1231,8 +1246,17 @@ function GanttView({
       }
       topRem += bars?.heightRem ?? minRowRem
     }
-    if (pending.length === 0) return none
     const edges: DependencyEdge[] = []
+    for (const item of parents) {
+      const parent = obstacles.find((box) => box.id === item.parentId)
+      if (!parent || parent.id === item.id) continue
+      const x = ((item.at - rangeStartMs) / 60000 / totalMin) * trackRemWidth
+      if (x < parent.left || x > parent.right) continue
+      const y = item.y >= parent.bottom ? parent.bottom : parent.top
+      const relation = relationGeometry({ x, y }, { x: item.x, y: item.y }, obstacles, parent.id, item.id)
+      if (relation) edges.push({ key: `parent:${parent.id}->${item.id}`, fromId: parent.id,
+        toId: item.id, fromX: x, fromY: y, toX: item.x, toY: item.y, relation, relationKind: item.kind })
+    }
     for (const item of pending) {
       for (const depId of item.dependencies) {
         if (depId === item.id) continue
@@ -2392,7 +2416,7 @@ function GanttView({
                 data-today={unit.isToday || undefined}
                 data-off={unit.isOff || undefined}
                 className={cn(
-                  "flex min-w-0 items-center justify-center truncate px-1.5 text-center",
+                  "flex min-w-0 items-center justify-center px-1.5 text-center",
                   "text-muted-foreground",
                   unit.isToday && "text-primary font-medium"
                 )}
@@ -2400,11 +2424,11 @@ function GanttView({
               >
                 {/* today reads as a soft pill, not just tinted text */}
                 {unit.isToday ? (
-                  <span className="bg-primary/10 truncate rounded-full px-1.5 py-px">
+                  <span data-slot="gantt-axis-unit-label" className="bg-primary/10 sticky start-1.5 end-1.5 max-w-full truncate rounded-full px-1.5 py-px">
                     {unit.label}
                   </span>
                 ) : (
-                  unit.label
+                  <span data-slot="gantt-axis-unit-label" className="sticky start-1.5 end-1.5 max-w-full truncate">{unit.label}</span>
                 )}
               </div>
             ))}
@@ -2989,8 +3013,10 @@ const GanttDependencyLayer = memo(function GanttDependencyLayer({
     <svg
       aria-hidden
       data-slot="gantt-dependencies"
-      // w-full, NOT the track's rem width: rows fill the pane when the
-      // zoomed track is narrower (min-w-full), and bars position as a
+      // Like the rows, fill the pane AND retain the track's minimum width.
+      // Otherwise a scrolled, zoomed track scales SVG paths to the viewport
+      // while bars still use the full axis, separating their anchors.
+      // Bars position as a
       // percentage of that STRETCHED box - so the viewBox mapping must
       // stretch with them or every arrow drifts off its bar. The
       // non-uniform scale is neutralized on strokes below; arrowheads
@@ -2999,7 +3025,7 @@ const GanttDependencyLayer = memo(function GanttDependencyLayer({
         "text-muted-foreground/70 pointer-events-none absolute start-0 top-0 w-full overflow-visible rtl:-scale-x-100",
         viewConfig.classNames?.dependencies
       )}
-      style={{ height: `${totalRem}rem` }}
+      style={{ height: `${totalRem}rem`, minWidth: `${trackRemWidth}rem` }}
       viewBox={`0 0 ${trackRemWidth} ${totalRem}`}
       preserveAspectRatio="none"
     >
@@ -3016,7 +3042,7 @@ const GanttDependencyLayer = memo(function GanttDependencyLayer({
           dragged && edge.toId === dragLink.eventId
             ? liveX(dragLink.startMs)
             : edge.toX
-        const geometry = buildDependencyPath(
+        const geometry = edge.relation ?? buildDependencyPath(
           { x: fromX, y: edge.fromY },
           { x: toX, y: edge.toY },
           {
@@ -3030,6 +3056,10 @@ const GanttDependencyLayer = memo(function GanttDependencyLayer({
           <g
             key={edge.key}
             data-slot="gantt-dependency"
+            data-relationship={edge.relation ? 'parent-activity' : 'finish-to-start'}
+            data-source-id={edge.fromId}
+            data-target-id={edge.toId}
+            data-relation-kind={edge.relationKind}
             data-dragging={dragged || undefined}
             // in-flight edges stay SOLID - they still describe a real link -
             // and drop to a lower tone, arrowhead included, while the
@@ -3044,9 +3074,11 @@ const GanttDependencyLayer = memo(function GanttDependencyLayer({
               // view's 1px gridlines; a viewBox-unit width would fatten
               // vertical runs whenever the track stretches
               strokeWidth={1.5}
+              strokeDasharray={edge.relation && edge.relationKind !== 'fork' ? '4 3' : undefined}
               vectorEffect="non-scaling-stroke"
             />
             <path d={geometry.arrow} fill="currentColor" />
+            {edge.relation ? <circle cx={edge.fromX} cy={edge.fromY} r={0.11} fill="currentColor" /> : null}
           </g>
         )
       })}
@@ -3709,7 +3741,7 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
                       : `${from * 100}%`,
                     width: plan.baseline.milestone
                       ? `${laneHeightRem}rem`
-                      : `${Math.max((to - from) * 100, 0.5)}%`,
+                      : `max(2px, ${(to - from) * 100}%)`,
                     top: `${laneOffsetRem}rem`,
                     height: `${bandRemHeight}rem`,
                   } as CSSProperties
@@ -3770,7 +3802,7 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
                     : `${from * 100}%`,
                   width: plan.baseline.milestone
                     ? `${laneHeightRem}rem`
-                    : `${Math.max((to - from) * 100, 0.5)}%`,
+                    : `max(2px, ${(to - from) * 100}%)`,
                   top: `${laneTopRem(laneOffsetRem, plan.lane, laneHeightRem, laneGapRem)}rem`,
                   height: `${laneHeightRem}rem`,
                 } as CSSProperties
@@ -3857,7 +3889,7 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
                   : `${from * 100}%`,
                 width: milestone
                   ? `${laneHeightRem}rem`
-                  : `${Math.max((to - from) * 100, 0.5)}%`,
+                  : `max(2px, ${(to - from) * 100}%)`,
                 top: `${laneTopRem(laneOffsetRem, lane, laneHeightRem, laneGapRem)}rem`,
                 height: `${laneHeightRem}rem`,
                 // one track means every lane is 0, so paint order (not the
@@ -3871,7 +3903,7 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
                 segment={segment}
                 labelOutside={placement !== "inside"}
                 rowTitle={row.resource.title}
-                className="h-full"
+                className={cn("h-full", barRemWidth < 1 && "px-0")}
               />
               {placement !== "inside" && (
                 <span
@@ -3905,7 +3937,7 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
             className="pointer-events-none absolute top-1/2 -translate-y-1/2"
             style={{
               insetInlineStart: `${bars.summary.from * 100}%`,
-              width: `${Math.max((bars.summary.to - bars.summary.from) * 100, 0.5)}%`,
+              width: `max(2px, ${(bars.summary.to - bars.summary.from) * 100}%)`,
             }}
           >
             {viewConfig.renderSummary ? (
@@ -3987,7 +4019,7 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
                   : `${ghost.from * 100}%`,
                 width: ghost.milestone
                   ? `${laneHeightRem}rem`
-                  : `${Math.max((ghost.to - ghost.from) * 100, 0.5)}%`,
+                  : `max(2px, ${(ghost.to - ghost.from) * 100}%)`,
                 // sit on the dragged schedule's OWN lane. Centering the ghost
                 // in the row put it on no lane at all once a node stacked, so
                 // a 3-lane row showed the drop target floating in the middle.
@@ -4030,7 +4062,7 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
             className="border-primary bg-background pointer-events-none absolute z-40 overflow-hidden rounded-sm border border-dashed"
             style={{
               insetInlineStart: `${draft.from * 100}%`,
-              width: `${Math.max((draft.to - draft.from) * 100, 0.5)}%`,
+              width: `max(2px, ${(draft.to - draft.from) * 100}%)`,
               // the destination lane, not the row's middle (which on a stacked
               // row is the GAP between two lanes), and the real lane height
               // rather than a hardcoded h-5 a consumer's metrics would break

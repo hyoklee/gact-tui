@@ -29,6 +29,7 @@ export type ClioQueryNamespace =
   | 'document-content'
   | 'document-editor-health'
   | 'document-manifest'
+  | 'document-pdf'
   | 'expert-pack'
   | 'expert-packs'
   | 'execution-provenance'
@@ -60,6 +61,7 @@ export type ClioQueryNamespace =
   | 'runs'
   | 'runtime-metrics'
   | 'runtime-settings'
+  | 'sandbox-setup'
   | 'sandbox-status'
   | 'saved-servers'
   | 'service-health'
@@ -75,6 +77,7 @@ export type ClioQueryNamespace =
   | 'queued-messages'
   | 'tools'
   | 'transcript'
+  | 'response-feedback'
   | 'variant-runs'
   | 'workspace-file'
   | 'workspace-file-bytes'
@@ -90,6 +93,7 @@ export type ClioQueryNamespace =
   | 'workspace-resource-structure-node'
   | 'workspace-memory-search'
   | 'workspace-warmup'
+  | 'working-context'
   | 'workspaces';
 
 /** Canonical TanStack Query keys shared by reads, mutations, and live invalidation. */

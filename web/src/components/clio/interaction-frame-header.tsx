@@ -7,24 +7,29 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { OwnerAttribution } from './pending-interaction-notices';
 import { TechnicalDetails } from './technical-details';
+import { QuestionMarkdown } from './question-markdown';
 
 interface InteractionFrameHeaderProps {
+  className?: string;
   interaction: PendingInteraction;
   ownerLabel?: string;
   showOwner: boolean;
   onCancel?: () => void;
   actions?: ReactNode;
   disabled?: boolean;
+  showFullPrompt?: boolean;
 }
 
 /** Shared compact heading for questions and interactive response surfaces. */
 export function InteractionFrameHeader({
+  className,
   interaction,
   ownerLabel,
   showOwner,
   onCancel,
   actions,
   disabled,
+  showFullPrompt,
 }: InteractionFrameHeaderProps) {
   const isPlanExit = interaction.source.tool_name === 'plan_exit';
   const Icon =
@@ -34,15 +39,21 @@ export function InteractionFrameHeader({
         ? BoxesIcon
         : MessageCircleQuestionIcon;
   return (
-    <FrameHeader className={cn('relative flex-row items-start gap-2', actions ? 'pr-28' : 'pr-10')}>
+    <FrameHeader
+      className={cn('relative flex-row items-start gap-2', actions ? 'pr-28' : 'pr-10', className)}
+    >
       <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-action" />
       <div className="min-w-0 flex-1">
         <FrameTitle
-          className="line-clamp-3"
+          className={cn(
+            'break-words font-normal',
+            !showFullPrompt && 'clio-scrollbar max-h-28 overflow-y-auto pb-1 pr-1',
+          )}
           data-slot="pending-interaction-title"
-          title={isPlanExit ? interaction.title : (interaction.prompt ?? interaction.title)}
         >
-          {isPlanExit ? interaction.title : (interaction.prompt ?? interaction.title)}
+          <QuestionMarkdown>
+            {isPlanExit ? interaction.title : (interaction.prompt ?? interaction.title)}
+          </QuestionMarkdown>
         </FrameTitle>
         <OwnerAttribution interaction={interaction} ownerLabel={ownerLabel} show={showOwner} />
         {interaction.routing_state === 'agent_elicitation_fallback_to_human' ? (
@@ -51,7 +62,10 @@ export function InteractionFrameHeader({
               The specialist could not answer this, so it needs you.
             </p>
             {interaction.fallback_detail ? (
-              <TechnicalDetails className="mt-1 text-xs text-muted-foreground" title="Technical details">
+              <TechnicalDetails
+                className="mt-1 text-xs text-muted-foreground"
+                title="Technical details"
+              >
                 <code>{interaction.fallback_detail}</code>
               </TechnicalDetails>
             ) : null}

@@ -184,10 +184,19 @@ export const TerminalClearButton = ({
   );
 };
 
-export type TerminalContentProps = HTMLAttributes<HTMLDivElement>;
+export type TerminalContentProps = HTMLAttributes<HTMLDivElement> & {
+  /** Render a recorded page or excerpt within the same terminal surface. */
+  output?: string;
+};
 
-export const TerminalContent = ({ className, children, ...props }: TerminalContentProps) => {
-  const { output, isStreaming, autoScroll } = useContext(TerminalContext);
+export const TerminalContent = ({
+  className,
+  children,
+  output: recordedOutput,
+  ...props
+}: TerminalContentProps) => {
+  const { output: contextOutput, isStreaming, autoScroll } = useContext(TerminalContext);
+  const output = recordedOutput ?? contextOutput;
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

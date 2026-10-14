@@ -1,3 +1,4 @@
+import { subagentOpenTarget } from './subagent-navigation';
 import type {
   Artifact,
   AsyncProcess,
@@ -10,6 +11,7 @@ import type {
   PendingInteraction,
   Run,
   RunState,
+  Session,
   SessionDiff,
   SubagentRun,
   Task,
@@ -45,6 +47,9 @@ import type { SubagentOpenTarget } from './subagent-card';
 import type { ObservabilityView } from './observability-view-storage';
 
 export interface ClioObservabilityDockProps {
+  sessions?: readonly Session[];
+  familyProvenance?: ExecutionProvenanceResult;
+  familyProvenancePending?: boolean;
   artifacts: readonly Artifact[];
   contextFiles: readonly ContextFile[];
   contextFrames: readonly ContextFrame[];
@@ -52,6 +57,7 @@ export interface ClioObservabilityDockProps {
   messages: readonly Message[];
   interactions?: readonly PendingInteraction[];
   processes: readonly AsyncProcess[];
+  onCancelTask?: (task: AsyncProcess) => Promise<void>;
   tasks: readonly Task[];
   tools: readonly ToolInvocation[];
   runs: readonly Run[];
@@ -100,7 +106,14 @@ export interface ClioObservabilityDockProps {
 }
 
 function isActiveWork(state: string): boolean {
-  return ['queued', 'running', 'waiting_permission', 'waiting_user'].includes(state);
+  return [
+    'queued',
+    'running',
+    'working',
+    'input_required',
+    'waiting_permission',
+    'waiting_user',
+  ].includes(state);
 }
 
 export function ClioObservabilityDock(props: ClioObservabilityDockProps) {
@@ -163,11 +176,11 @@ export function ClioObservabilityDock(props: ClioObservabilityDockProps) {
   return (
     <div className="flex min-w-0 items-center gap-1" data-slot="composer-evidence">
       <SessionEvidencePopover evidence={props}>
-        {({ layout, buttonRef, panelId, cycle }) => (
+        {({ layout, visible, buttonRef, panelId, cycle }) => (
           <Button
             ref={buttonRef}
             aria-label={`Evidence layout: ${layout.charAt(0).toUpperCase() + layout.slice(1)}`}
-            aria-expanded={layout !== 'none'}
+            aria-expanded={visible}
             aria-controls={panelId}
             aria-haspopup="dialog"
             data-evidence-layout={layout}
@@ -238,8 +251,7 @@ export function ClioObservabilityDock(props: ClioObservabilityDockProps) {
             <PopoverHeader className="px-2 pb-1 pt-1">
               <PopoverTitle>Child agents</PopoverTitle>
               <PopoverDescription>
-                Select one to make it central. Use the canvas action to keep this conversation in
-                place.
+                Select one to open a workspace tab. Shift-click to open it in the center.
               </PopoverDescription>
             </PopoverHeader>
             <div className="grid gap-1">
@@ -267,9 +279,7 @@ export function ClioObservabilityDock(props: ClioObservabilityDockProps) {
                     className="min-h-0 px-2 py-2"
                     disabled={!agent.child_session_id || !props.onOpenSubagent}
                     key={agent.id}
-                    onClick={(event) =>
-                      openChildAgent(agent, event.shiftKey ? 'canvas' : 'conversation')
-                    }
+                    onClick={(event) => openChildAgent(agent, subagentOpenTarget(event))}
                     onKeyDown={(event) => {
                       if (
                         event.shiftKey &&
@@ -278,7 +288,7 @@ export function ClioObservabilityDock(props: ClioObservabilityDockProps) {
                         props.onOpenSubagent
                       ) {
                         event.preventDefault();
-                        openChildAgent(agent, 'canvas');
+                        openChildAgent(agent, 'conversation');
                       }
                     }}
                     onMouseDown={(event) => {

@@ -6,11 +6,11 @@ import {
   type ToolInvocation,
   type TransportFrame,
 } from '@clio/core/v3';
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AppearanceProvider } from '@/providers/appearance-provider';
+import { TranscriptTestAppearance as AppearanceProvider } from '@/test/transcript-test-appearance';
 import { ConversationDisplayProvider } from '@/providers/conversation-display-provider';
 import { useLiveStore } from '@/store/live-store';
 import reloadFixture from '@/test-fixtures/variant-runs/refine-user-judged-reload.json';
@@ -77,15 +77,16 @@ describe('ClioConversation variant runs', () => {
     const block = within(row).getByRole('group', { name: 'Alternative drafts' });
     expect(within(block).getByRole('status')).toHaveTextContent('Draft 3 selected');
     // The turn keeps its own injection; the try's advice moved into the try's tab.
-    expect(within(row).getAllByText(/gave the agent: Drafting alternatives/u)).toHaveLength(1);
-    const advice = within(row).getAllByText(/gave the agent: Advice for this draft/u);
+    fireEvent.click(within(row).getByRole('button', { name: /^Activity:/u }));
+    expect(within(row).getAllByText('Drafting alternatives')).toHaveLength(1);
+    const advice = within(row).getAllByText('Advice for this draft');
     expect(advice).toHaveLength(1);
     expect(block).toContainElement(advice[0]!);
     expect(document.getElementById('message-msg_user_1')).not.toContainElement(block);
     // The advice was injected in the resumed turn: its stamped block lands in the
     // try's tab, never in that turn's own lane.
     const resumed = document.getElementById('message-msg_assistant_2')!;
-    expect(within(resumed).queryByText(/gave the agent: Advice for this draft/u)).toBeNull();
+    expect(within(resumed).queryByText('Advice for this draft')).toBeNull();
     expect(resumed).toHaveTextContent('Mesh study (0.6M, 1.2M, 2.1M cells)');
   });
 

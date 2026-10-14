@@ -8,13 +8,22 @@ import type {
 } from '@clio/core/v3';
 
 export type WorkbenchTab =
+  | { id: string; kind: 'knowledge'; sourceId: string; label: string; workspaceId: string }
   | { id: 'work'; kind: 'work'; label: 'Work' }
   | { id: 'session'; kind: 'session'; label: 'Observability' }
   | { id: 'files'; kind: 'files'; label: 'Files'; path?: string }
   | { id: 'artifacts'; kind: 'artifacts'; label: 'Artifacts' }
   | { id: 'blueprints'; kind: 'blueprints'; label: 'Blueprints' }
   | { id: 'resources'; kind: 'resources'; label: 'Resources' }
-  | { id: string; kind: 'workspace-file'; label: string; path: string; workspaceId: string }
+  | {
+      id: string;
+      kind: 'workspace-file';
+      label: string;
+      path: string;
+      workspaceId: string;
+      line?: number;
+      find?: string;
+    }
   | {
       id: string;
       kind: 'diff';

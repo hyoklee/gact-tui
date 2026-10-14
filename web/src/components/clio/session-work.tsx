@@ -8,9 +8,6 @@ import {
   CirclePauseIcon,
   CircleStopIcon,
   ListChecksIcon,
-  SquareCheckIcon,
-  SquareIcon,
-  SquareMinusIcon,
 } from 'lucide-react';
 import { DeleteIcon } from '@/lib/icon-vocabulary';
 import { useRepository } from '@/hooks/use-repository';
@@ -33,24 +30,54 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useSessionWork } from './use-session-work';
+import { WorkRecordControls } from './work-record-controls';
+import { useEvidenceDisclosure } from '@/hooks/use-evidence-disclosures';
+import { TodoList, TodoStatusIcon } from './todo-list';
+import { todoCurrentSummary } from './todo-list-summary';
+import { OpenQuestionsSection } from './open-question-list';
+
+/** Keep parked goals and future monitoring visible in the bottom work finder. */
+export function SessionWorkStatus({
+  sessionId,
+  onOpen,
+  fallback,
+}: {
+  sessionId: string;
+  onOpen: () => void;
+  fallback: string;
+}) {
+  const { data } = useSessionWork(sessionId);
+  return data && (data.goal || data.loop || data.schedules.length) ? (
+    <div className="min-w-0 max-w-96 [&_button]:h-5 [&_button]:text-[0.625rem]">
+      <SessionWorkSummary sessionId={sessionId} onOpen={onOpen} />
+    </div>
+  ) : (
+    <span>{fallback}</span>
+  );
+}
 
 /** Compact entry to authoritative work state, independent of transcript expansion. */
 export function SessionWorkSummary({
   sessionId,
   onOpen,
+  includeTodos = true,
 }: {
   sessionId: string;
   onOpen: () => void;
+  includeTodos?: boolean;
 }) {
   const { data } = useSessionWork(sessionId);
-  if (!data || (!data.goal && !data.loop && !data.todos.length)) return null;
+  if (!data || (!data.goal && !data.loop && !data.todos.length && !data.schedules.length))
+    return null;
   const current =
     data.goal?.state === 'active' || data.goal?.state === 'paused'
       ? data.goal
       : data.loop?.state === 'active' || data.loop?.state === 'paused'
         ? data.loop
         : undefined;
-  const done = data.todos.filter((todo) => todo.status === 'completed').length;
+  const scheduledCount = data.schedules.filter((schedule) => schedule.enabled).length;
+  const otherLoop = current === data.goal && data.loop?.state === 'active';
+  if (!includeTodos && !current && !scheduledCount) return null;
   return (
     <Button
       type="button"
@@ -63,13 +90,19 @@ export function SessionWorkSummary({
       <ListChecksIcon data-icon="inline-start" />
       <span className="min-w-0 flex-1 truncate">
         {current
-          ? `${current.state === 'paused' ? 'Paused' : 'Active'}: ${current.title}`
-          : 'Session work'}
+          ? `${current.phase === 'waiting' ? 'Waiting' : current.phase === 'needs_input' ? 'Needs input' : current.state === 'paused' ? 'Paused' : 'Active'}: ${current.title}`
+          : data.schedules.some((schedule) => schedule.enabled)
+            ? 'Scheduled work'
+            : 'Session work'}
       </span>
-      {data.todos.length ? (
+      {otherLoop ? <span className="shrink-0">Loop</span> : null}
+      {scheduledCount ? (
         <span className="shrink-0">
-          {done}/{data.todos.length} done
+          {scheduledCount} {scheduledCount === 1 ? 'schedule' : 'schedules'}
         </span>
+      ) : null}
+      {includeTodos && data.todos.length ? (
+        <span className="shrink-0">{todoCurrentSummary(data.todos, (todo) => todo.status)}</span>
       ) : null}
     </Button>
   );
@@ -89,7 +122,15 @@ function workReasonLabel(reason: string): string {
   );
 }
 
-function WorkRecordRow({ record }: { record: WorkRecord }) {
+function WorkRecordRow({
+  record,
+  sessionId,
+  kind,
+}: {
+  record: WorkRecord;
+  sessionId: string;
+  kind: 'goal' | 'loop';
+}) {
   const Icon =
     record.state === 'completed'
       ? CircleCheckIcon
@@ -98,7 +139,8 @@ function WorkRecordRow({ record }: { record: WorkRecord }) {
         : record.state === 'paused'
           ? CirclePauseIcon
           : CircleDotIcon;
-  const state = record.state.charAt(0).toUpperCase() + record.state.slice(1);
+  const phase = record.state === 'active' && record.phase ? record.phase : record.state;
+  const state = phase.charAt(0).toUpperCase() + phase.slice(1).replaceAll('_', ' ');
   return (
     <li className="flex min-w-0 flex-col gap-0.5 py-1.5">
       <div className="flex flex-wrap items-center gap-x-2 text-muted-foreground">
@@ -119,6 +161,7 @@ function WorkRecordRow({ record }: { record: WorkRecord }) {
           {workReasonLabel(record.reason)}
         </p>
       ) : null}
+      <WorkRecordControls sessionId={sessionId} kind={kind} record={record} />
     </li>
   );
 }
@@ -170,13 +213,14 @@ function WorkSection({
   hasContent: boolean;
   children: React.ReactNode;
 }) {
+  const [open, setOpen] = useEvidenceDisclosure(`work-view:${title}`);
   return (
-    <Collapsible defaultOpen asChild>
+    <Collapsible open={open} onOpenChange={setOpen} asChild>
       <section
         aria-label={title}
         className={cn(
           'group/work-section flex min-h-0 min-w-0 flex-col border-b last:border-b-0',
-          hasContent && 'data-[state=open]:flex-1',
+          hasContent && 'shrink-0',
         )}
       >
         {/* The WAI-ARIA disclosure pattern nests an accordion trigger in a
@@ -199,11 +243,11 @@ function WorkSection({
             </Button>
           </CollapsibleTrigger>
         </h3>
-        <CollapsibleContent className="min-h-0 flex-1 overflow-hidden">
+        <CollapsibleContent className="min-h-0 overflow-hidden">
           <ScrollArea
-            className="h-full min-h-0"
+            className="max-h-[32rem] min-h-0"
             data-slot="work-section-scroll"
-            viewportProps={{ className: 'pr-3' }}
+            viewportProps={{ className: 'max-h-[32rem] pr-3' }}
           >
             <div className="flex min-w-0 flex-col gap-2 pb-3">{children}</div>
           </ScrollArea>
@@ -214,12 +258,6 @@ function WorkSection({
 }
 
 function TodoRow({ todo }: { todo: WorkTodo }) {
-  const Icon =
-    todo.status === 'completed'
-      ? SquareCheckIcon
-      : todo.status === 'in_progress'
-        ? SquareMinusIcon
-        : SquareIcon;
   const label =
     todo.status === 'in_progress'
       ? 'In progress'
@@ -237,17 +275,7 @@ function TodoRow({ todo }: { todo: WorkTodo }) {
               tabIndex={0}
               className="mt-1 inline-flex size-4 shrink-0 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
-              <Icon
-                aria-hidden="true"
-                className={cn(
-                  'size-4',
-                  todo.status === 'completed'
-                    ? 'text-success'
-                    : todo.status === 'in_progress'
-                      ? 'text-warning'
-                      : 'text-muted-foreground',
-                )}
-              />
+              <TodoStatusIcon state={todo.status} />
             </span>
           </TooltipTrigger>
           <TooltipContent>{label}</TooltipContent>
@@ -299,6 +327,19 @@ function PreviousScheduleRow({ schedule }: { schedule: WorkScheduleHistory }) {
 
 /** Inspect todos, goal/loop history, and schedules without changing runtime state. */
 export function SessionWorkView({ sessionId }: { sessionId: string }) {
+  return (
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
+      <div className="max-h-[45%] shrink-0 overflow-y-auto px-4">
+        <OpenQuestionsSection />
+      </div>
+      <div className="min-h-0 flex-1">
+        <SessionWorkInventory sessionId={sessionId} />
+      </div>
+    </div>
+  );
+}
+
+function SessionWorkInventory({ sessionId }: { sessionId: string }) {
   const [cursor, setCursor] = useState(0);
   const query = useSessionWork(sessionId, cursor);
   const repository = useRepository();
@@ -319,6 +360,16 @@ export function SessionWorkView({ sessionId }: { sessionId: string }) {
           queryKey: ['session-work', settings.endpoint, sessionId],
         }),
       ]);
+    },
+  });
+  const toggleSchedule = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      repository.setScheduleEnabled(sessionId, id, enabled),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: scheduleKey });
+      await queryClient.invalidateQueries({
+        queryKey: ['session-work', settings.endpoint, sessionId],
+      });
     },
   });
   if (query.isPending)
@@ -349,26 +400,29 @@ export function SessionWorkView({ sessionId }: { sessionId: string }) {
   const activeScheduleCount = schedules.data?.schedules.length ?? 0;
   return (
     <div
-      className="flex h-full min-h-0 min-w-0 flex-col px-4 text-sm leading-6 [overflow-wrap:anywhere]"
+      className="flex h-full min-h-0 min-w-0 flex-col overflow-y-auto px-4 text-sm leading-6 [overflow-wrap:anywhere]"
       aria-label="Session work"
     >
       <WorkSection
         title="Todos"
-        summary={data.todos.length ? `${data.todos.length} current` : 'None current'}
+        summary={
+          data.todos.length ? todoCurrentSummary(data.todos, (todo) => todo.status) : 'None current'
+        }
         hasContent={Boolean(data.todos.length || data.todo_history.length)}
       >
         {data.todos.length ? (
-          <ul className="flex flex-col gap-2">
-            {data.todos.map((todo, index) => (
-              <TodoRow key={`${todo.content}-${index}`} todo={todo} />
-            ))}
-          </ul>
+          <TodoList
+            items={data.todos}
+            status={(todo) => todo.status}
+            scope="work"
+            renderItem={(todo, index) => <TodoRow key={`${todo.content}-${index}`} todo={todo} />}
+          />
         ) : (
           <p className="text-muted-foreground">
-            {data.todo_history.length ? 'No current tasks.' : 'No tasks recorded.'}
+            {data.todo_history.length ? 'No current todos.' : 'No todos recorded.'}
           </p>
         )}
-        <PreviousRecords count={data.todo_history.length} noun="task lists">
+        <PreviousRecords count={data.todo_history.length} noun="todo lists">
           <ul className="flex flex-col gap-2">
             {data.todo_history.map((snapshot) => (
               <TodoSnapshotRow key={snapshot.id} snapshot={snapshot} />
@@ -394,7 +448,7 @@ export function SessionWorkView({ sessionId }: { sessionId: string }) {
           >
             {currentIsActive && current ? (
               <ul>
-                <WorkRecordRow record={current} />
+                <WorkRecordRow record={current} sessionId={sessionId} kind={kind} />
               </ul>
             ) : (
               <p className="text-muted-foreground">
@@ -404,7 +458,12 @@ export function SessionWorkView({ sessionId }: { sessionId: string }) {
             <PreviousRecords count={previous.length} noun={`${kind} records`}>
               <ul className="flex flex-col gap-2">
                 {previous.map((record) => (
-                  <WorkRecordRow key={record.id} record={record} />
+                  <WorkRecordRow
+                    key={record.id}
+                    record={record}
+                    sessionId={sessionId}
+                    kind={kind}
+                  />
                 ))}
               </ul>
             </PreviousRecords>
@@ -443,6 +502,23 @@ export function SessionWorkView({ sessionId }: { sessionId: string }) {
                     <span>Time zone: {schedule.timezone}</span>
                   </p>
                   {schedule.last_error ? <p>{schedule.last_error}</p> : null}
+                  <details className="text-muted-foreground">
+                    <summary className="cursor-pointer">Details</summary>
+                    <p>Run limit: {schedule.max_fires || 'Unlimited'}</p>
+                    <p>Completed runs: {schedule.fire_count}</p>
+                    <p>Deadline: {schedule.until || 'None'}</p>
+                  </details>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={toggleSchedule.isPending}
+                    onClick={() =>
+                      toggleSchedule.mutate({ id: schedule.id, enabled: !schedule.enabled })
+                    }
+                  >
+                    {schedule.enabled ? 'Stop' : 'Restart'}
+                  </Button>
+                  {toggleSchedule.error ? <p role="alert">{toggleSchedule.error.message}</p> : null}
                 </div>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>

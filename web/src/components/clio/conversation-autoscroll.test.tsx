@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConversationDisplayProvider } from '@/providers/conversation-display-provider';
-import { AppearanceProvider } from '@/providers/appearance-provider';
+import { TranscriptTestAppearance as AppearanceProvider } from '@/test/transcript-test-appearance';
 import { ClioConversation } from './conversation';
 
 vi.mock('@tanstack/react-virtual', () => ({
@@ -124,6 +124,22 @@ function conversation(text: string): ReactElement {
 }
 
 const scrollButton = () => screen.queryByRole('button', { name: 'Scroll to bottom' });
+
+it('keeps a disclosure press clear of the scroll control while the transcript fits', () => {
+  const geometry = stubScrollGeometry();
+  geometry.resizeContent(-1700);
+  render(conversation('Short recorded update'));
+  const log = screen.getByRole('log', { name: 'Conversation' });
+  const disclosure = document.createElement('button');
+  disclosure.setAttribute('aria-expanded', 'false');
+  log.append(disclosure);
+  fireEvent.pointerDown(disclosure);
+  expect(scrollButton()).toBeNull();
+  geometry.grow(600);
+  expect(scrollButton()).toBeVisible();
+  geometry.grow(-600);
+  expect(scrollButton()).toBeNull();
+});
 
 let now = 1_000;
 beforeEach(() => {

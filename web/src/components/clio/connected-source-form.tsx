@@ -1,4 +1,5 @@
 import { inTauri } from '@/lib/transport/tauri-runtime';
+import { vocab } from '@/lib/brand-vocabulary';
 import type {
   CreateSourceInput,
   SourceProvider,
@@ -14,6 +15,7 @@ import { useRepository } from '@/hooks/use-repository';
 import { HostPathPicker } from './host-path-picker';
 import { InfoTip } from './info-tip';
 import { SourceProviderLogo } from './source-provider-logo';
+import { ObsidianSourceForm, type ObsidianChoice } from './obsidian-source-form';
 import { SourceSshTarget } from './source-ssh-target';
 import { GitHubRevisionPicker } from './github-revision-picker';
 
@@ -24,6 +26,7 @@ export function ConnectedSourceForm({
   hostLabel,
   browseStartPath,
   source,
+  obsidianChoice,
   onConnected,
   onBack,
 }: {
@@ -32,6 +35,7 @@ export function ConnectedSourceForm({
   hostLabel: string;
   browseStartPath?: string;
   source?: ConnectedSourceState;
+  obsidianChoice?: ObsidianChoice;
   onConnected: (source: ConnectedSourceState) => void;
   onBack: () => void;
 }) {
@@ -53,7 +57,9 @@ export function ConnectedSourceForm({
         provider: provider.id,
         label:
           label.trim() ||
-          (provider.id === 'local' || (provider.id === 'sftp' && inTauri())
+          (provider.id === 'local' ||
+          provider.id === 'obsidian' ||
+          (provider.id === 'sftp' && inTauri())
             ? root
                 .trim()
                 .replace(/[/\\]+$/, '')
@@ -77,13 +83,26 @@ export function ConnectedSourceForm({
       <Input
         form={formId}
         id={`source-${key}`}
-        value={configuration[key] ?? ''}
+        value={
+          Array.isArray(configuration[key])
+            ? configuration[key].join(', ')
+            : (configuration[key] ?? '')
+        }
         placeholder={placeholder}
         onChange={(e) => setConfiguration((previous) => ({ ...previous, [key]: e.target.value }))}
       />
     </Field>
   );
-  return (
+  return provider.id === 'obsidian' && !source ? (
+    <ObsidianSourceForm
+      initialChoice={obsidianChoice}
+      workspaceId={workspaceId}
+      hostLabel={hostLabel}
+      browseStartPath={browseStartPath}
+      onConnected={onConnected}
+      onBack={onBack}
+    />
+  ) : (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
         <SourceProviderLogo provider={provider.id} />
@@ -119,6 +138,42 @@ export function ConnectedSourceForm({
                 This source has data or transfer history. Its folder identifies that evidence. You
                 can rename it, or connect another folder as a new source.
               </InfoTip>
+            </div>
+          )}
+          {provider.id === 'obsidian' && (
+            <div className="space-y-3 text-sm">
+              <p className="text-xs text-muted-foreground">
+                This vault is a knowledge source. Only its approved folder is available to knowledge
+                tools. Hidden folders and Obsidian settings are excluded.
+              </p>
+              {configuration.obsidian_connection === 'headless_sync' && (
+                <div className="space-y-2">
+                  <p>
+                    {vocab.agent} manages this synced copy on {hostLabel}. Manage the official Sync
+                    client and its account in Settings → Data sources → Obsidian.
+                  </p>
+                  <Field>
+                    <FieldLabel htmlFor="vault-sync-mode">Sync direction</FieldLabel>
+                    <select
+                      id="vault-sync-mode"
+                      className="w-full rounded-md border bg-background p-2"
+                      value={configuration.obsidian_sync_mode ?? 'pull-only'}
+                      onChange={(event) =>
+                        setConfiguration((previous) => ({
+                          ...previous,
+                          obsidian_sync_mode: event.target.value as 'pull-only' | 'bidirectional',
+                        }))
+                      }
+                    >
+                      <option value="pull-only">Download remote changes</option>
+                      <option value="bidirectional">Sync changes both ways</option>
+                    </select>
+                  </Field>
+                  <p className="text-xs text-muted-foreground">
+                    Sync direction is separate from permission for the agent to edit notes.
+                  </p>
+                </div>
+              )}
             </div>
           )}
           {provider.id === 'sftp' && (
@@ -163,7 +218,7 @@ export function ConnectedSourceForm({
               )}
             </div>
             <div className="flex gap-2">
-              {provider.id !== 'local' && provider.id !== 'sftp' && (
+              {provider.id !== 'local' && provider.id !== 'sftp' && provider.id !== 'obsidian' && (
                 <Input
                   form={formId}
                   id="source-root"
@@ -183,14 +238,18 @@ export function ConnectedSourceForm({
                   }
                 />
               )}
-              {(provider.id === 'local' || provider.id === 'sftp') && (
+              {(provider.id === 'local' ||
+                provider.id === 'sftp' ||
+                provider.id === 'obsidian') && (
                 <div className="flex min-w-0 w-full items-center gap-3 rounded-md border p-2">
                   <HostPathPicker
                     targetId={provider.id === 'sftp' ? configuration.target_id || '' : 'local'}
                     hostLabel={
                       provider.id === 'sftp' ? sshFolder?.label || 'selected SSH host' : hostLabel
                     }
-                    label="Source folder"
+                    label={
+                      provider.id === 'obsidian' ? 'Vault or folder inside it' : 'Source folder'
+                    }
                     triggerLabel="Choose folder"
                     startPath={provider.id === 'sftp' ? sshFolder?.startPath : browseStartPath}
                     path={root}
@@ -233,7 +292,9 @@ export function ConnectedSourceForm({
             />
           )}
           <p className="text-xs text-muted-foreground">
-            Choose Download or Link and how edits are handled after connecting.
+            {provider.id === 'obsidian'
+              ? 'Connect this vault as a knowledge source. Notes open in the graph, file list, and reader.'
+              : 'Choose Download or Link and how edits are handled after connecting.'}
           </p>
         </fieldset>
       </fieldset>
@@ -258,7 +319,8 @@ export function ConnectedSourceForm({
           disabled={
             connect.isPending ||
             (provider.id === 'github' && !githubRevisionValid) ||
-            ((provider.id === 'local' || provider.id === 'sftp') && !root.trim())
+            ((provider.id === 'local' || provider.id === 'sftp' || provider.id === 'obsidian') &&
+              !root.trim())
           }
         >
           {connect.isPending
@@ -267,7 +329,9 @@ export function ConnectedSourceForm({
               : 'Connecting…'
             : source
               ? 'Save changes'
-              : 'Connect folder'}
+              : provider.id === 'obsidian'
+                ? 'Connect vault'
+                : 'Connect folder'}
         </Button>
       </form>
     </div>

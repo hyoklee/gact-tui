@@ -21,7 +21,7 @@ import {
   CodeBlockHeader,
   CodeBlockTitle,
 } from '@/components/ai-elements/code-block';
-import { MessageResponse } from '@/components/ai-elements/message';
+import { ContentMarkdown } from './content-markdown';
 import { DOCUMENT_MARKDOWN_CLASS_NAME, normalizeConvertedMarkdown } from '@/lib/document-markdown';
 import {
   Empty,
@@ -69,20 +69,48 @@ export function WorkspaceFileView({
   initialPage?: number;
 }) {
   const detected = mediaType || inferredWorkspaceMediaType(path);
+  const html =
+    detected !== 'application/pdf' && !detected.startsWith('image/') && isHtmlFile(path, detected);
   const preview =
     detected === 'application/pdf' ? (
       <WorkspacePdfView initialPage={initialPage} path={path} workspaceId={workspaceId} />
     ) : detected.startsWith('image/') ? (
       <WorkspaceImageView mediaType={detected} path={path} workspaceId={workspaceId} />
-    ) : isTextMediaType(detected) ? (
-      <WorkspaceTextView path={path} size={size} workspaceId={workspaceId} mediaType={detected} />
+    ) : isTextMediaType(detected) || html ? (
+      <WorkspaceTextView
+        path={path}
+        size={size}
+        workspaceId={workspaceId}
+        mediaType={detected}
+        htmlView={html ? 'preview' : undefined}
+      />
     ) : (
       <WorkspaceBinaryView mediaType={detected} path={path} size={size} workspaceId={workspaceId} />
     );
   return (
     <FileViewerShell
       source={{ kind: 'workspace', workspaceId, path, mediaType: detected, size }}
-      tabs={[{ value: 'preview', label: 'Preview', icon: EyeIcon, content: preview }]}
+      tabs={[
+        { value: 'preview', label: 'Preview', icon: EyeIcon, content: preview },
+        ...(html
+          ? [
+              {
+                value: 'source',
+                label: 'Source',
+                icon: FileCode2Icon,
+                content: (
+                  <WorkspaceTextView
+                    path={path}
+                    size={size}
+                    workspaceId={workspaceId}
+                    mediaType={detected}
+                    htmlView="source"
+                  />
+                ),
+              },
+            ]
+          : []),
+      ]}
     />
   );
 }
@@ -119,11 +147,13 @@ function WorkspaceTextView({
   path,
   size,
   mediaType,
+  htmlView,
 }: {
   workspaceId: string;
   path: string;
   size?: number;
   mediaType?: string;
+  htmlView?: 'preview' | 'source';
 }) {
   const repository = useRepository();
   const { settings } = useConnectionSettings();
@@ -132,6 +162,9 @@ function WorkspaceTextView({
     queryKey: queryKeys.workspaceFile(settings.endpoint, workspaceId, path),
     queryFn: ({ signal }) => repository.readWorkspaceFile(workspaceId, path, signal),
     enabled: canLoad,
+    // Preview and Source are two views of the same loaded file. Switching
+    // between their host tabs must not restart a read of unchanged content.
+    refetchOnMount: htmlView ? false : undefined,
   });
   if (!canLoad) return <LargeResourceNotice name={fileName(path)} size={size} />;
   return (
@@ -140,6 +173,7 @@ function WorkspaceTextView({
       error={content.error?.message}
       path={path}
       mediaType={mediaType}
+      htmlView={htmlView}
     />
   );
 }
@@ -309,15 +343,16 @@ export function ArtifactView({
     !canLoadInline ? (
       <LargeResourceNotice name={artifact.name} size={previewSize} />
     ) : text.data ? (
+      artifact.producer?.['designation'] === 'dashboard-report' ||
       artifact.name.endsWith('.dashboard.json') ? (
         <DashboardResourceView content={text.data.content} artifactId={artifact.id} />
       ) : isHtmlFile(artifact.name, artifact.media_type) ? (
         <HtmlFilePreview name={artifact.name} content={text.data.content} />
       ) : isMarkdownArtifact(artifact.media_type, artifact.name) ? (
         <article className="min-w-0 overflow-hidden rounded-lg border bg-background px-5 py-4">
-          <MessageResponse className={DOCUMENT_MARKDOWN_CLASS_NAME}>
+          <ContentMarkdown className={DOCUMENT_MARKDOWN_CLASS_NAME}>
             {normalizeConvertedMarkdown(text.data.content)}
-          </MessageResponse>
+          </ContentMarkdown>
         </article>
       ) : isCsvPath(artifact.name) || artifact.media_type === 'text/csv' ? (
         <ClioCsvView content={text.data.content} title={artifact.name} />
@@ -431,11 +466,13 @@ export function TextResourceView({
   content,
   error,
   mediaType,
+  htmlView,
 }: {
   path: string;
   content?: string;
   error?: string;
   mediaType?: string;
+  htmlView?: 'preview' | 'source';
 }) {
   if (content === undefined && !error)
     return <ResourceLoading className="p-4" label={`Loading ${fileName(path)}`} />;
@@ -446,7 +483,7 @@ export function TextResourceView({
       </div>
     );
   if (isHtmlFile(path, mediaType)) {
-    return <HtmlFilePreview name={fileName(path)} content={content ?? ''} />;
+    return <HtmlFilePreview name={fileName(path)} content={content ?? ''} view={htmlView} />;
   }
   if (isMarkdownArtifact('', path)) {
     return <MarkdownFilePreview name={fileName(path)} content={content ?? ''} />;
@@ -602,6 +639,7 @@ function LargeResourceNotice({ name, size }: { name: string; size?: number }) {
 
 function imageMediaType(path: string): string {
   const extension = path.split('.').at(-1)?.toLowerCase();
+  if (extension === 'svg') return 'image/svg+xml';
   if (extension === 'jpg' || extension === 'jpeg') return 'image/jpeg';
   if (extension === 'gif') return 'image/gif';
   if (extension === 'webp') return 'image/webp';

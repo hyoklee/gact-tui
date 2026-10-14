@@ -1,3 +1,4 @@
+import { subagentOpenTarget } from './subagent-navigation';
 import type {
   Artifact,
   AsyncProcess,
@@ -20,8 +21,10 @@ import {
   WrenchIcon,
 } from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
+import { useEvidenceSections } from '@/hooks/use-evidence-disclosures';
 import { formatBytes, formatDuration } from '@/lib/format';
 import { fileFormatLabel } from '@/lib/media-types';
+import { artifactDisplayName, isDashboardArtifact } from '@/lib/dashboard-presentation';
 import { ArtifactTypeIcon } from './artifact-type-icon';
 import { EvidenceSection } from './observability-evidence-section';
 import type { ClioEvidenceViewProps } from './observability-evidence';
@@ -30,6 +33,7 @@ import { diffStatus, friendlyStatus, type EvidenceSource } from './observability
 import { SessionSummaryRow } from './session-summary-row';
 import { clioStatusLabel } from './status';
 import { ClioToolInvocation } from './tool-invocation';
+import { AsyncTaskList } from './async-task-list';
 
 /** Compact inventory of the same authoritative evidence used by the full view. */
 export function SessionEvidenceSummary({
@@ -53,6 +57,7 @@ export function SessionEvidenceSummary({
   | 'onOpenSubagent'
   | 'onOpenWork'
   | 'onOpenActivity'
+  | 'onCancelTask'
 > & {
   outputs: readonly Artifact[];
   files: readonly EvidenceFile[];
@@ -65,22 +70,19 @@ export function SessionEvidenceSummary({
   subagents: readonly SubagentRun[];
   backgroundProcesses: readonly AsyncProcess[];
 }) {
+  const sections = useEvidenceSections('evidence-summary', [
+    'runs',
+    'tasks',
+    'child-agents',
+    'background',
+    'files',
+    'changes',
+    'artifacts',
+    'plans',
+    'sources',
+  ]);
   return (
-    <Accordion
-      type="multiple"
-      defaultValue={[
-        'runs',
-        'tasks',
-        'tools',
-        'child-agents',
-        'background',
-        'files',
-        'changes',
-        'artifacts',
-        'plans',
-        'sources',
-      ]}
-    >
+    <Accordion type="multiple" {...sections}>
       {runs.length ? (
         <EvidenceSection
           compact
@@ -141,8 +143,7 @@ export function SessionEvidenceSummary({
               metadata={clioStatusLabel(agent.state)}
               onOpen={
                 agent.child_session_id && actions.onOpenSubagent
-                  ? (event) =>
-                      actions.onOpenSubagent?.(agent, event.shiftKey ? 'canvas' : 'conversation')
+                  ? (event) => actions.onOpenSubagent?.(agent, subagentOpenTarget(event))
                   : undefined
               }
             />
@@ -170,15 +171,7 @@ export function SessionEvidenceSummary({
           value="background"
           count={backgroundProcesses.length}
         >
-          {backgroundProcesses.map((process) => (
-            <SessionSummaryRow
-              key={process.id}
-              icon={<ServerIcon />}
-              label={process.title}
-              metadata={clioStatusLabel(process.live_state)}
-              onOpen={actions.onOpenActivity}
-            />
-          ))}
+          <AsyncTaskList processes={backgroundProcesses} onCancelTask={actions.onCancelTask} />
         </EvidenceSection>
       ) : null}
       {files.length ? (
@@ -195,7 +188,7 @@ export function SessionEvidenceSummary({
               icon={<FileTextIcon />}
               label={file.displayPath}
               metadata={file.size === undefined ? undefined : formatBytes(file.size)}
-              title={[file.path, ...file.facts].join(' · ')}
+              title={[file.path, ...file.facts].join(' — ')}
               onOpen={actions.onOpenFile ? () => actions.onOpenFile?.(file.path) : undefined}
             />
           ))}
@@ -232,13 +225,15 @@ export function SessionEvidenceSummary({
             <SessionSummaryRow
               key={artifact.id}
               icon={<ArtifactTypeIcon artifact={artifact} />}
-              label={artifact.name}
+              label={artifactDisplayName(artifact)}
               metadata={[
-                fileFormatLabel(artifact.name, artifact.media_type),
+                isDashboardArtifact(artifact)
+                  ? 'Dashboard'
+                  : fileFormatLabel(artifact.name, artifact.media_type),
                 artifact.size === undefined ? undefined : formatBytes(artifact.size),
               ]
                 .filter(Boolean)
-                .join(' · ')}
+                .join(' — ')}
               timestamp={artifact.created_at}
               timestampLabel="Created"
               onOpen={actions.onOpenArtifact ? () => actions.onOpenArtifact?.(artifact) : undefined}

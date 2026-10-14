@@ -1,3 +1,4 @@
+import { artifactDisplayName } from '@/lib/dashboard-presentation';
 import type {
   AgentBlueprint,
   Artifact as ArtifactEntity,
@@ -6,7 +7,11 @@ import type {
   WorkspaceFileEntry,
   WorkspaceResource,
 } from '@clio/core/v3';
-import { Suspense, lazy, type ReactNode } from 'react';
+import { Suspense, lazy, type ReactNode, type ComponentProps } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useRepository } from '@/hooks/use-repository';
+import { useConnectionSettings } from '@/providers/connection-provider';
+import { connectionScope } from '@/lib/connection-scope';
 import type { SubagentOpenTarget } from './subagent-card';
 import { DiffCanvasView } from './diff-canvas-view';
 import { SessionWorkView } from './session-work';
@@ -20,6 +25,9 @@ import {
   FileBrowser,
 } from './workbench-resource-browser';
 import { WorkspaceTerminalPanel } from './workspace-terminal-panel';
+const KnowledgeSourceView = lazy(() =>
+  import('./knowledge-source-view').then((module) => ({ default: module.KnowledgeSourceView })),
+);
 import { assertNever, fileName, loadResourceViewers, type WorkbenchTab } from './workbench-shared';
 
 const ArtifactView = lazy(() =>
@@ -118,11 +126,18 @@ export function WorkbenchTabContent({
   switch (tab.kind) {
     case 'work':
       return sessionId ? <SessionWorkView key={sessionId} sessionId={sessionId} /> : sessionView;
+    case 'knowledge':
+      return (
+        <Suspense fallback={<CanvasLoading label="Loading knowledge" />}>
+          <KnowledgeSourceView workspaceId={workspaceId} sourceId={tab.sourceId} />
+        </Suspense>
+      );
     case 'session':
       return sessionView;
     case 'files':
       return (
         <FileBrowser
+          sessionId={sessionId}
           files={files}
           filesError={filesError}
           filesFetching={filesFetching}
@@ -148,7 +163,7 @@ export function WorkbenchTabContent({
             onReplaceTab(tab.id, {
               id: `artifact:${artifact.id}`,
               kind: 'artifact',
-              label: artifact.name,
+              label: artifactDisplayName(artifact),
               artifact,
               workspaceId: artifact.workspace_id ?? workspaceId,
             })
@@ -198,7 +213,9 @@ export function WorkbenchTabContent({
       );
     case 'workspace-file':
       return (
-        <FileBrowser
+        <ScopedWorkspaceFileBrowser
+          sourceWorkspaceId={workspaceId}
+          sessionId={sessionId}
           files={files}
           filesError={filesError}
           filesFetching={filesFetching}
@@ -208,6 +225,7 @@ export function WorkbenchTabContent({
           onRefresh={onRefreshFiles}
           onSelectedPathChange={(path) => onSelectWorkspaceFilePath(tab.id, path)}
           selectedPath={tab.path}
+          searchLocation={tab.line || tab.find ? { line: tab.line, find: tab.find } : undefined}
           workspaceId={tab.workspaceId}
         />
       );
@@ -255,7 +273,7 @@ export function WorkbenchTabContent({
               onOpenTab({
                 id: `artifact:${artifact.id}`,
                 kind: 'artifact',
-                label: artifact.name,
+                label: artifactDisplayName(artifact),
                 artifact,
                 workspaceId: artifact.workspace_id ?? tab.workspaceId,
               })
@@ -290,7 +308,7 @@ export function WorkbenchTabContent({
             onOpenTab({
               id: `artifact:${artifact.id}`,
               kind: 'artifact',
-              label: artifact.name,
+              label: artifactDisplayName(artifact),
               artifact,
               workspaceId: artifact.workspace_id ?? tab.workspaceId,
             })
@@ -333,4 +351,43 @@ export function WorkbenchTabContent({
     default:
       return assertNever(tab);
   }
+}
+
+/** A cross-workspace citation must bring its own tree as well as its own file bytes. */
+function ScopedWorkspaceFileBrowser({
+  sourceWorkspaceId,
+  ...props
+}: ComponentProps<typeof FileBrowser> & { sourceWorkspaceId: string }) {
+  const repository = useRepository();
+  const { settings } = useConnectionSettings();
+  const foreign = sourceWorkspaceId !== props.workspaceId;
+  const listing = useQuery({
+    queryKey: [
+      'workspace-files',
+      settings.endpoint,
+      props.workspaceId,
+      connectionScope(settings),
+      'search-tab',
+    ],
+    queryFn: ({ signal }) => repository.workspaceFiles(props.workspaceId, signal),
+    enabled: foreign,
+  });
+  return (
+    <FileBrowser
+      {...props}
+      {...(foreign
+        ? {
+            files: listing.data?.entries ?? [],
+            filesPending: listing.isPending,
+            filesFetching: listing.isFetching,
+            filesError: listing.error?.message,
+            filesTruncated: listing.data?.truncated,
+            filesNextOffset: undefined,
+            onRefresh: () => {
+              void listing.refetch();
+            },
+          }
+        : {})}
+    />
+  );
 }

@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConversationDisplayProvider } from '@/providers/conversation-display-provider';
-import { AppearanceProvider } from '@/providers/appearance-provider';
+import { TranscriptTestAppearance as AppearanceProvider } from '@/test/transcript-test-appearance';
 import { PROTOCOL } from '@/lib/brand-vocabulary';
 import { ClioConversation } from './conversation';
 
@@ -99,10 +99,14 @@ describe('ClioConversation activity and interactive surfaces', () => {
       name: 'Open child conversation geospatial #1',
     });
     fireEvent.click(dispatch);
-    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'conversation');
+    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'canvas');
 
     fireEvent.click(dispatch, { shiftKey: true });
+    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'conversation');
+    fireEvent.keyDown(dispatch, { key: 'Enter' });
     expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'canvas');
+    fireEvent.keyDown(dispatch, { key: 'Enter', shiftKey: true });
+    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'conversation');
   });
 
   it('keeps the sourced tool outcome readable inside a compact activity chain', async () => {
@@ -134,26 +138,38 @@ describe('ClioConversation activity and interactive surfaces', () => {
             state: 'succeeded',
             input: { path: 'D:/campaign/evidence.json' },
             output: 'large payload omitted from the collapsed summary',
-            presentation: { summary: 'Read evidence.json', blocks: [] },
+            presentation: {
+              summary: 'Read evidence.json',
+              blocks: [
+                { id: 'outcome', type: 'text', text: 'Three station records are available.' },
+              ],
+            },
           },
         }}
       />,
     );
 
-    expect(screen.getByRole('button', { name: /^Activity: 1 tool completed/ })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Activity: Read files' })).toHaveAttribute(
       'aria-expanded',
-      'true',
+      'false',
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Activity: Read files' }));
     const activity = screen.getByRole('button', {
-      name: 'Technical details for Read evidence file',
+      name: 'Show result for Read evidence file',
     });
     expect(activity).toBeInTheDocument();
     expect(activity).toHaveTextContent('Read evidence.json');
     expect(screen.queryByRole('radio', { name: 'Full activity view' })).not.toBeInTheDocument();
     fireEvent.click(activity);
-    expect(await screen.findByRole('dialog')).toHaveTextContent(
-      'large payload omitted from the collapsed summary',
+    expect(
+      await screen.findByRole('region', { name: /Read evidence file: Result/ }),
+    ).toHaveTextContent('Three station records are available.');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Technical details for Read evidence file' }),
     );
+    expect(
+      await screen.findByRole('dialog', { name: /Read evidence file: Technical details/ }),
+    ).toHaveTextContent('large payload omitted from the collapsed summary');
   });
 
   it('renders a tool-returned task as a quiet status line inside Activity', () => {
@@ -196,6 +212,7 @@ describe('ClioConversation activity and interactive surfaces', () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /^Activity:/ }));
     const taskLine = document.querySelector('[data-turn-activity="task:task_quality"]');
     if (!taskLine) throw new Error('the task activity line was not rendered');
     expect(taskLine).toBeInTheDocument();
@@ -246,9 +263,7 @@ describe('ClioConversation activity and interactive surfaces', () => {
     expect(activity).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(activity);
     expect(activity).toHaveAttribute('aria-expanded', 'true');
-    expect(
-      screen.getByRole('button', { name: /^Reasoning: Inspecting the evidence/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Inspecting the evidence.')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Technical details for Read evidence file' }),
     ).toBeInTheDocument();

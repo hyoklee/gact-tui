@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 const endpoint = `http://127.0.0.1:${process.env['CLIO_FIXTURE_PORT'] ?? '18799'}`;
 
-test('renders one compact causal timeline and a truthful completion footer at desktop and phone widths', async ({
+test('renders reader-controlled causal entries and a truthful completion footer at desktop and phone widths', async ({
   page,
 }) => {
   await page.request.post(`${endpoint}/__test/reset`);
@@ -25,23 +25,76 @@ test('renders one compact causal timeline and a truthful completion footer at de
   const message = page.locator('#message-msg_flat_assistant');
   const activity = message.getByRole('button', { name: /^Activity:/ });
   await expect(activity).toHaveAttribute('aria-expanded', 'true');
-  const thinking = message.getByRole('button', { name: /^Thinking/ });
-  await expect(thinking).toBeVisible();
-  await expect(thinking).not.toContainText('Thinking');
-  await expect(thinking.locator('svg.animate-spin')).toHaveCount(1);
+  await activity.click();
+  await expect(activity).toHaveAttribute('aria-expanded', 'false');
+  const thinking = message.locator('[data-slot="transcript-reasoning"]');
+  await expect(thinking).toHaveCount(0);
+  await expect(message.getByRole('button', { name: /^(?:Thinking|Reasoning):/u })).toHaveCount(0);
+  await expect(activity.locator('svg.animate-spin')).toHaveCount(1);
   await expect(
-    message.getByText('Read the fixture notes before preparing the report.', { exact: true }),
+    message
+      .locator('p')
+      .filter({ hasText: /^Read the fixture notes before preparing the report\.$/u }),
   ).toHaveCount(1);
   await expect(message.getByRole('group', { name: 'Activity detail' })).toHaveCount(0);
+  await expect(message.locator('[data-slot="message-completion-footer"]')).toHaveCount(0);
+  const update = message.locator('p').filter({
+    hasText: /^Read the fixture notes before preparing the report\.$/u,
+  });
+  await expect
+    .poll(async () => {
+      // The streaming fixture changes virtualized row heights. A detached row
+      // has no geometry; wait for its mounted measurements before comparing.
+      const [updateBounds, activityBounds] = await Promise.all([
+        update.boundingBox(),
+        activity.boundingBox(),
+      ]);
+      if (!updateBounds || !activityBounds) return -1;
+      return activityBounds.y - updateBounds.y - updateBounds.height;
+    })
+    .toBeGreaterThanOrEqual(18);
+  await activity.click();
+  await expect(message.getByRole('button', { name: /^Thinking:/ })).toHaveCount(0);
+  await expect(thinking).toBeVisible();
+  const reasoning = message.locator('[data-slot="transcript-reasoning"]');
+  await expect(reasoning).toHaveCount(1);
+  await expect(reasoning).toHaveAttribute('aria-busy', 'true');
+  await expect(reasoning).toContainText('Read the fixture notes before preparing the report.');
   await page.request.post(`${endpoint}/__test/transcript-activity`, { data: { phase: 'answer' } });
-  await expect(activity).toHaveAttribute('aria-expanded', 'false');
-  await expect(activity).toContainText('2 tools · 1 completed');
   const persisted = await (
     await page.request.get(`${endpoint}/v1/sessions/sess_flat_ndp/messages`)
   ).json();
   expect(
-    persisted.messages.some((entry: { id: string }) => entry.id === 'msg_flat_assistant'),
+    persisted.messages.some(
+      (entry: { id: string; completed_at?: string }) =>
+        entry.id === 'msg_flat_assistant' && entry.completed_at,
+    ),
   ).toBe(true);
+  // Completion changes virtualized row heights. Keep the current message
+  // mounted before inspecting its content; this does not toggle the activity.
+  let completedMeasurements = 0;
+  await expect
+    .poll(async () => {
+      await page
+        .getByRole('log', { name: 'Conversation' })
+        .evaluate((node) => node.scrollTo({ top: node.scrollHeight, behavior: 'instant' }));
+      const completed = await message.evaluateAll((nodes) =>
+        nodes.some(
+          (node) =>
+            node.querySelector('button[aria-label^="Activity:"]')?.getAttribute('aria-expanded') ===
+              'true' &&
+            node
+              .querySelector('[data-slot="message-completion-footer"]')
+              ?.textContent?.includes('Done'),
+        ),
+      );
+      completedMeasurements = completed ? completedMeasurements + 1 : 0;
+      return completedMeasurements;
+    })
+    .toBeGreaterThanOrEqual(3);
+  await expect(activity).toHaveAttribute('aria-expanded', 'true');
+  await expect(activity).not.toContainText(/\d+ tools|·/u);
+  await expect(thinking).toBeVisible();
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 });
     // Let virtualized row measurements settle before measuring the actual click.
@@ -72,6 +125,11 @@ test('renders one compact causal timeline and a truthful completion footer at de
         { intervals: [50, 100, 200], timeout: 10000 },
       )
       .toBeGreaterThanOrEqual(3);
+    if ((await activity.getAttribute('aria-expanded')) === 'true') {
+      await activity.focus();
+      await activity.press('Enter');
+      await expect(activity).toHaveAttribute('aria-expanded', 'false');
+    }
     await activity.scrollIntoViewIfNeeded();
     const before = await activity.boundingBox();
     await page.mouse.click(before!.x + 20, before!.y + before!.height / 2);
@@ -83,9 +141,29 @@ test('renders one compact causal timeline and a truthful completion footer at de
       contentType: 'application/json',
     });
     expect(Math.abs((await activity.boundingBox())!.y - before!.y)).toBeLessThanOrEqual(2);
-    await expect(message.getByRole('button', { name: /^Reasoning/ })).toHaveCount(1);
-    const read = message.getByRole('button', { name: 'Technical details for Read' });
-    const run = message.getByRole('button', { name: 'Technical details for Run' });
+    await expect(message.getByRole('button', { name: /^Reasoning:/ })).toHaveCount(0);
+    await expect(message.getByRole('button', { name: /^Thinking:/ })).toHaveCount(0);
+    await expect(thinking).toBeVisible();
+    await expect(reasoning).not.toHaveAttribute('aria-busy');
+    await expect(reasoning).toContainText('Read the fixture notes before preparing the report.');
+    expect(await reasoning.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    expect((await thinking.boundingBox())!.y).toBeLessThan(
+      (await message.getByRole('button', { name: 'Technical details for Read' }).boundingBox())!.y,
+    );
+    const read = message.getByRole('button', { name: 'Show result for Read' });
+    const run = message.getByRole('button', { name: 'Show result for Run' });
+    const reasoningToToolGap = async () => {
+      const [reasoningBounds, readBounds] = await Promise.all([
+        reasoning.boundingBox(),
+        read.boundingBox(),
+      ]);
+      if (!reasoningBounds || !readBounds) return -1;
+      return readBounds.y - reasoningBounds.y - reasoningBounds.height;
+    };
+    // Expanded activity entries stay dense; public text-to-activity separation
+    // is verified independently above.
+    await expect.poll(reasoningToToolGap).toBeGreaterThanOrEqual(4);
+    await expect.poll(reasoningToToolGap).toBeLessThanOrEqual(8);
     await expect(read).toContainText('61 lines');
     await expect(run).toContainText('failed');
     expect((await read.boundingBox())!.y).toBeLessThan((await run.boundingBox())!.y);
@@ -94,9 +172,19 @@ test('renders one compact causal timeline and a truthful completion footer at de
     await expect(footer).toContainText('Done');
     await expect(footer).toContainText('129K in / 3K out');
     await expect(footer).toContainText('$0');
-    await expect(footer).toContainText('2 tool calls');
+    await expect(footer).toContainText('2 (1 failed) tool calls');
+    await expect(footer).not.toContainText('·');
     expect(await footer.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
     await read.click();
+    const details = message.getByRole('region', { name: 'Read: Result' });
+    await expect(details).toContainText('notes.md');
+    await expect(details).not.toContainText('Arguments');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await read.focus();
+    await read.press('Enter');
+    await expect(details).toHaveCount(0);
+    await expect(read).toBeFocused();
+    await message.getByRole('button', { name: 'Technical details for Read' }).click();
     await expect(page.getByRole('dialog')).toContainText('Complete fixture file contents.');
     await page.keyboard.press('Escape');
     await activity.click();

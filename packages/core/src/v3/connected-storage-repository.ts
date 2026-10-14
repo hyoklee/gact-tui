@@ -13,6 +13,13 @@ import {
   type GlobusDestination,
 } from './connected-storage-contract.js';
 import { workspaceResourceSchema } from './composer-schemas.js';
+import {
+  knowledgeSnapshotSchema,
+  knowledgeGraphSnapshotSchema,
+  knowledgeOpenSchema,
+  knowledgeSyncSchema,
+  obsidianStatusSchema,
+} from './knowledge-contract.js';
 
 const root = (workspaceId: string) => `/v1/workspaces/${encodeURIComponent(workspaceId)}/sources`;
 const sourcePath = (workspaceId: string, sourceId: string) =>
@@ -27,6 +34,109 @@ const storageSignInSchema = z.object({
 
 /** Trusted setup and approved data on the connected CLIO, never the desktop implicitly. */
 export class ConnectedStorageRepository extends A2uiRepository {
+  /** Account setup never attaches or grants access to workspace notes. */
+  public obsidianStatus(signal?: AbortSignal) {
+    return this.transport.request({
+      method: 'GET',
+      path: '/v1/storage/obsidian',
+      signal,
+      decode: (value) => obsidianStatusSchema.parse(value),
+    });
+  }
+  public installObsidian() {
+    return this.transport.request({
+      method: 'POST',
+      path: '/v1/storage/obsidian/install',
+      decode: (value) => obsidianStatusSchema.parse(value),
+    });
+  }
+  public signInObsidian(input: { email: string; password: string; mfa?: string }) {
+    return this.transport.request({
+      method: 'POST',
+      path: '/v1/storage/obsidian/login',
+      body: input,
+      decode: (value) => obsidianStatusSchema.parse(value),
+    });
+  }
+  public signOutObsidian() {
+    return this.transport.request({
+      method: 'POST',
+      path: '/v1/storage/obsidian/logout',
+      decode: (value) => obsidianStatusSchema.parse(value),
+    });
+  }
+  public obsidianVaults(signal?: AbortSignal) {
+    return this.transport.request({
+      method: 'GET',
+      path: '/v1/storage/obsidian/vaults',
+      signal,
+      decode: (value) =>
+        z.object({ vaults: z.array(z.object({ id: z.string(), name: z.string() })) }).parse(value),
+    });
+  }
+  public setupObsidianVault(vault_id: string, password?: string) {
+    return this.transport.request({
+      method: 'POST',
+      path: '/v1/storage/obsidian/setup',
+      body: { vault_id, password },
+      decode: (value) => z.object({ root: z.string() }).parse(value),
+    });
+  }
+  /** Full topology crosses file pages, while note bytes remain on demand. */
+  public knowledgeGraph(
+    workspaceId: string,
+    sourceId: string,
+    options: { query?: string; focus?: string; attachments?: boolean } = {},
+    signal?: AbortSignal,
+  ) {
+    const query = new URLSearchParams(
+      Object.entries(options).map(([key, value]) => [key, String(value)]),
+    );
+    return this.transport.request({
+      method: 'GET',
+      path: `${sourcePath(workspaceId, sourceId)}/knowledge/graph?${query}`,
+      signal,
+      decode: (value) => knowledgeGraphSnapshotSchema.parse(value),
+    });
+  }
+  public knowledgeSnapshot(
+    workspaceId: string,
+    sourceId: string,
+    options: { query?: string; focus?: string; offset?: number; limit?: number } = {},
+    signal?: AbortSignal,
+  ) {
+    const query = new URLSearchParams(
+      Object.entries(options).map(([key, value]) => [key, String(value)]),
+    );
+    return this.transport.request({
+      method: 'GET',
+      path: `${sourcePath(workspaceId, sourceId)}/knowledge?${query}`,
+      signal,
+      decode: (value) => knowledgeSnapshotSchema.parse(value),
+    });
+  }
+  public knowledgeOpen(
+    workspaceId: string,
+    sourceId: string,
+    path: string,
+    revision = '',
+    signal?: AbortSignal,
+  ) {
+    return this.transport.request({
+      method: 'POST',
+      path: `${sourcePath(workspaceId, sourceId)}/knowledge/open`,
+      body: { path, revision },
+      signal,
+      decode: (value) => knowledgeOpenSchema.parse(value),
+    });
+  }
+  public knowledgeSync(workspaceId: string, sourceId: string, action?: 'start' | 'stop') {
+    return this.transport.request({
+      method: action ? 'POST' : 'GET',
+      path: `${sourcePath(workspaceId, sourceId)}/knowledge/sync${action ? `/${action}` : ''}`,
+      decode: (value) => knowledgeSyncSchema.parse(value),
+    });
+  }
   public githubRevisions(
     url: string,
     kind: 'branch' | 'tag' | 'commit',
@@ -245,11 +355,15 @@ export class ConnectedStorageRepository extends A2uiRepository {
     unlink = false,
     draftId?: string,
     mapping?: { access: 'read_only' | 'publish_later' | 'write_through'; confirm_remote?: boolean },
+    sessionId?: string,
   ) {
     return this.transport.request({
       method: 'POST',
       path: `${sourcePath(workspaceId, sourceId)}/${unlink ? 'unlink' : 'link'}`,
-      body: draftId || mapping ? { draft_id: draftId, ...mapping } : undefined,
+      body:
+        draftId || mapping || sessionId
+          ? { draft_id: draftId, ...mapping, ...(sessionId ? { session_id: sessionId } : {}) }
+          : undefined,
       decode: (value) => connectedSourceStateSchema.parse(value),
     });
   }
@@ -259,13 +373,19 @@ export class ConnectedStorageRepository extends A2uiRepository {
     paths?: string[],
     draftId?: string,
     access?: 'read_only' | 'editable',
+    sessionId?: string,
   ) {
     return this.transport.request({
       method: 'POST',
       path: `${sourcePath(workspaceId, sourceId)}/transfer`,
       body:
-        paths || draftId || access
-          ? { access, ...(paths ? { paths } : {}), ...(draftId ? { draft_id: draftId } : {}) }
+        paths || draftId || access || sessionId
+          ? {
+              access,
+              ...(paths ? { paths } : {}),
+              ...(draftId ? { draft_id: draftId } : {}),
+              ...(sessionId ? { session_id: sessionId } : {}),
+            }
           : undefined,
       decode: (value) => sourceOperationSchema.parse(value),
     });

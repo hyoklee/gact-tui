@@ -422,14 +422,10 @@ describe('InfrastructurePage', () => {
     await user.click(await screen.findByText('Protected execution'));
     await user.click(await screen.findByRole('button', { name: /Set up protected execution/u }));
     expect(repository.setupSandbox).toHaveBeenCalled();
-    expect(await screen.findByText('Waiting for Windows permission prompt…')).toBeVisible();
-    await waitFor(
-      () =>
-        expect(
-          screen.queryByText('Waiting for Windows permission prompt…'),
-        ).not.toBeInTheDocument(),
-      { timeout: 3_000 },
-    );
+    expect(await screen.findByText('Starting setup…')).toBeVisible();
+    await waitFor(() => expect(screen.queryByText('Starting setup…')).not.toBeInTheDocument(), {
+      timeout: 3_000,
+    });
   });
 
   it('still picks up a running setup after the request itself times out', async () => {
@@ -469,14 +465,10 @@ describe('InfrastructurePage', () => {
 
     await user.click(await screen.findByText('Protected execution'));
     await user.click(await screen.findByRole('button', { name: /Set up protected execution/u }));
-    expect(await screen.findByText('Waiting for Windows permission prompt…')).toBeVisible();
-    await waitFor(
-      () =>
-        expect(
-          screen.queryByText('Waiting for Windows permission prompt…'),
-        ).not.toBeInTheDocument(),
-      { timeout: 3_000 },
-    );
+    expect(await screen.findByText('Starting setup…')).toBeVisible();
+    await waitFor(() => expect(screen.queryByText('Starting setup…')).not.toBeInTheDocument(), {
+      timeout: 3_000,
+    });
   });
 
   it('hides the setup button once the connected service reports 501 (nothing to provision here)', async () => {

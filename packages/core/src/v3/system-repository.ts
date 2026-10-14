@@ -1,4 +1,14 @@
 import { z } from 'zod';
+import { sessionSchema } from './schemas.js';
+export const fleetSettingsSchema = z.object({
+  revision: z.string(),
+  search: z.object({ provider_id: z.string(), model_id: z.string() }).nullable().optional(),
+  judges: z.object({
+    goals: z.object({ provider_id: z.string(), model_id: z.string() }).nullable(),
+    variants: z.object({ provider_id: z.string(), model_id: z.string() }).nullable(),
+    permissions: z.object({ provider_id: z.string(), model_id: z.string() }).nullable(),
+  }),
+});
 import { InfrastructureRepository } from './infrastructure-repository.js';
 import { spotterAvailabilitySchema, type SpotterAvailability } from './spotter-domain.js';
 import {
@@ -32,6 +42,53 @@ export const latestReleaseSchema = z.object({
 
 /** System-wide surfaces scoped to the connected service. */
 export class SystemRepository extends InfrastructureRepository {
+  public searchFilePassage(workspaceId: string, path: string, line: number, signal?: AbortSignal) {
+    return this.transport.request({
+      method: 'GET',
+      path: `/v1/workspaces/${encodeURIComponent(workspaceId)}/files/passage?${new URLSearchParams({ path, line: String(line) })}`,
+      signal,
+      decode: (value) =>
+        z
+          .object({
+            text: z.string(),
+            start_line: z.number().int().positive(),
+            truncated: z.boolean(),
+            next_line: z.number().int().positive().nullable(),
+          })
+          .parse(value),
+    });
+  }
+  public openSearchSession(
+    input: { workspace_id: string; parent_session_id?: string },
+    signal?: AbortSignal,
+  ) {
+    return this.transport.request({
+      method: 'POST',
+      path: '/v1/search/sessions',
+      body: input,
+      signal,
+      decode: (value) => sessionSchema.parse(value),
+    });
+  }
+  public fleetSettings(signal?: AbortSignal) {
+    return this.transport.request({
+      method: 'GET',
+      path: '/v1/settings/fleet',
+      signal,
+      decode: (value) => fleetSettingsSchema.parse(value),
+    });
+  }
+
+  public updateFleetSettings(input: z.input<typeof fleetSettingsSchema>, signal?: AbortSignal) {
+    return this.transport.request({
+      method: 'PATCH',
+      path: '/v1/settings/fleet',
+      body: input,
+      signal,
+      decode: (value) => fleetSettingsSchema.parse(value),
+    });
+  }
+
   public runtimeSettings(signal?: AbortSignal): Promise<RuntimeSettings> {
     return this.transport.request({
       method: 'GET',

@@ -41,9 +41,12 @@ test('General hides native update controls in the browser and redirects the old 
     'aria-current',
     'page',
   );
-  await page.getByRole('textbox', { name: 'Search settings', exact: true }).fill('beta');
-  await expect(page.getByRole('status')).toHaveText('No matching settings.');
-  await page.getByRole('button', { name: 'Clear settings search' }).click();
+  await page.getByRole('button', { name: 'Search everywhere', exact: true }).click();
+  await page.getByPlaceholder('Search work, files, artifacts, or actions…').fill('beta');
+  await expect(
+    page.getByRole('dialog').getByRole('option', { name: 'General', exact: true }),
+  ).toHaveCount(0);
+  await page.keyboard.press('Escape');
   const hiddenFiles = page.getByRole('switch', { name: 'Hide dot files and folders' });
   await hiddenFiles.click();
   await page.reload();

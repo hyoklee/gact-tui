@@ -1,7 +1,7 @@
 import type { Message } from '@clio/core/v3';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AppearanceProvider } from '@/providers/appearance-provider';
+import { TranscriptTestAppearance as AppearanceProvider } from '@/test/transcript-test-appearance';
 import { ConversationDisplayProvider } from '@/providers/conversation-display-provider';
 import { ClioConversation } from './conversation';
 import {
@@ -37,6 +37,67 @@ Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
 afterEach(cleanup);
 
 describe('conversation message projections', () => {
+  it('keeps a question resume under one sender while retaining both message anchors', () => {
+    const interaction = {
+      id: 'question:resume',
+      kind: 'question' as const,
+      owner_session_id: 's',
+      attended_session_id: 's',
+      status: 'answered' as const,
+      title: 'Continue?',
+      prompt: 'Shall I continue?',
+      created_at: '2026-10-12T00:00:00Z',
+      source: { protocol: 'native' as const, tool_name: 'ask_user', invocation_id: 'ask' },
+      payload: { question_id: 'resume', answer_metadata: { answer: 'Yes' } },
+      actions: [],
+    };
+    const message = (id: string, role: Message['role']): Message => ({
+      id,
+      role,
+      session_id: 's',
+      created_at: '2026-10-12T00:00:00Z',
+      blocks: [],
+    });
+    const view = render(
+      <AppearanceProvider>
+        <ConversationDisplayProvider>
+          <ClioConversation
+            artifacts={{}}
+            subagents={{}}
+            surfaces={{}}
+            tasks={{}}
+            tools={{}}
+            interactions={[interaction]}
+            messages={[
+              {
+                ...message('before', 'assistant'),
+                blocks: [
+                  { id: 'thinking-before', type: 'reasoning', text: 'Checking the next step.' },
+                ],
+              },
+              {
+                ...message('envelope', 'user'),
+                metadata: { ask_user_resume: true, ask_user_question_id: 'resume' },
+              },
+              {
+                ...message('after', 'assistant'),
+                blocks: [{ id: 'thinking-after', type: 'reasoning', text: 'Continuing the work.' }],
+              },
+            ]}
+          />
+        </ConversationDisplayProvider>
+      </AppearanceProvider>,
+    );
+    expect(
+      view.container.querySelectorAll('[data-slot="conversation-message-sender"]'),
+    ).toHaveLength(1);
+    expect(view.container.querySelector('#message-before')).not.toBeNull();
+    expect(view.container.querySelector('#message-after')).toHaveAttribute(
+      'data-response-continuation',
+      'true',
+    );
+    expect(view.container.querySelector('#message-envelope')).toBeNull();
+  });
   it('preserves unchanged rows when the last message streams', () => {
     const messages: Message[] = Array.from({ length: 1_000 }, (_, index) => ({
       id: `message-${index}`,
@@ -50,9 +111,9 @@ describe('conversation message projections', () => {
       ...messages[999]!,
       blocks: [{ id: 'text-999', type: 'text', text: 'More text', streaming: true }],
     };
-    const after = foldA2UIRevisionBlocks(projectA2UIActionMessages([
-      ...messages.slice(0, -1), streamed,
-    ]));
+    const after = foldA2UIRevisionBlocks(
+      projectA2UIActionMessages([...messages.slice(0, -1), streamed]),
+    );
     expect(after.slice(0, -1).every((message, index) => message === before[index])).toBe(true);
     expect(after[999]).toBe(streamed);
   });
@@ -72,7 +133,13 @@ describe('conversation message projections', () => {
         role: 'user',
         created_at: '2026-10-02T00:00:01Z',
         metadata: { a2ui_action: 'event_1', a2ui_action_context: { approved: false } },
-        blocks: [{ id: 'text', type: 'text', text: 'A2UI event: approval.respond\n\nStructured context: {"approved":false}' }],
+        blocks: [
+          {
+            id: 'text',
+            type: 'text',
+            text: 'A2UI event: approval.respond\n\nStructured context: {"approved":false}',
+          },
+        ],
       },
     ];
     const projected = projectA2UIActionMessages(messages);
@@ -81,34 +148,46 @@ describe('conversation message projections', () => {
   });
 
   it('shows a selected value without the protocol event envelope', () => {
-    const projected = projectA2UIActionMessages([{
-      id: 'choice',
-      session_id: 'session_1',
-      role: 'user',
-      created_at: '2026-10-02T00:00:01Z',
-      blocks: [{ id: 'text', type: 'text', text: 'A2UI event: agent.submit\n\nStructured context: {"selected_visit":["FV-104"]}' }],
-    }]);
+    const projected = projectA2UIActionMessages([
+      {
+        id: 'choice',
+        session_id: 'session_1',
+        role: 'user',
+        created_at: '2026-10-02T00:00:01Z',
+        blocks: [
+          {
+            id: 'text',
+            type: 'text',
+            text: 'A2UI event: agent.submit\n\nStructured context: {"selected_visit":["FV-104"]}',
+          },
+        ],
+      },
+    ]);
     expect(projected[0]?.blocks).toMatchObject([{ type: 'text', text: 'Selected visit: FV-104' }]);
   });
 
   it('names a selected item when its action also carries follow-up details', () => {
-    const projected = projectA2UIActionMessages([{
-      id: 'choice',
-      session_id: 'session_1',
-      role: 'user',
-      created_at: '2026-10-02T00:00:01Z',
-      metadata: {
-        a2ui_action: 'event_2',
-        a2ui_action_context: {
-          selected_id: 'EQ-204',
-          equipment: 'Air compressor',
-          deadline: 'Saturday, October 3, 2026',
-          status: 'In progress',
+    const projected = projectA2UIActionMessages([
+      {
+        id: 'choice',
+        session_id: 'session_1',
+        role: 'user',
+        created_at: '2026-10-02T00:00:01Z',
+        metadata: {
+          a2ui_action: 'event_2',
+          a2ui_action_context: {
+            selected_id: 'EQ-204',
+            equipment: 'Air compressor',
+            deadline: 'Saturday, October 3, 2026',
+            status: 'In progress',
+          },
         },
+        blocks: [{ id: 'text', type: 'text', text: 'A2UI event: agent.submit' }],
       },
-      blocks: [{ id: 'text', type: 'text', text: 'A2UI event: agent.submit' }],
-    }]);
-    expect(projected[0]?.blocks).toMatchObject([{ type: 'text', text: 'Selected: Air compressor (EQ-204)' }]);
+    ]);
+    expect(projected[0]?.blocks).toMatchObject([
+      { type: 'text', text: 'Selected: Air compressor (EQ-204)' },
+    ]);
   });
 
   it('keeps a revised surface in its original message only', () => {
@@ -159,6 +238,12 @@ describe('conversation message projections', () => {
 
     expect(isProjectedQuestionResumeEnvelope(envelope, [interaction])).toBe(true);
     expect(isProjectedQuestionResumeEnvelope(envelope, [])).toBe(false);
+    const asyncEnvelope = {
+      ...envelope,
+      metadata: { question_response_mode: 'async', ask_user_question_id: 'ques_1' },
+    };
+    expect(isProjectedQuestionResumeEnvelope(asyncEnvelope, [interaction])).toBe(true);
+    expect(isProjectedQuestionResumeEnvelope(asyncEnvelope, [])).toBe(false);
   });
 
   it('always hides a server-authored Plan approval resume envelope', () => {

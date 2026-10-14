@@ -1,6 +1,7 @@
 import type { AgentBlueprintReference, Session } from '@clio/core/v3';
 import { describe, expect, it } from 'vitest';
 import {
+  canForkSession,
   isManagedChildSession,
   isSessionActive,
   isSessionRunning,
@@ -8,6 +9,17 @@ import {
 } from './session-state';
 
 describe('session state semantics', () => {
+  it('allows conversation forks and rejects managed sessions regardless of ancestry', () => {
+    expect(canForkSession({ session_kind: 'conversation' })).toBe(true);
+    expect(canForkSession({ session_kind: 'branch', parent_session_id: 'parent' })).toBe(true);
+    expect(canForkSession({})).toBe(true);
+    expect(canForkSession(undefined)).toBe(false);
+    for (const session_kind of ['agent', 'lookup'] as const) {
+      expect(canForkSession({ session_kind })).toBe(false);
+      expect(canForkSession({ session_kind, parent_session_id: 'parent' })).toBe(false);
+    }
+    expect(canForkSession({ parent_session_id: 'parent' })).toBe(false);
+  });
   it('gives user branches a composer while retaining the managed-child footer', () => {
     expect(isManagedChildSession({ parent_session_id: 'parent', session_kind: 'branch' })).toBe(
       false,

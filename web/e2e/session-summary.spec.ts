@@ -69,6 +69,7 @@ test('compact Session rows open source, tool, Context and Work destinations', as
   await expect(sources.getByRole('button', { name: 'Link folder' })).toBeEnabled();
   await sources.getByRole('button', { name: 'Close and keep setup' }).click();
   await expect(panel).toBeVisible();
+  await work.getByRole('button', { name: /^Tool calls,/ }).click();
   await work
     .getByRole('button', { name: /^Technical details for/ })
     .first()
@@ -83,9 +84,14 @@ test('compact Session rows open source, tool, Context and Work destinations', as
   const view = page.getByRole('tablist', { name: 'Observability view' });
   await expect(view.getByRole('tab', { name: 'Context' })).toHaveAttribute('data-state', 'active');
   await page.getByRole('button', { name: 'Close workspace canvas' }).click();
-  if (await panel.isVisible())
-    await panel.getByRole('button', { name: 'Hide activity and evidence' }).click();
+  // Closing the canvas restores the remembered panels after layout settles.
+  // Wait for that restoration before dismissing; an immediate visibility probe
+  // can otherwise miss it and cycle the restored layout from Both to Top.
+  await expect(panel).toBeVisible();
+  await panel.getByRole('button', { name: 'Hide activity and evidence' }).click();
+  await expect(panel).toBeHidden();
   await toggle.click({ button: 'right' });
+  await expect(panel).toHaveAttribute('data-showcase-mode', 'docked');
   await panel.getByRole('button', { name: 'Open Work view' }).click();
   await expect(page.getByRole('tab', { name: 'Work', exact: true })).toHaveAttribute(
     'data-state',
@@ -111,6 +117,7 @@ test('temporary Session source links survive dismissing the small overlay', asyn
   const toggle = page.getByRole('button', { name: /^Evidence layout:/ });
   await toggle.click();
   const panel = page.getByRole('dialog', { name: 'Activity and evidence' });
+  await panel.getByRole('button', { name: /^Tool calls,/ }).click();
   await panel
     .getByRole('button', { name: /^Technical details for/ })
     .first()
@@ -152,7 +159,7 @@ for (const density of ['both', 'work']) {
     const panel = page.getByRole('dialog', { name: 'Activity and evidence' });
     const data = panel.getByRole('region', { name: 'Data', exact: true });
     const work = panel.getByRole('region', { name: 'Work', exact: true });
-    await expect(work.getByRole('button', { name: 'Todos, 60 recorded' })).toBeVisible();
+    await expect(work.getByRole('button', { name: 'Todos, 60/60 current' })).toBeVisible();
     await expect
       .poll(async () => {
         const d = (await data.boundingBox())!;
@@ -167,7 +174,15 @@ for (const density of ['both', 'work']) {
           Math.ceil(node.children[1]!.firstElementChild!.getBoundingClientRect().height) +
           1,
       );
-    if (density === 'work') {
+    if (density === 'both') {
+      // Both inventories need their ResizeObserver measurements before the
+      // allocator can lend them equal space. Preserve the exact final tolerance.
+      await expect
+        .poll(async () =>
+          Math.abs((await data.boundingBox())!.height - (await work.boundingBox())!.height),
+        )
+        .toBeLessThan(2);
+    } else {
       // ResizeObserver applies the newly measured allocation on the next
       // animation frame. Wait for that allocation, retaining the same exact
       // half-pixel tolerance rather than accepting a clipped natural height.
@@ -203,7 +218,7 @@ for (const density of ['both', 'work']) {
     await data.getByRole('button', { name: 'Expand Data' }).click();
     await expect.poll(async () => (await data.boundingBox())!.height).toBeGreaterThan(100);
     await work.getByRole('button', { name: 'Expand Work' }).click();
-    await expect(work.getByRole('button', { name: 'Todos, 60 recorded' })).toBeVisible();
+    await expect(work.getByRole('button', { name: 'Todos, 60/60 current' })).toBeVisible();
     // Inner disclosure also frees height; mounted sections preserve their own state.
     if (density === 'both') {
       await data.getByRole('button', { name: 'Connected sources, 25 recorded' }).click();

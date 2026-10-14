@@ -7,6 +7,7 @@ import type { LanguageModelPreset } from '@clio/core/v3';
  * is the one display name. Kept equal to the service's canonical labels.
  */
 const providerIdNames: Record<string, string> = {
+  amsc_mag: 'AmSC Model Access Gateway',
   codex: 'OpenAI Codex',
   claude_code: 'Claude Code',
   openai: 'OpenAI',
@@ -20,10 +21,13 @@ const providerIdNames: Record<string, string> = {
   vllm: 'vLLM',
   argonne_metis: 'ALCF Metis',
   argonne_sophia: 'ALCF Sophia',
+  argonne_minerva: 'ALCF Minerva',
+  argonne_tara: 'ALCF Tara',
   argonne_local_vllm: 'vLLM',
 };
 
 const providerSummaries: Record<string, string> = {
+  amsc_mag: 'Use models available through your American Science Cloud project allocation.',
   codex: 'Use models included with your Codex subscription.',
   claude_code: 'Use models included with your Claude subscription.',
   openai: 'Use OpenAI models connected to this agent.',
@@ -33,6 +37,8 @@ const providerSummaries: Record<string, string> = {
   ollama: 'Use models served by Ollama on the connected agent.',
   argonne_metis: 'Use Metis models available through your ALCF account.',
   argonne_sophia: 'Use Sophia models available through your ALCF account.',
+  argonne_minerva: 'Use Minerva models available through your ALCF account.',
+  argonne_tara: 'Use Tara models available through your ALCF account.',
   argonne_local_vllm: 'Use a compatible model service connected to this agent.',
 };
 
@@ -72,6 +78,7 @@ export function providerSummary(
  * (see `providerLogoId`'s fallback) — e.g. `mistral` -> `mistral.svg`.
  */
 export const providerLogoIds: Record<string, string> = {
+  amsc_mag: 'amsc',
   aws_bedrock: 'amazon-bedrock',
   azure_openai: 'azure',
   bedrock: 'amazon-bedrock',
@@ -91,6 +98,8 @@ export const providerLogoIds: Record<string, string> = {
   // Argonne National Laboratory's triangle mark (public domain, see README).
   argonne_metis: 'argonne',
   argonne_sophia: 'argonne',
+  argonne_minerva: 'argonne',
+  argonne_tara: 'argonne',
   argonne_local_vllm: 'argonne',
 };
 

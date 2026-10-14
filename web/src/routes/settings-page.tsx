@@ -2,38 +2,21 @@ import { vocab } from '@/lib/brand-vocabulary';
 import { SettingsRow, SettingsChoice } from '@/components/clio/settings-row';
 import { connectionScope } from '@/lib/connection-scope';
 import { inTauri } from '@/lib/transport/tauri-runtime';
-import {
-  SettingsNavigation,
-  type SettingsDestination,
-} from '@/components/clio/settings-navigation';
+import { SettingsNavigation } from '@/components/clio/settings-navigation';
+import { settingsDestinations } from '@/lib/application-destinations';
 import { queryKeys } from '@/lib/query-keys';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
-  BellRingIcon,
-  BotIcon,
-  BoxesIcon,
-  BrainCircuitIcon,
   CableIcon,
-  CalendarClockIcon,
   CheckCircle2Icon,
   CircleAlertIcon,
-  CpuIcon,
-  DatabaseIcon,
-  HeartPulseIcon,
   KeyRoundIcon,
   MonitorCogIcon,
   MoonIcon,
-  PackageIcon,
-  PaletteIcon,
-  PlugZapIcon,
-  ScrollTextIcon,
-  ServerIcon,
-  ShieldCheckIcon,
   SunIcon,
   Volume2Icon,
-  WrenchIcon,
 } from 'lucide-react';
-import { AdjustIcon, DeleteIcon, InfoIcon, MoreIcon, SettingsIcon } from '@/lib/icon-vocabulary';
+import { DeleteIcon, MoreIcon } from '@/lib/icon-vocabulary';
 import { useTheme } from 'next-themes';
 import { useEffect, useRef } from 'react';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
@@ -49,6 +32,7 @@ import { ToolsSettings } from '@/components/clio/settings-tools';
 import { ScheduleSettings } from '@/components/clio/settings-schedules';
 import { SessionDefaultsSettings } from '@/components/clio/settings-session-defaults';
 import { RuntimeSettingsPanel } from '@/components/clio/settings-runtime';
+import { FleetSettingsPanel } from '@/components/clio/settings-fleet';
 import { ModelsSettings } from '@/components/clio/settings-models';
 import { ProvidersSettings } from '@/components/clio/settings-providers';
 import { DataSourceSettings } from '@/components/clio/settings-data-sources';
@@ -78,6 +62,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { useRepository } from '@/hooks/use-repository';
 import { useSwitchConnection } from '@/hooks/use-switch-connection';
+import { useKnownConnections, type KnownConnection } from '@/hooks/use-known-connections';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import {
   type AttentionSoundMode,
@@ -96,155 +81,13 @@ import {
   workspaceIdFromRoute,
 } from '@/lib/workspace-route-memory';
 
-const sections: SettingsDestination[] = [
-  {
-    id: 'general',
-    label: 'General',
-    icon: SettingsIcon,
-    group: 'Personal',
-    keywords: 'files activity preview preferences',
-  },
-  {
-    id: 'appearance',
-    label: 'Appearance',
-    icon: PaletteIcon,
-    group: 'Personal',
-    keywords: 'theme dark light width motion preview files font text size scale zoom display',
-  },
-  {
-    id: 'notifications',
-    label: 'Notifications',
-    icon: BellRingIcon,
-    group: 'Personal',
-    keywords: 'sound attention alerts',
-  },
-  {
-    id: 'connections',
-    label: `${vocab.agent} connections`,
-    icon: CableIcon,
-    group: 'Connections',
-    keywords: 'service address endpoint server',
-  },
-  {
-    id: 'providers',
-    label: 'Model providers',
-    icon: ServerIcon,
-    group: 'Connections',
-    keywords: 'api keys sign in local model server',
-  },
-  {
-    id: 'models',
-    label: 'Models',
-    icon: CpuIcon,
-    group: 'Connections',
-    keywords: 'default reasoning response parameters',
-  },
-  {
-    id: 'data-sources',
-    label: 'Data sources',
-    icon: DatabaseIcon,
-    group: 'Connections',
-    keywords: 'accounts sign in github drive globus',
-  },
-  {
-    id: 'relays',
-    label: 'Remote computers',
-    icon: PlugZapIcon,
-    group: 'Connections',
-    keywords: 'relay ssh remote host',
-  },
-  {
-    id: 'session-defaults',
-    label: 'New session defaults',
-    icon: AdjustIcon,
-    group: 'Agent',
-    keywords: 'model reasoning blueprint work mode confirmations',
-  },
-  {
-    id: 'agents',
-    label: 'Agents',
-    icon: BotIcon,
-    group: 'Agent',
-    keywords: 'instructions capabilities routing',
-  },
-  {
-    id: 'runtime',
-    label: 'Execution & history',
-    icon: AdjustIcon,
-    group: 'Agent',
-    keywords: 'configuration timeout retries transcript reasoning compaction defaults',
-  },
-  {
-    id: 'blueprints',
-    label: 'Marketplaces & blueprints',
-    icon: BoxesIcon,
-    group: 'Agent',
-    keywords: 'catalog install skills',
-  },
-  {
-    id: 'expert-packs',
-    label: 'Expert packs',
-    icon: PackageIcon,
-    group: 'Agent',
-    keywords: 'specialist agents install',
-  },
-  {
-    id: 'tools',
-    label: 'MCP tools',
-    icon: WrenchIcon,
-    group: 'Agent',
-    keywords: 'services tools connections',
-  },
-  {
-    id: 'prompts',
-    label: 'Prompts & commands',
-    icon: ScrollTextIcon,
-    group: 'Agent',
-    keywords: 'instructions overrides commands',
-  },
-  {
-    id: 'schedules',
-    label: 'Scheduled work',
-    icon: CalendarClockIcon,
-    group: 'Agent',
-    keywords: 'recurring automation repeat',
-  },
-  {
-    id: 'permissions',
-    label: 'Permissions',
-    icon: ShieldCheckIcon,
-    group: 'Access & system',
-    keywords: 'approvals requests access rules policy',
-  },
-  {
-    id: 'memory',
-    label: 'Memory',
-    icon: BrainCircuitIcon,
-    group: 'Access & system',
-    keywords: 'context search recall compaction',
-  },
-  {
-    id: 'system',
-    label: 'System',
-    icon: HeartPulseIcon,
-    group: 'Access & system',
-    keywords: 'health storage metrics hooks',
-  },
-  {
-    id: 'about',
-    label: 'About',
-    icon: InfoIcon,
-    group: 'Access & system',
-    keywords: 'version updates build',
-  },
-];
-
 function ConnectionsSettings() {
   const repository = useRepository();
-  const { settings, recents, forget } = useConnectionSettings();
+  const { settings, forget } = useConnectionSettings();
+  const knownConnections = useKnownConnections();
   const switchConnection = useSwitchConnection();
   const connectionSwitch = useMutation({
-    mutationFn: (connection: (typeof recents)[number]) =>
+    mutationFn: (connection: KnownConnection) =>
       switchConnection(connection, { navigateToWorkspace: false }),
   });
   const capabilities = useQuery({
@@ -264,7 +107,7 @@ function ConnectionsSettings() {
   return (
     <div className="grid gap-6">
       <SectionHeading
-        description="Choose where your workspace runs and manage addresses you have connected to before."
+        description="Choose where your workspace runs and manage known services."
         title={`${vocab.agent} connections`}
       />
       <Frame spacing="lg">
@@ -328,13 +171,13 @@ function ConnectionsSettings() {
       </Frame>
       <Frame spacing="lg">
         <FrameHeader>
-          <FrameTitle>Remembered connections</FrameTitle>
+          <FrameTitle>Known services</FrameTitle>
           <FrameDescription>
-            Use the menu on an address to reconnect or remove it from this device.
+            Connect to another service or remove a remembered address from this device.
           </FrameDescription>
         </FrameHeader>
         <FramePanel className="grid gap-1 p-2">
-          {recents.map((connection) => {
+          {knownConnections.map((connection) => {
             const active = connection.endpoint === settings.endpoint;
             return (
               <div
@@ -362,26 +205,34 @@ function ConnectionsSettings() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-52">
                     <DropdownMenuItem
-                      disabled={active || connectionSwitch.isPending}
+                      disabled={
+                        active ||
+                        connectionSwitch.isPending ||
+                        connection.availability.state === 'unavailable'
+                      }
                       onSelect={() => connectionSwitch.mutate(connection)}
                     >
                       <CableIcon aria-hidden="true" /> Connect
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      disabled={active}
-                      onSelect={() => void forget(connection.endpoint)}
-                      variant="destructive"
-                    >
-                      <DeleteIcon aria-hidden="true" /> Forget on this device
-                    </DropdownMenuItem>
+                    {connection.source === 'recent' ? (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          disabled={active}
+                          onSelect={() => void forget(connection.endpoint)}
+                          variant="destructive"
+                        >
+                          <DeleteIcon aria-hidden="true" /> Forget on this device
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
             );
           })}
-          {recents.length === 0 ? (
-            <p className="p-5 text-sm text-muted-foreground">No remembered connections yet.</p>
+          {knownConnections.length === 0 ? (
+            <p className="p-5 text-sm text-muted-foreground">No known services yet.</p>
           ) : null}
           {connectionSwitch.error ? (
             <p className="p-3 text-sm text-destructive sm:col-span-2">
@@ -629,6 +480,7 @@ function SettingsSection({
   if (section === 'data-sources') return <DataSourceSettings />;
   if (section === 'session-defaults') return <SessionDefaultsSettings />;
   if (section === 'runtime') return <RuntimeSettingsPanel />;
+  if (section === 'fleet') return <FleetSettingsPanel />;
   if (section === 'providers') return <ProvidersSettings />;
   if (section === 'models') return <ModelsSettings />;
   if (section === 'agents') return <AgentSettings />;
@@ -652,13 +504,7 @@ export function SettingsPage() {
   const { section = 'general' } = useParams();
   const location = useLocation();
   const { settings } = useConnectionSettings();
-  const destinations = inTauri()
-    ? sections.map((item) =>
-        item.id === 'general'
-          ? { ...item, keywords: `${item.keywords} app updates beta release channel` }
-          : item,
-      )
-    : sections;
+  const destinations = settingsDestinations(inTauri());
   const content = useRef<HTMLElement>(null);
   useEffect(() => {
     content.current?.scrollTo({ left: 0, top: 0 });

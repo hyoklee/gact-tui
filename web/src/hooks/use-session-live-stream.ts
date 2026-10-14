@@ -457,7 +457,9 @@ export function queryInvalidationKeysForEvent({
     isProcessEvent(eventName) ||
     isSessionArtifactEvent(eventName)
   ) {
-    keys.push(queryKeys.key('execution-provenance', endpoint, sessionId));
+    // A child's recorded activity also changes its ancestor's family projection.
+    // Prefix invalidation refreshes mounted family queries without polling or fanout.
+    keys.push(queryKeys.key('execution-provenance', endpoint));
   }
   return keys;
 }

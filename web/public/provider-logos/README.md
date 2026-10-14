@@ -107,3 +107,13 @@ switched to `currentColor` (a multi-colour mark). Used for `argonne_metis`,
 5. Add the raw import to `web/src/components/ai-elements/provider-logo-svgs.ts`.
 
 Connected-data artwork lives in `branding/provider-logos/`; its README records the official sources.
+
+## American Science Cloud / Genesis Mission
+
+`amsc.svg` uses the official symbol shown by the AmSC website and documentation
+favicons. Its path is copied unchanged from the first symbol in the official
+[Genesis Mission × American Science Cloud lockup](https://docs.amsc.energy.gov/img/Genesis-x-AmSC-lockup_Horizontal_White.svg),
+retrieved 2026-10-14. Only the viewBox is cropped to the symbol and the fill
+inherits the surrounding color through the existing provider mask renderer.
+The mark identifies the `amsc_mag` provider; it is not a CLIO-authored logo.
+The original asset and packaged asset hashes are retained in the campaign receipt.

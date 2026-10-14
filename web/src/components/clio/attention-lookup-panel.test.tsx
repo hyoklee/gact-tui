@@ -1,11 +1,31 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render as renderUI,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createSelectionActionRegistry, type SelectionTarget } from '@/lib/selection-actions';
 import { SelectionActionsContext } from '@/lib/selection-actions-context';
 import { AttentionLookupPanel } from './attention-lookup-panel';
 import { attentionProfileSchema } from '@clio/core/v3';
 import { attentionEvidenceHash } from '@/lib/attention-evidence-navigation';
-import { StrictMode } from 'react';
+import { StrictMode, type ReactElement, type ReactNode } from 'react';
+import { AttentionAvailabilityContext } from '@/lib/attention-availability';
+
+function CapturedAttention({ children }: { children: ReactNode }) {
+  return (
+    <AttentionAvailabilityContext.Provider value={{ sessionId: 's', available: true }}>
+      {children}
+    </AttentionAvailabilityContext.Provider>
+  );
+}
+
+function render(element: ReactElement) {
+  return renderUI(element, { wrapper: CapturedAttention });
+}
 
 const mocks = vi.hoisted(() => ({ endpoint: 'http://clio-a', lookup: vi.fn() }));
 vi.mock('@/hooks/use-repository', () => ({
@@ -46,7 +66,7 @@ const lookup = {
   next_cursor: null,
 };
 
-it('shows the chosen capture heat and removes it when the selection is cleared', async () => {
+it('paints the capture heat as soon as a selection is added and removes it when cleared', async () => {
   mocks.lookup.mockResolvedValue(lookup);
   const registry = createSelectionActionRegistry();
   const heat = vi.fn();
@@ -61,11 +81,9 @@ it('shows the chosen capture heat and removes it when the selection is cleared',
       .find((item) => item.id === 'attention-set')!
       .run(target),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Inspect sources' }));
+  // No Inspect sources > expand > Show transcript heat detour: adding inspects and paints.
+  await waitFor(() => expect(heat).toHaveBeenLastCalledWith(generated));
   await screen.findByText('Generated selection · 2 captured tokens');
-  fireEvent.click(screen.getByText('Generated selection · 2 captured tokens'));
-  fireEvent.click(screen.getByRole('button', { name: 'Show transcript heat' }));
-  expect(heat).toHaveBeenLastCalledWith(generated);
   fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
   expect(heat).toHaveBeenLastCalledWith(undefined);
 });
@@ -172,7 +190,7 @@ it('does not resurrect an old evidence link after clearing and remounting with n
   expect(mocks.lookup).not.toHaveBeenCalled();
 });
 
-it('retains the basket across navigation but re-reads captures on explicit inspection', async () => {
+it('retains the basket across navigation without re-reading captures', async () => {
   const registry = createSelectionActionRegistry();
   const view = () => (
     <SelectionActionsContext.Provider value={registry}>
@@ -186,10 +204,12 @@ it('retains the basket across navigation but re-reads captures on explicit inspe
       .find((item) => item.id === 'attention-set')!
       .run(target),
   );
+  // Adding inspects once; navigating away and back must not read captures again.
+  await waitFor(() => expect(mocks.lookup).toHaveBeenCalledTimes(1));
   first.unmount();
   render(view());
   expect(screen.getByText('Attention set · 1')).toBeVisible();
-  expect(mocks.lookup).not.toHaveBeenCalled();
+  expect(mocks.lookup).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
   expect(sessionStorage.length).toBe(0);
 });
@@ -222,6 +242,8 @@ it('deduplicates selections and sends the exact source reference and requested d
   act(add);
   act(add);
   expect(screen.getByText('Attention set · 1')).toBeVisible();
+  // The add's own lookup settles first; Trace later use then asks the other direction.
+  await screen.findByText('No captured image patches.');
   fireEvent.click(screen.getByRole('button', { name: 'Trace later use' }));
   await waitFor(() =>
     expect(mocks.lookup).toHaveBeenCalledWith(

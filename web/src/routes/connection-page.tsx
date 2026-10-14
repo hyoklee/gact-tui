@@ -13,6 +13,7 @@ import {
   LaptopIcon,
   ServerIcon,
   ShieldCheckIcon,
+  SearchIcon,
   TriangleAlertIcon,
 } from 'lucide-react';
 import { AddIcon } from '@/lib/icon-vocabulary';
@@ -69,6 +70,7 @@ import {
   newConversationRoute,
 } from '@/lib/workspace-route-memory';
 import { useConnectionSettings } from '@/providers/connection-provider';
+import { useCommandMenuVisibility } from '@/store/command-menu-visibility';
 import type { ManagedBackendStatus } from '@/tauri/managed-backend';
 
 type DesktopBootStage =
@@ -138,6 +140,21 @@ function managedBootStage(status?: ManagedBackendStatus): DesktopBootStage {
   return 'checking_existing';
 }
 
+function HomeSearchButton() {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      aria-label="Search everywhere"
+      onClick={() => window.dispatchEvent(new Event('clio:open-command-menu'))}
+    >
+      <SearchIcon aria-hidden="true" /> Search{' '}
+      <kbd className="ml-2 text-[10px] text-muted-foreground">Ctrl K</kbd>
+    </Button>
+  );
+}
+
 function DesktopBoot({
   logoSource,
   stage,
@@ -159,6 +176,9 @@ function DesktopBoot({
 
   return (
     <main className="relative grid h-full min-h-0 overflow-hidden bg-background text-foreground">
+      <div className="absolute right-4 top-4 z-10">
+        <HomeSearchButton />
+      </div>
       <div aria-hidden="true" className="clio-landing-background absolute inset-0 opacity-70" />
       <div
         aria-hidden="true"
@@ -245,6 +265,7 @@ function DesktopBoot({
 }
 
 export function ConnectionPage() {
+  const searchOpen = useCommandMenuVisibility((state) => state.open);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -332,20 +353,21 @@ export function ConnectionPage() {
           sessions.filter((session) => session.workspace_id === workspace.id),
         );
       }
-      if (target) {
-        await navigate(connectionSessionRoute(target), { replace: true });
-      } else if (workspace) {
-        // A blank entry composer is presentation only. Opening/reopening the
-        // service must never persist an unused conversation on the backend.
-        await navigate(newConversationRoute(workspace.id), { replace: true });
-      } else {
+      // Opening a service must never persist an unused conversation. Defer the
+      // route transition while search is open, including an in-flight startup.
+      const route = target
+        ? connectionSessionRoute(target)
+        : workspace
+          ? newConversationRoute(workspace.id)
+          : undefined;
+      if (!route) {
         reportConnectionOutcome({
           code: 'target_unresolved',
           endpoint: next.endpoint,
           reason: 'The service exposed no workspace that could be opened.',
         });
       }
-      return { next, capabilities, sessions, target: target ?? workspace, workspaces };
+      return { next, capabilities, sessions, target: target ?? workspace, workspaces, route };
     },
   });
   const setup = useMutation({
@@ -381,9 +403,15 @@ export function ConnectionPage() {
     },
   });
 
+  const resolvedRoute = mutation.data?.route;
+  useEffect(() => {
+    if (resolvedRoute && !searchOpen) navigate(resolvedRoute, { replace: true });
+  }, [navigate, resolvedRoute, searchOpen]);
+
   useEffect(() => {
     if (
       autoConnectStarted.current ||
+      searchOpen ||
       !credentialsReady ||
       (recents.length === 0 && !managedConnectionReady) ||
       connectionIntent === 'connect'
@@ -394,6 +422,7 @@ export function ConnectionPage() {
     mutation.mutate(settings);
   }, [
     connectionIntent,
+    searchOpen,
     credentialsReady,
     managedConnectionReady,
     mutation,
@@ -507,6 +536,7 @@ export function ConnectionPage() {
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              <HomeSearchButton />
               {inTauri() ? (
                 <Button
                   onClick={() => setDeployOpen(true)}

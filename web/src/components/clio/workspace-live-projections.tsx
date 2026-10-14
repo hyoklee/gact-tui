@@ -2,6 +2,9 @@ import type { Artifact, Message, RunState, SubagentRun } from '@clio/core/v3';
 import type { ComponentProps } from 'react';
 import { useMemo } from 'react';
 import { useLiveStore } from '@/store/live-store';
+import { useTaskCancellation } from '@/hooks/use-task-cancellation';
+import { useMessageMarks } from '@/hooks/use-message-marks';
+import { conversationForkOrigin } from './conversation-fork-origin';
 import { ClioConversation, type ClioConversationProps } from './conversation';
 import { ClioObservabilityDock, ClioObservabilityView } from './observability-dock';
 import { WorkspaceStatusStrip } from './workspace-route-surfaces';
@@ -42,6 +45,9 @@ export function WorkspaceLiveConversation({
   sessionState,
   ...props
 }: LiveConversationProps) {
+  const session = useLiveStore((state) => state.entities.sessions[sessionId]);
+  const messageMarks = useMessageMarks(session, props.workspaceId ?? '');
+  const forkOrigin = useMemo(() => conversationForkOrigin(session), [session]);
   const infrastructure = useLiveStore((state) => state.entities.infrastructure);
   const activeTurnId = useLiveStore((state) => state.entities.active_turns[sessionId]);
   const activeTurnResponded = useLiveStore((state) =>
@@ -107,6 +113,9 @@ export function WorkspaceLiveConversation({
     <ClioConversation
       {...entities}
       {...props}
+      {...messageMarks}
+      sessionId={sessionId}
+      forkOrigin={forkOrigin}
       messages={messages}
       preparation={{ activeTurnId, activeTurnResponded, dependencies, sessionState }}
     />
@@ -121,11 +130,13 @@ export function WorkspaceLiveObservabilityDock({
   sessionId,
   ...props
 }: LiveObservabilityDockProps) {
+  const onCancelTask = useTaskCancellation(sessionId);
   return (
     <ClioObservabilityDock
       {...props}
-      messages={useSessionMessages(sessionId)}
       sessionId={sessionId}
+      onCancelTask={onCancelTask}
+      messages={useSessionMessages(sessionId)}
     />
   );
 }
@@ -138,9 +149,11 @@ export function WorkspaceLiveObservabilityView({
   sessionId,
   ...props
 }: LiveObservabilityViewProps) {
+  const onCancelTask = useTaskCancellation(sessionId);
   return (
     <ClioObservabilityView
       {...props}
+      onCancelTask={onCancelTask}
       messages={useSessionMessages(sessionId)}
       sessionId={sessionId}
     />
@@ -160,6 +173,7 @@ export function WorkspaceLiveStatusStrip({ sessionId, ...props }: LiveStatusStri
   return (
     <WorkspaceStatusStrip
       {...props}
+      sessionId={sessionId}
       cost={usage?.cost_usd}
       cursor={cursor}
       stream={stream}

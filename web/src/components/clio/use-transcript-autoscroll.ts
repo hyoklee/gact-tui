@@ -70,8 +70,10 @@ interface TranscriptAutoscroll {
    * effects and observers that must not re-render.
    */
   followingRef: RefObject<boolean>;
-  /** Render-time engagement; the scroll-to-bottom control shows when false. */
+  /** Render-time engagement; the scroll-to-bottom control shows when false and scrollable. */
   engaged: boolean;
+  /** Whether the transcript actually overflows its viewport. */
+  scrollable: boolean;
   /** Programmatic scroll to the bottom. Never changes engagement. */
   scrollToBottom: (behavior?: ScrollBehavior) => void;
   /** Re-engage and scroll to the bottom (the scroll-to-bottom control). */
@@ -112,6 +114,7 @@ export function useTranscriptAutoscroll(
 ): TranscriptAutoscroll {
   const engagedRef = useRef(true);
   const [engaged, setEngagedState] = useState(true);
+  const [scrollable, setScrollable] = useState(false);
   const stuckRef = useRef(true);
   const followingRef = useRef(true);
   // Geometry at the last scroll we observed or produced. Deliberately not
@@ -146,6 +149,7 @@ export function useTranscriptAutoscroll(
   );
 
   const recordGeometry = useCallback((element: HTMLElement) => {
+    setScrollable(element.scrollHeight - element.clientHeight > BOTTOM_EPSILON_PX);
     geometryRef.current = {
       scrollHeight: element.scrollHeight,
       clientHeight: element.clientHeight,
@@ -207,11 +211,7 @@ export function useTranscriptAutoscroll(
       scrollbarPointerRef.current ||
       touchYRef.current !== null ||
       performance.now() - lastUserInputAtRef.current <= USER_SCROLL_WINDOW_MS;
-    if (
-      !userDriven &&
-      followingRef.current &&
-      performance.now() <= layoutFollowUntilRef.current
-    ) {
+    if (!userDriven && followingRef.current && performance.now() <= layoutFollowUntilRef.current) {
       if (!atBottom) scrollToBottom('instant');
       return;
     }
@@ -326,6 +326,7 @@ export function useTranscriptAutoscroll(
     const element = scrollRef.current;
     if (!element || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(() => {
+      setScrollable(element.scrollHeight - element.clientHeight > BOTTOM_EPSILON_PX);
       if (followingRef.current) {
         layoutFollowUntilRef.current = performance.now() + LAYOUT_SCROLL_WINDOW_MS;
         scrollToBottom('instant');
@@ -355,6 +356,7 @@ export function useTranscriptAutoscroll(
   return {
     followingRef,
     engaged,
+    scrollable,
     scrollToBottom,
     engage,
     disengage,

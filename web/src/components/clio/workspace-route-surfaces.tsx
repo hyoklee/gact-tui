@@ -12,6 +12,7 @@ import { isUpdateInFlight, useUpdateFlowStore } from '@/store/update-flow-store'
 import { LiveConnectionIndicator } from './live-connection-indicator';
 import { SystemVersionStatus } from './navigation-version-status';
 import { ClioStatus } from './status';
+import { SessionWorkStatus } from './session-work';
 
 /**
  * Keeps an exiting transcript surface (the welcome state, the conversation)
@@ -179,7 +180,11 @@ export function WorkspaceStatusStrip({
   tokens,
   sessionState,
   stream,
+  sessionId,
+  onOpenWork,
 }: {
+  sessionId?: string;
+  onOpenWork?: () => void;
   activeWorkCount: number;
   /** Undefined when no turn ever reported a real cost -- shown as a muted
    * dash with a tooltip, never the word "Unavailable" (it isn't broken,
@@ -214,7 +219,9 @@ export function WorkspaceStatusStrip({
           copy there so the two surfaces never duplicate the same pill. */}
       {inTauri() ? null : <LiveConnectionIndicator />}
       {recoveryLabel ? <span title={recoveryDetail}>{recoveryLabel}</span> : null}
-      <span>{activeWorkLabel}</span>
+      {sessionId && onOpenWork ? (
+        <SessionWorkStatus sessionId={sessionId} onOpen={onOpenWork} fallback={activeWorkLabel} />
+      ) : <span>{activeWorkLabel}</span>}
       <SystemVersionStatus />
       <span className="ml-auto hidden font-mono sm:inline">Tokens: {tokens ?? 0}</span>
       <span className="hidden items-center gap-1 font-mono sm:inline-flex">

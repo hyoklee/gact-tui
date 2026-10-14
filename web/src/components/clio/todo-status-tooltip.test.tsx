@@ -1,9 +1,13 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClioToolInvocation } from './tool-invocation';
 
 afterEach(cleanup);
+beforeEach(() => {
+  localStorage.clear();
+  window.dispatchEvent(new StorageEvent('storage', { key: null }));
+});
 
 describe('todo status explanations', () => {
   it.each([
@@ -29,13 +33,14 @@ describe('todo status explanations', () => {
           }}
         />,
       );
+      if (state === 'completed')
+        await user.click(screen.getByRole('button', { name: 'Show completed 1' }));
       const icon = screen.getByRole('img', { name: label });
       expect(icon).toHaveAttribute('tabindex', '0');
       await user.hover(icon);
       expect(await screen.findByRole('tooltip')).toHaveTextContent(label);
       await user.unhover(icon);
-      await user.tab(); // Technical details icon precedes the task.
-      await user.tab();
+      icon.focus();
       expect(icon).toHaveFocus();
       expect(await screen.findByRole('tooltip')).toHaveTextContent(label);
       await user.keyboard('{Escape}');
@@ -73,6 +78,7 @@ describe('todo status explanations', () => {
       />,
     );
 
+    await user.click(screen.getByRole('button', { name: 'Show completed 1' }));
     const transition = screen.getByRole('img', {
       name: 'Changed from Pending to Completed',
     });

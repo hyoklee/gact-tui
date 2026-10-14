@@ -5,11 +5,23 @@ export function isUserBranch(session: Pick<Session, 'session_kind'>): boolean {
   return session.session_kind === 'branch';
 }
 
-/** Managed children are followed from their parent rather than independently edited. */
+/** Managed children retain their parent relationship and their own follow-up target. */
 export function isManagedChildSession(
   session: Pick<Session, 'parent_session_id' | 'session_kind'>,
 ): boolean {
   return Boolean(session.parent_session_id && !isUserBranch(session));
+}
+
+/** Only independent conversations can create user branches, including legacy roots. */
+export function canForkSession(
+  session: Pick<Session, 'parent_session_id' | 'session_kind'> | undefined,
+): boolean {
+  return Boolean(
+    session &&
+      session.session_kind !== 'agent' &&
+      session.session_kind !== 'lookup' &&
+      !isManagedChildSession(session),
+  );
 }
 
 export function isSessionRunning(state: Session['state']): boolean {

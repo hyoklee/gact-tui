@@ -9,6 +9,7 @@ export const GENERIC_PROVIDER_LOGO_ID = 'generic';
 
 const PROVIDER_LOGO_IDS = [
   'amazon-bedrock',
+  'amsc',
   'anthropic',
   'argonne',
   'azure',

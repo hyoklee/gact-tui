@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sessionMetadataPatch, type SessionUpdateInput } from './session-metadata-patch.js';
 import { agentTaskRecordSchema } from './agent-task-domain.js';
 import type {
   Artifact,
@@ -9,9 +10,6 @@ import type {
   ApprovalRequest,
   PermissionLedgerItem,
   OperationalRun,
-  CreateScheduledTurnInput,
-  ScheduledTurn,
-  ScheduledTurns,
   Session,
   SessionArtifactListing,
   SessionDefaults,
@@ -31,8 +29,6 @@ import {
   turnAttemptSchema,
   workspaceSchema,
   relayStatusSchema,
-  scheduledTurnSchema,
-  scheduledTurnsSchema,
   sessionDefaultsSchema,
   userQuestionSchema,
 } from './schemas.js';
@@ -56,7 +52,7 @@ import {
 } from './artifact-custody.js';
 import type { ClioTransport, StreamScope, TransportFrame } from './transport.js';
 import { mergeA2uiClientMetadata } from './a2ui/index.js';
-import { SystemRepository } from './system-repository.js';
+import { WorkRepository } from './work-repository.js';
 import { decodeCapabilities } from './capability-negotiation.js';
 import { decodeTranscript } from './transcript-decoder.js';
 
@@ -73,7 +69,7 @@ const ARTIFACT_PAGE_SIZE = 200;
  * silently swallowed.
  */
 const MAX_ARTIFACT_PAGES = 100;
-export class ClioRepository extends SystemRepository {
+export class ClioRepository extends WorkRepository {
   public constructor(transport: ClioTransport) {
     super(transport);
   }
@@ -221,17 +217,7 @@ export class ClioRepository extends SystemRepository {
 
   public updateSession(
     sessionId: string,
-    input: {
-      title?: string;
-      pinned?: boolean;
-      archived?: boolean;
-      mode?: Session['mode'];
-      edit_mode?: Session['edit_mode'];
-      routing_mode?: Session['routing_mode'];
-      approval_mode?: Session['approval_mode'];
-      provider_id?: string;
-      model_id?: string;
-    },
+    input: SessionUpdateInput,
     signal?: AbortSignal,
   ): Promise<Session> {
     return this.transport.request({
@@ -239,7 +225,7 @@ export class ClioRepository extends SystemRepository {
       path: `/v1/sessions/${encodeURIComponent(sessionId)}`,
       body: {
         ...(input.title === undefined ? {} : { title: input.title }),
-        ...(input.pinned === undefined ? {} : { metadata: { pinned: input.pinned } }),
+        ...sessionMetadataPatch(input),
         ...(input.archived === undefined ? {} : { archived: input.archived }),
         ...(input.mode === undefined ? {} : { mode: input.mode }),
         ...(input.edit_mode === undefined ? {} : { edit_mode: input.edit_mode }),
@@ -281,42 +267,6 @@ export class ClioRepository extends SystemRepository {
       path: '/v1/session-defaults',
       body: input,
       decode: (value) => sessionDefaultsSchema.parse(value),
-      signal,
-    });
-  }
-
-  public async scheduledTurns(sessionId: string, signal?: AbortSignal): Promise<ScheduledTurns> {
-    const result = await this.transport.request({
-      method: 'GET',
-      path: `/v1/sessions/${encodeURIComponent(sessionId)}/schedules`,
-      decode: (value) => scheduledTurnsSchema.parse(value),
-      signal,
-    });
-    return {
-      schedules: result.schedules,
-      timezone: result.cron_timezone,
-    };
-  }
-
-  public createScheduledTurn(
-    sessionId: string,
-    input: CreateScheduledTurnInput,
-    signal?: AbortSignal,
-  ): Promise<ScheduledTurn> {
-    return this.transport.request({
-      method: 'POST',
-      path: `/v1/sessions/${encodeURIComponent(sessionId)}/schedules`,
-      body: input,
-      decode: (value) => scheduledTurnSchema.parse(value),
-      signal,
-    });
-  }
-
-  public deleteScheduledTurn(scheduleId: string, signal?: AbortSignal): Promise<void> {
-    return this.transport.request({
-      method: 'DELETE',
-      path: `/v1/schedules/${encodeURIComponent(scheduleId)}`,
-      decode: () => undefined,
       signal,
     });
   }

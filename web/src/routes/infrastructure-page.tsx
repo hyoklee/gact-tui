@@ -1,3 +1,8 @@
+import {
+  INFRASTRUCTURE_SECTIONS,
+  isInfrastructureSection,
+  type InfrastructureSection,
+} from '@/lib/application-destinations';
 import { queryKeys } from '@/lib/query-keys';
 import { INFRASTRUCTURE_POLL_MS } from '@/lib/runtime-limits';
 import type {
@@ -11,16 +16,11 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRightIcon,
-  BotIcon,
   BookOpenCheckIcon,
   CableIcon,
   ChevronLeftIcon,
   NetworkIcon,
   ServerIcon,
-  WrenchIcon,
-  LayoutDashboardIcon,
-  HardDriveIcon,
-  HistoryIcon,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
@@ -63,6 +63,7 @@ import {
 } from './infrastructure-foundation';
 import { SandboxFoundationRow } from './infrastructure-sandbox-row';
 import { connectionScope } from '@/lib/connection-scope';
+import { InfrastructureFoundationGroups } from './infrastructure-foundation-groups';
 export function InfrastructurePage() {
   const location = useLocation();
   const { section } = useParams();
@@ -473,19 +474,19 @@ export function InfrastructurePage() {
 
           {currentSection === 'agent' ? (
             <>
-              <InfrastructureInventory section="hosts" />
-              <div className="mt-6 border-y">
-                <div className="divide-y">
-                  {(health.data?.integrations ?? []).map((integration) => (
+              <InfrastructureInventory section="hosts">
+                <InfrastructureFoundationGroups
+                  integrations={health.data?.integrations ?? []}
+                  renderRow={(integration) => (
                     <FoundationRow integration={integration} key={integration.name} />
-                  ))}
-                </div>
+                  )}
+                />
                 {!health.isPending && !health.data?.integrations.length ? (
                   <p className="p-5 text-sm text-muted-foreground">
                     No supporting-component details were reported.
                   </p>
                 ) : null}
-              </div>
+              </InfrastructureInventory>
             </>
           ) : null}
 
@@ -562,51 +563,6 @@ function effectiveToolCatalog(
   return [...projected.values()];
 }
 
-type InfrastructureSection = 'overview' | 'agent' | 'tools' | 'services' | 'models' | 'activity';
-
-const INFRASTRUCTURE_SECTIONS = [
-  {
-    id: 'overview',
-    label: 'Overview',
-    icon: LayoutDashboardIcon,
-    description: 'Your connected hosts, services, and current work.',
-  },
-  {
-    id: 'agent',
-    label: `${vocab.agent} hosts`,
-    icon: BotIcon,
-    description: `Confirm that ${vocab.agent} itself and the components it depends on are ready.`,
-  },
-  {
-    id: 'services',
-    label: 'Services',
-    icon: CableIcon,
-    description: `Install, connect, operate, and verify the services that give ${vocab.agent} more capabilities.`,
-  },
-  {
-    id: 'models',
-    label: 'Models & storage',
-    icon: HardDriveIcon,
-    description: 'Choose where each host keeps models, service data, and evidence.',
-  },
-  {
-    id: 'tools',
-    label: 'Tools',
-    icon: WrenchIcon,
-    description: 'Inspect tools available to the selected session.',
-  },
-  {
-    id: 'activity',
-    label: 'Activity',
-    icon: HistoryIcon,
-    description: 'Follow deployments, downloads, and lifecycle operations.',
-  },
-] as const;
-
-function isInfrastructureSection(value: string | undefined): value is InfrastructureSection {
-  return INFRASTRUCTURE_SECTIONS.some((item) => item.id === value);
-}
-
 function SetupCard({
   action,
   description,
@@ -676,12 +632,14 @@ function FoundationRow({ integration }: { integration: ServiceIntegrationHealth 
   const action = foundationAction(integration);
   return (
     <details className="group px-1 py-3">
-      <summary className="flex cursor-pointer list-none items-center gap-3">
+      <summary className="grid cursor-pointer list-none grid-cols-[1rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 sm:flex sm:gap-3">
         <ServerIcon aria-hidden="true" className="size-4 shrink-0 text-primary" />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+        <span className="min-w-0 text-sm font-medium sm:flex-1">
           {foundationTitle(integration.name)}
         </span>
-        <ClioStatus label={integrationStatusLabel(status)} value={status} />
+        <div className="col-start-2 shrink-0 justify-self-start sm:ml-auto">
+          <ClioStatus label={integrationStatusLabel(status)} value={status} />
+        </div>
       </summary>
       <div className="mt-3 border-t pt-3 text-xs leading-5 text-muted-foreground">
         <p>{summary}</p>
@@ -716,10 +674,8 @@ function clioServiceDescription(
 ): string {
   if (!health) return `Checking ${vocab.agent}.`;
   if (!health.healthy) return `${vocab.agent} needs attention.`;
-  if (foundationIssues === 1) return 'Running with 1 supporting service needing attention.';
-  if (foundationIssues > 1) {
-    return `Running with ${foundationIssues} supporting services needing attention.`;
-  }
+  if (foundationIssues > 0)
+    return 'Running. Review the errors and warnings for each computer below.';
   return `${vocab.agent} is running normally.`;
 }
 
@@ -736,6 +692,14 @@ function foundationAction(
       description: 'Use the full conversation-memory service to restore complete agent behavior.',
       label: 'Memory settings',
       to: '/settings/memory',
+    };
+  }
+  if (integration.name === 'lm_provider') {
+    return {
+      description:
+        'Sign-in is stored locally. Check the provider connection and its available models.',
+      label: 'Provider setup',
+      to: '/settings/providers',
     };
   }
   if (integration.name === 'child_parentage') {

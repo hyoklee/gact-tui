@@ -15,7 +15,13 @@ import { useConnectionSettings } from '@/providers/connection-provider';
 import { inTauri } from '@/lib/transport/tauri-runtime';
 import { restartClio } from '@/tauri/managed-backend';
 import { vocab } from '@/lib/brand-vocabulary';
-import { foundationSummary, foundationTitle, integrationStatus, integrationStatusLabel } from './infrastructure-foundation';
+import { formatDuration } from '@/lib/format';
+import {
+  foundationSummary,
+  foundationTitle,
+  integrationStatus,
+  integrationStatusLabel,
+} from './infrastructure-foundation';
 
 /** The typed reason tokens (clio_agent.runtime.sandbox / sandbox_codex) this row words specifically. */
 const SANDBOX_REASON_LABELS: Record<string, string> = {
@@ -43,6 +49,7 @@ export function SandboxFoundationRow({ integration }: { integration: ServiceInte
   const desktop = inTauri();
   const [setupUnsupported, setSetupUnsupported] = useState(false);
   const [restarting, setRestarting] = useState(false);
+  const [setupOutcome, setSetupOutcome] = useState<string>();
   const sandboxKey = queryKeys.key('sandbox-status', settings.endpoint);
   // Counts polls while setup_in_progress stays true; reset the moment it
   // isn't, and on every fresh "Set up" click (see the mutation's onMutate
@@ -80,6 +87,7 @@ export function SandboxFoundationRow({ integration }: { integration: ServiceInte
   const polling = (row?.setup_in_progress ?? false) && !pollGaveUpOnErrors && !pollExhausted;
 
   const setup = useMutation({
+    mutationKey: queryKeys.key('sandbox-setup', settings.endpoint),
     mutationFn: () => repository.setupSandbox(),
     onMutate: () => {
       // A fresh, explicit attempt always gets a fresh poll budget, even
@@ -88,6 +96,23 @@ export function SandboxFoundationRow({ integration }: { integration: ServiceInte
       setPollExhausted(false);
     },
     onSuccess: (result) => {
+      const outcome =
+        result.row?.summary ||
+        result.row?.detail ||
+        (result.reason
+          ? humanizeProtocolValue(result.reason)
+          : 'Setup finished. Inspect the current status below.');
+      setSetupOutcome(outcome);
+      toast.message(
+        result.row?.setup_progress?.status !== 'failed' &&
+          (result.row?.status === 'ready' || result.row?.status === 'healthy')
+          ? 'Protected execution is ready'
+          : 'Protected execution setup finished',
+        {
+          id: `sandbox-setup:${settings.endpoint}`,
+          description: result.row?.next_action || outcome,
+        },
+      );
       // 501: nothing to provision on this platform — hide the button rather
       // than offer a fix that can never work here.
       if (result.reason === 'sandbox_setup_unsupported') setSetupUnsupported(true);
@@ -99,7 +124,10 @@ export function SandboxFoundationRow({ integration }: { integration: ServiceInte
       // up from there — one path for both cases instead of two.
     },
     onError: (error) =>
-      toast.error('Could not set up protected execution', { description: error.message }),
+      toast.message('Setup request disconnected', {
+        id: `sandbox-setup:${settings.endpoint}`,
+        description: `${vocab.agent} may still be setting up protection. Checking its status. ${error.message}`,
+      }),
     onSettled: () => {
       // Unconditional and on BOTH outcomes: the desktop bridge's own
       // request timeout is generous (SANDBOX_SETUP_TIMEOUT_MS, for the UAC
@@ -107,6 +135,9 @@ export function SandboxFoundationRow({ integration }: { integration: ServiceInte
       // is actually still running server-side must still flip this row
       // into the same poll a clean 409 would have.
       void queryClient.invalidateQueries({ queryKey: sandboxKey });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.key('service-health', settings.endpoint),
+      });
     },
   });
 
@@ -130,23 +161,34 @@ export function SandboxFoundationRow({ integration }: { integration: ServiceInte
     ? (SANDBOX_REASON_LABELS[row.reason] ?? humanizeProtocolValue(row.reason))
     : undefined;
   const pendingRestart = row?.reason === 'sandbox_fence_pending_restart';
-  const summary = row?.summary || row?.detail || foundationSummary(integration);
+  const summary = pendingRestart
+    ? `Setup finished. Restart ${vocab.agent} to protect tool processes that were already running.`
+    : row?.reason === 'codex_enforcement_unverified'
+      ? 'Protection has not been verified on this computer. Complete setup before retrying commands.'
+      : row?.summary || row?.detail || foundationSummary(integration);
 
   return (
     <details className="group px-1 py-3">
-      <summary className="flex cursor-pointer list-none items-center gap-3">
+      <summary className="grid cursor-pointer list-none grid-cols-[1rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 sm:flex sm:gap-3">
         <ServerIcon aria-hidden="true" className="size-4 shrink-0 text-primary" />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+        <span className="min-w-0 text-sm font-medium sm:flex-1">
           {foundationTitle(integration.name)}
         </span>
-        <ClioStatus
-          label={reasonLabel ?? integrationStatusLabel(status)}
-          value={status === 'healthy' ? 'healthy' : polling ? 'connecting' : status}
-        />
+        <div className="col-start-2 shrink-0 justify-self-start sm:ml-auto">
+          <ClioStatus
+            label={reasonLabel ?? integrationStatusLabel(status)}
+            value={status === 'healthy' ? 'healthy' : polling ? 'connecting' : status}
+          />
+        </div>
       </summary>
       <div className="mt-3 border-t pt-3 text-xs leading-5 text-muted-foreground">
         <p>{summary}</p>
-        {status !== 'healthy' && !setupUnsupported ? (
+        {setupOutcome ? (
+          <p role="status" className="mt-2 text-foreground">
+            {setupOutcome}
+          </p>
+        ) : null}
+        {(status !== 'healthy' || setup.isPending || polling) && !setupUnsupported ? (
           <div className="mt-2 flex flex-wrap items-center gap-2 text-foreground">
             <Button
               disabled={setup.isPending || polling}
@@ -157,10 +199,21 @@ export function SandboxFoundationRow({ integration }: { integration: ServiceInte
               {setup.isPending || polling ? (
                 <LoaderCircleIcon aria-hidden="true" className="motion-safe:animate-spin" />
               ) : null}
-              Set up protected execution
+              {setup.isPending || polling
+                ? 'Setting up protected execution…'
+                : 'Set up protected execution'}
             </Button>
-            {polling ? (
-              <span role="status">Waiting for Windows permission prompt…</span>
+            {polling || setup.isPending ? (
+              <div role="status" className="w-full space-y-1">
+                <p>{row?.setup_progress?.detail || 'Starting setup…'}</p>
+                <p>
+                  {row?.setup_progress
+                    ? `${formatDuration(row.setup_progress.elapsed_seconds * 1000)} elapsed. `
+                    : ''}
+                  Setup continues if you leave this page. {vocab.agent} will notify you when it
+                  finishes.
+                </p>
+              </div>
             ) : null}
             {!polling && (pollGaveUpOnErrors || pollExhausted) ? (
               <span className="text-destructive" role="status">

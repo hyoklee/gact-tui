@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import type { Session } from '@clio/core/v3';
+import { providerComponentsSchema, type Session } from '@clio/core/v3';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const fixturePort = Number.parseInt(process.env['CLIO_FIXTURE_PORT'] ?? '18799', 10);
@@ -51,11 +51,16 @@ async function waitForArtifactPreview(page: Page) {
 }
 
 async function alignTranscriptAnchorAtTop(page: Page, anchor: Locator) {
-  const conversation = page.getByRole('log', { name: 'Conversation' });
   await expect(anchor).toBeVisible();
+  const conversation = page.getByRole('log', { name: 'Conversation' });
+  // Navigate as a reader before positioning the screenshot. Direct DOM
+  // scrolling alone leaves following engaged and can scroll into our padding.
+  await conversation.press('ArrowUp');
+  await conversation.evaluate((element) => element.blur());
+  let stablePasses = 0;
   await expect
-    .poll(() =>
-      anchor.evaluate((element) => {
+    .poll(async () => {
+      await anchor.evaluate((element) => {
         const scroller = element.closest<HTMLElement>('[role="log"]');
         if (!scroller) return Number.POSITIVE_INFINITY;
         const delta = element.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
@@ -65,10 +70,23 @@ async function alignTranscriptAnchorAtTop(page: Page, anchor: Locator) {
           scroller.style.paddingBottom = `${paddingBottom + delta - remainingScroll}px`;
         }
         scroller.scrollBy({ behavior: 'instant', top: delta });
-        return Math.abs(element.getBoundingClientRect().top - scroller.getBoundingClientRect().top);
-      }),
-    )
-    .toBeLessThanOrEqual(1);
+      });
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+      const offset = await anchor.evaluate((element) => {
+        const scroller = element.closest<HTMLElement>('[role="log"]');
+        return scroller
+          ? Math.abs(element.getBoundingClientRect().top - scroller.getBoundingClientRect().top)
+          : Number.POSITIVE_INFINITY;
+      });
+      stablePasses = offset <= 1 ? stablePasses + 1 : 0;
+      return stablePasses;
+    })
+    .toBeGreaterThanOrEqual(3);
 }
 
 async function alignLatestActivityAtTop(page: Page) {
@@ -317,6 +335,10 @@ test('renders structured MCP v2 interactions and one live inline App', async ({ 
   await page.goto(workspaceUrl);
   const attention = page.getByRole('region', { name: 'Agent needs your response' });
   await expect(attention.getByRole('button', { name: '3 responses needed' })).toBeVisible();
+  await settleConversationAtLatest(page);
+  const activity = page.getByRole('button', { name: /^Activity:/ }).last();
+  await expect(activity).toHaveAttribute('aria-expanded', 'false');
+  await activity.click();
   await expect(page.locator('[data-agent-question-state="answering"]')).toContainText(
     'Agent is reading conversation context',
   );
@@ -398,6 +420,11 @@ test('renders structured MCP v2 interactions and one live inline App', async ({ 
   expect(replaced.ok()).toBe(true);
   await page.reload();
   await settleConversationAtLatest(page);
+  await expect(page.locator('iframe[data-mcp-app-iframe="app_fixture_1"]')).toHaveCount(0);
+  await expect(page.locator('iframe[data-mcp-app-iframe="app_fixture_2"]')).toHaveCount(1);
+  const history = page.getByRole('button', { name: /^Activity:/ }).last();
+  await expect(history).toHaveAttribute('aria-expanded', 'false');
+  await history.click();
   await expect(page.getByText('MCP v2 exerciser view closed')).toBeVisible();
   await expect(page.locator('iframe[data-mcp-app-iframe="app_fixture_1"]')).toHaveCount(0);
   await expect(page.locator('iframe[data-mcp-app-iframe="app_fixture_2"]')).toHaveCount(1);
@@ -616,9 +643,17 @@ test('renders dense flat-NDP semantics with accessible interactions', async ({
     name: 'Jump to user message 1',
   });
   await expect(firstRailLandmark).toBeVisible();
-  await firstRailLandmark.hover();
   const railPreview = page.locator('[data-slot="hover-card-content"]');
-  await expect(railPreview.locator('[data-streamdown="strong"]')).toContainText('evidence ledger');
+  // Scrolling across the rail can open another preview. Close it before the
+  // next hover: count=1 alone can match that old card before the new one opens.
+  await page.mouse.move(0, 0);
+  await expect(railPreview).toHaveCount(0);
+  await firstRailLandmark.hover();
+  await expect(railPreview).toHaveCount(1);
+  const railPreviewTitle = railPreview.locator('p.font-semibold');
+  await expect(railPreviewTitle).toHaveText('Sanitized evidence ledger entry 1.');
+  await expect(railPreviewTitle).toHaveCSS('font-weight', '600');
+  await expect(railPreview).toContainText('Sanitized evidence ledger entry 2.');
   await expect(railPreview.getByText(/\*\*evidence ledger\*\*/)).toHaveCount(0);
   await expect
     .poll(() => conversation.evaluate((element) => element.scrollTop))
@@ -638,6 +673,8 @@ test('renders dense flat-NDP semantics with accessible interactions', async ({
   await expect(page.locator('[data-slot="hover-card-content"]')).toHaveCount(0);
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await alignLatestActivityAtTop(page);
+  // The reviewed baseline reflects reader-controlled collapsed activity and
+  // the completion footer's separate fields. Keep the existing pixel budget.
   // maxDiffPixels absorbs sub-row anti-aliasing jitter at the latest-anchored
   // transcript's top edge (~400px originally observed); a real layout
   // regression moves orders of magnitude more (tens of thousands of pixels,
@@ -749,7 +786,9 @@ test('keeps a pending EarthScope map flat, resizable, and centered when expanded
     .poll(() => viewport.evaluate((element) => element.getBoundingClientRect().height))
     .toBeGreaterThan(initialHeight);
 
-  const enlargedHeight = await viewport.evaluate((element) => element.getBoundingClientRect().height);
+  const enlargedHeight = await viewport.evaluate(
+    (element) => element.getBoundingClientRect().height,
+  );
   const corner = pendingResponses.getByRole('button', {
     name: 'Corner resize handle',
   });
@@ -811,7 +850,9 @@ test('keeps a pending EarthScope map flat, resizable, and centered when expanded
     expect(dialogBounds.width).toBeGreaterThan(pageSize.width * 0.5);
     expect(dialogBounds.width).toBeLessThan(pageSize.width * 0.9);
     expect(Math.abs(dialogBounds.x + dialogBounds.width / 2 - pageSize.width / 2)).toBeLessThan(1);
-    expect(Math.abs(dialogBounds.y + dialogBounds.height / 2 - pageSize.height / 2)).toBeLessThan(1);
+    expect(Math.abs(dialogBounds.y + dialogBounds.height / 2 - pageSize.height / 2)).toBeLessThan(
+      1,
+    );
   }
   expect(dialogBounds?.height ?? 0).toBeGreaterThan((pageSize?.height ?? 0) * 0.9);
   expect(mapBounds?.height ?? 0).toBeGreaterThan((pageSize?.height ?? 0) * 0.75);
@@ -859,8 +900,11 @@ test('keeps navigation and workspace canvas accessible on mobile with reduced mo
   expect(await outline.locator('[data-index]').count()).toBeLessThan(30);
   const finalOutlineRow = outline.locator('[data-index="999"]');
   await expect(finalOutlineRow).toBeVisible();
-  await expect(finalOutlineRow.locator('p')).toHaveCSS('white-space', 'nowrap');
-  expect((await finalOutlineRow.boundingBox())?.height ?? 0).toBeLessThanOrEqual(36);
+  await expect(finalOutlineRow.locator('p.font-semibold > span')).toHaveCSS(
+    'white-space',
+    'nowrap',
+  );
+  expect((await finalOutlineRow.boundingBox())?.height).toBe(72);
   const outlineBounds = await outline.boundingBox();
   expect(outlineBounds).not.toBeNull();
   if (outlineBounds) {
@@ -875,9 +919,14 @@ test('keeps navigation and workspace canvas accessible on mobile with reduced mo
       { steps: 8 },
     );
     await page.mouse.up();
-    const resizedBounds = await outline.boundingBox();
-    expect(resizedBounds?.width ?? 0).toBeGreaterThan(outlineBounds.width + 40);
-    expect(resizedBounds?.height ?? 0).toBeGreaterThan(outlineBounds.height + 20);
+    // The popover transitions its native CSS resize dimensions. Measure after
+    // they reach the requested size, rather than during the final pointer frame.
+    await expect
+      .poll(async () => (await outline.boundingBox())?.width ?? 0)
+      .toBeGreaterThan(outlineBounds.width + 40);
+    await expect
+      .poll(async () => (await outline.boundingBox())?.height ?? 0)
+      .toBeGreaterThan(outlineBounds.height + 20);
   }
   await outline.locator('[data-slot="transcript-outline-list"]').evaluate((element) => {
     element.scrollTop = 0;
@@ -887,11 +936,18 @@ test('keeps navigation and workspace canvas accessible on mobile with reduced mo
     name: 'Jump to user message 1',
   });
   await expect(firstOutlineItem).toBeVisible();
-  await expect(outline.locator('[data-streamdown="strong"]')).toContainText('evidence ledger');
+  const firstOutlineTitle = outline
+    .locator('p.font-semibold')
+    .filter({ hasText: 'Sanitized evidence ledger entry 1.' });
+  await expect(firstOutlineTitle).toHaveCSS('font-weight', '600');
+  await expect(outline.locator('[data-index="0"]')).toContainText(
+    'Sanitized evidence ledger entry 2.',
+  );
   await expect(outline.getByText(/\*\*evidence ledger\*\*/)).toHaveCount(0);
   await firstOutlineItem.hover();
   const firstMessagePreview = page.getByRole('region', { name: 'user message 1 preview' });
   await expect(firstMessagePreview).toContainText('Sanitized evidence ledger entry 1.');
+  await expect(firstMessagePreview).toContainText('Sanitized evidence ledger entry 2.');
   await firstOutlineItem.click();
   await expect(firstMessagePreview).toHaveCount(0);
   await expect(outline).toHaveCount(0);
@@ -917,7 +973,24 @@ test('renders the discovered catalog and the steer the service is holding', asyn
   // message, so that message offers to cancel it before delivery.
   await expect(page.getByRole('button', { name: 'Cancel pending message' })).toHaveCount(1);
 
+  const componentStatusResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === 'GET' &&
+      url.pathname === '/v1/providers/codex/components' &&
+      url.searchParams.get('refresh') === 'true'
+    );
+  });
   await page.getByRole('button', { name: 'Change model' }).click();
+  const componentStatus = await componentStatusResponse;
+  expect(componentStatus.ok()).toBe(true);
+  expect(providerComponentsSchema.parse(await componentStatus.json())).toMatchObject({
+    provider_id: 'codex',
+    provider_kind: 'codex',
+    installed: true,
+    update_available: false,
+    components: [],
+  });
   const picker = page.getByRole('dialog', { name: 'Choose a model' });
   await expect(picker).toBeVisible();
   // Both live providers reach the picker: the one that answered with models,
@@ -1215,48 +1288,57 @@ test('batches a 100-delta stream over a virtualized 1,000-message transcript', a
   expect(Math.abs(measurements.bottomGap)).toBeLessThanOrEqual(2);
 });
 
-test('shows the summarization injection collapsed with a clamped preview, then expands it', async ({
+test('keeps summarization in collapsed activity and discloses its exact received text', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(workspaceUrl);
   await expect(page).toHaveURL(new RegExp(`${workspaceUrl}$`));
   await settleConversationAtLatest(page);
+  await page.getByRole('button', { name: 'Activity: Received context', exact: true }).click();
 
   const compactionRow = page.locator(
     '[data-slot="harness-injection"][data-source="summarization"]',
   );
   await expect(compactionRow).toBeVisible();
-  await expect(compactionRow.getByText(/gave the agent: Summarization/)).toBeVisible();
+  const disclosure = compactionRow.getByRole('button', {
+    name: 'Injection Summarization Automatic',
+  });
+  await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
   await expect(compactionRow.getByText('Automatic')).toBeVisible();
-
-  // Collapsed: a clamped preview of the summary the agent received, not an
-  // empty row — the checkpoint appends to the transcript, it does not hide it.
-  const preview = compactionRow.locator('p.line-clamp-3');
-  await expect(preview).toBeVisible();
-  await expect(preview).toContainText('EarthScope station evidence ledger');
+  await expect(compactionRow.locator('pre')).toHaveCount(0);
   // Scroll the row to the top of the viewport: it sits near the tail of the
   // transcript, close enough to the composer that the floating "Agent needs
   // your response" queue (docked at the bottom) would otherwise cover it.
   await compactionRow.evaluate((element) =>
     element.scrollIntoView({ behavior: 'instant', block: 'start' }),
   );
+  // Scrolling can move this row under the pointer left by the activity click.
+  // Capture the baseline's unhovered state, independently of its prior position.
+  await page.mouse.move(0, 0);
   await page.evaluate(
     () =>
       new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
       ),
   );
-  await expect(compactionRow).toHaveScreenshot('summarization-row-collapsed.png', {
+  await expect(compactionRow).toHaveScreenshot('summarization-disclosure-collapsed.png', {
     animations: 'disabled',
   });
 
-  await compactionRow.getByRole('button', { name: 'Show more' }).click();
-  await expect(compactionRow.locator('p.line-clamp-3')).toHaveCount(0);
+  await disclosure.click();
+  await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+  await expect(compactionRow.locator('pre')).toContainText('EarthScope station evidence ledger');
   await expect(
     compactionRow.getByText(/derived displacement series before this checkpoint/),
   ).toBeVisible();
-  await expect(compactionRow.getByRole('button', { name: 'Show less' })).toBeVisible();
+  await compactionRow.getByRole('button', { name: 'Open exact details' }).click();
+  await expect(page.getByRole('dialog', { name: 'Summarization', exact: true })).toContainText(
+    'derived displacement series before this checkpoint',
+  );
+  await page.keyboard.press('Escape');
+  await disclosure.click();
+  await expect(compactionRow.locator('pre')).toHaveCount(0);
 });
 
 interface LongFrameRecord {

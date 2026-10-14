@@ -1,4 +1,8 @@
-import type { AttentionAvailable, AttentionProfile } from '@clio/core/v3';
+import type {
+  AttentionAvailable,
+  AttentionProfile,
+  AttentionSessionAvailability,
+} from '@clio/core/v3';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { useQuery } from '@tanstack/react-query';
 import { RadarIcon } from 'lucide-react';
@@ -8,6 +12,7 @@ import type { AgentAnswerTextSelection, SelectionAction } from '@/lib/selection-
 import { useRepository } from './use-repository';
 import { useSelectionAction } from './use-selection-action';
 import { connectionScope } from '@/lib/connection-scope';
+import { hasAttentionCaptures } from '@/lib/attention-availability';
 
 export type AttentionModeState =
   | { status: 'idle' }
@@ -38,6 +43,7 @@ export function useAttentionMode(
   changeProfile: (profile: AttentionProfile) => void;
   heat: AttentionAvailable | undefined;
   showLookupHeat: (data: AttentionAvailable | undefined) => void;
+  availability: AttentionSessionAvailability | undefined;
 } {
   const repository = useRepository();
   const { settings } = useConnectionSettings();
@@ -55,7 +61,9 @@ export function useAttentionMode(
     retry: false,
     refetchInterval: (query) => (query.state.data?.enabled ? 5000 : false),
   });
-  const availableAnswers = availability.data?.enabled ? availability.data.messages : undefined;
+  const capability = availability.isSuccess ? availability.data : undefined;
+  const availableAnswers = capability?.enabled ? capability.messages : undefined;
+  const canInspect = hasAttentionCaptures(capability);
   const [held, setHeld] = useState<{ sessionId: string; state: AttentionModeState }>({
     sessionId: scope,
     state: { status: 'idle' },
@@ -133,14 +141,27 @@ export function useAttentionMode(
       label: 'Understand attention',
       icon: RadarIcon,
       order: 30,
-      kinds: ['agent-answer-text'],
-      // Only this session's answers that the service reports attention for.
+      // Generated text of this session's captured answers: the answer itself, and
+      // other generated blocks of that message (its thinking) as transcript content.
+      kinds: ['agent-answer-text', 'transcript-content'],
       isAvailable: (target) =>
-        target.kind === 'agent-answer-text' &&
-        target.sessionId === sessionId &&
-        availableAnswers?.[target.messageId] === true,
+        target.kind === 'agent-answer-text'
+          ? target.sessionId === sessionId && availableAnswers?.[target.messageId] === true
+          : target.kind === 'transcript-content' &&
+            target.reference.session_id === sessionId &&
+            availableAnswers?.[target.reference.message_id] === true,
       run: (target) => {
         if (target.kind === 'agent-answer-text') void request(target);
+        else if (target.kind === 'transcript-content')
+          void request({
+            kind: 'agent-answer-text',
+            text: target.text,
+            sessionId: target.reference.session_id,
+            messageId: target.reference.message_id,
+            partId: target.reference.part_id,
+            contentRevision: target.reference.content_revision,
+            reference: target.reference,
+          });
       },
     }),
     [availableAnswers, request, sessionId],
@@ -157,18 +178,20 @@ export function useAttentionMode(
   );
 
   return {
-    state: current,
+    availability: capability,
+    state: canInspect ? current : { status: 'idle' },
     dismiss,
     showLookupHeat,
-    heat:
-      lookupHeat?.scope === scope && lookupHeat.data
+    heat: !canInspect
+      ? undefined
+      : lookupHeat?.scope === scope && lookupHeat.data
         ? lookupHeat.data
         : current.status === 'shown'
           ? current.data
           : undefined,
     changeProfile: (next) => {
       setProfile(next);
-      if (current.status !== 'idle') void request(current.selection, next);
+      if (canInspect && current.status !== 'idle') void request(current.selection, next);
     },
   };
 }

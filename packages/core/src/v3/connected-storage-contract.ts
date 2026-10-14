@@ -23,6 +23,9 @@ export const sourceConfigurationSchema = z.object({
   destination_collection_root: z.string().default(''),
   destination_local_root: z.string().default(''),
   github_ref: z.string().default(''),
+  obsidian_connection: z.enum(['local_vault', 'headless_sync']).default('local_vault'),
+  obsidian_excluded_folders: z.array(z.string()).default([]),
+  obsidian_sync_mode: z.enum(['pull-only', 'bidirectional']).default('pull-only'),
 });
 export const connectedSourceStateSchema = z
   .object({
@@ -42,6 +45,7 @@ export const connectedSourceStateSchema = z
     download_access: z.enum(['read_only', 'editable']).optional(),
     pending_edits: z.number().optional(),
     download_available: z.boolean().optional(),
+    indexing_operation: z.lazy(() => sourceOperationSchema).optional(),
   })
   .passthrough()
   .transform(
@@ -62,6 +66,7 @@ export const connectedSourceStateSchema = z
       download_access,
       pending_edits,
       download_available,
+      indexing_operation,
       ...source
     }) => ({
       ...connectedSourceGeneratedSchema.parse(source),
@@ -81,6 +86,7 @@ export const connectedSourceStateSchema = z
       download_access,
       pending_edits,
       download_available,
+      indexing_operation,
     }),
   );
 export type ConnectedSourceState = z.infer<typeof connectedSourceStateSchema>;
@@ -96,11 +102,12 @@ export interface CreateSourceInput {
   label: string;
   root: string;
   mode: SourceMode;
+  create_vault?: boolean;
   configuration?: Partial<z.infer<typeof sourceConfigurationSchema>>;
   sftp_credentials?: SftpCredentials;
 }
 export const sourceProviderSchema = z.object({
-  id: z.enum(['local', 'sftp', 'google_drive', 'globus', 'github']),
+  id: z.enum(['local', 'sftp', 'google_drive', 'globus', 'github', 'obsidian']),
   name: z.string(),
   logo: z.string(),
   authentication: z.enum(['none', 'ssh_profile', 'browser']),
@@ -130,6 +137,10 @@ export const sourceOperationSchema = z.object({
   state: z.enum(['queued', 'running', 'completed', 'failed', 'cancelled', 'interrupted']),
   bytes_done: z.number(),
   bytes_total: z.number(),
+  entries_done: z.number().default(0),
+  task_handle: z.string().default(''),
+  owner_session_id: z.string().default(''),
+  invocation_id: z.string().default(''),
   native_job_id: z.string().nullable(),
   cancel_requested: z.boolean(),
   error: z.string().nullable(),

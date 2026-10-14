@@ -62,7 +62,7 @@ import {
 } from '@/components/ui/popover';
 import { useRepository } from '@/hooks/use-repository';
 import { useConnectionSettings } from '@/providers/connection-provider';
-import { documentApplications, openDocumentWorkingCopy, openFileBytes } from '@/tauri/documents';
+import { documentApplications, revealFileBytes } from '@/tauri/documents';
 import { inTauri } from '@/lib/transport/tauri-runtime';
 import { downloadBytes } from './surface-export';
 import { DocumentOpenMenu, type DocumentOpenTarget } from './document-open-menu';
@@ -71,10 +71,12 @@ import { ClioOnlyOfficeEditor } from './onlyoffice-editor';
 import { ClioPdfPreview } from './pdf-preview';
 import { ClioStatus } from './status';
 import { TechnicalDetails } from './technical-details';
+import { ResourceLoading, ResourceUnavailable } from './resource-states';
 import { HtmlPreview } from './html-file-preview';
 import { DocumentSourceView } from './document-source-view';
 import { isDocumentSourceProfile } from './document-open-policy';
 import { prepareDocumentPdf } from './document-pdf';
+import { editorLabel, openDocumentTarget } from './document-launch';
 
 const directProfiles = new Set(['markdown', 'pdf', 'latex', 'html-static']);
 
@@ -90,7 +92,6 @@ export function ClioDocumentWorkspace({
   const { settings } = useConnectionSettings();
   const queryClient = useQueryClient();
   const previewRef = useRef<HTMLDivElement>(null);
-  const preparedPdf = useRef<Promise<DocumentManifest> | undefined>(undefined);
   const [selection, setSelection] = useState<DocumentAnchor>();
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewText, setReviewText] = useState('');
@@ -102,16 +103,27 @@ export function ClioDocumentWorkspace({
     queryKey: queryKeys.key('document-manifest', settings.endpoint, artifact.id),
     queryFn: ({ signal }) => repository.documentManifest(artifact.id, signal),
   });
-  const previewId =
-    manifest.data && !directProfiles.has(manifest.data.profile)
-      ? manifest.data.pdf_rendition_artifact_id
-      : undefined;
-  const savedPreview = useQuery({
-    queryKey: queryKeys.key('document-manifest', settings.endpoint, previewId),
-    queryFn: ({ signal }) => repository.documentManifest(previewId!, signal),
-    enabled: Boolean(previewId),
+  const needsPdfPreview = Boolean(
+    manifest.data &&
+      !directProfiles.has(manifest.data.profile) &&
+      (manifest.data.pdf_rendition_artifact_id || manifest.data.rendition_formats.includes('pdf')),
+  );
+  // One immutable rendition is shared by preview, PDF export and native PDF opening.
+  // Do not abort conversion when a tab unmounts: reopening joins the same request.
+  const pdfOptions = {
+    queryKey: queryKeys.key('document-pdf', settings.endpoint, artifact.id),
+    queryFn: () => prepareDocumentPdf(repository, manifest.data, artifact.session_id),
+    staleTime: Infinity,
+    retry: false as const,
+  };
+  const pdfPreview = useQuery({
+    ...pdfOptions,
+    enabled: needsPdfPreview,
+    retryOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
-  const effectiveManifest = savedPreview.data ?? manifest.data;
+  const effectiveManifest = (needsPdfPreview ? pdfPreview.data : undefined) ?? manifest.data;
   const content = useQuery({
     queryKey: queryKeys.key('document-content', settings.endpoint, effectiveManifest?.artifact_id),
     queryFn: ({ signal }) => repository.documentContent(effectiveManifest!.artifact_id, signal),
@@ -171,17 +183,7 @@ export function ClioDocumentWorkspace({
       });
     },
   });
-  const preparePdf = () => {
-    preparedPdf.current ??= prepareDocumentPdf(
-      repository,
-      manifest.data,
-      artifact.session_id,
-    ).catch((error: unknown) => {
-      preparedPdf.current = undefined;
-      throw error;
-    });
-    return preparedPdf.current;
-  };
+  const preparePdf = () => queryClient.fetchQuery(pdfOptions);
   const rendition = useMutation({
     mutationFn: async () => {
       const pdf = await preparePdf();
@@ -191,68 +193,8 @@ export function ClioDocumentWorkspace({
     onSuccess: () => setStatus('PDF downloaded.'),
   });
   const createWorkingCopy = useMutation({
-    mutationFn: async (target: DocumentOpenTarget) => {
-      const provider = target.kind === 'embedded' ? target.provider : 'native';
-      const isPdf = target.kind === 'native' && target.format === 'pdf';
-      const source = isPdf ? await preparePdf() : manifest.data;
-      if (!source) throw new Error('The document is not available yet.');
-      if (provider !== 'native') {
-        const health = await repository.documentEditorHealth();
-        const available = health.editors.find((entry) => entry.provider === provider);
-        if (!available?.healthy) {
-          throw new Error(
-            `${editorLabel(provider)} is unavailable. Check its connection before opening it.`,
-          );
-        }
-      }
-      const readOnly = isPdf || ['pdf', 'html-static', 'binary'].includes(source.profile);
-      const copy = await repository.createDocumentWorkingCopy(source.artifact_id, {
-        session_id: artifact.session_id,
-        provider,
-        writable: !readOnly,
-        auto_checkpoint: !readOnly,
-      });
-      try {
-        if (target.kind === 'native') {
-          let desktopCopy = false;
-          try {
-            await openDocumentWorkingCopy(copy.path, target.application.id);
-          } catch (error) {
-            // A remote service's working-copy path is not on this desktop.
-            if (!String(error).includes('document path is unavailable')) throw error;
-            await openFileBytes(
-              source.name.split(/[\\/]/u).at(-1)!,
-              await repository.documentContent(source.artifact_id),
-              target.application.id,
-            );
-            await repository.closeDocumentWorkingCopy(copy.id);
-            desktopCopy = true;
-          }
-          return {
-            kind: 'native' as const,
-            copy,
-            appName: target.application.name,
-            isPdf,
-            desktopCopy,
-          };
-        }
-        const launched = await repository.createDocumentEditorSession(copy.id, target.provider);
-        if (launched.status !== 'ready' || !launched.editor_url) {
-          throw new Error(launched.error || `${editorLabel(provider)} could not start.`);
-        }
-        return { kind: 'embedded' as const, copy, launched };
-      } catch (error) {
-        // An editor that did not launch must not leave an apparently active copy.
-        try {
-          await repository.closeDocumentWorkingCopy(copy.id);
-        } catch (closeError) {
-          throw new Error(
-            `${error instanceof Error ? error.message : 'Editor could not start.'} Could not close its working copy: ${closeError instanceof Error ? closeError.message : 'unknown error'}`,
-          );
-        }
-        throw error;
-      }
-    },
+    mutationFn: (target: DocumentOpenTarget) =>
+      openDocumentTarget(repository, manifest.data, artifact.session_id, preparePdf, target),
     onSuccess: (result) => {
       setWorkingCopy(result.kind === 'native' && result.desktopCopy ? undefined : result.copy);
       if (result.kind === 'embedded') {
@@ -262,7 +204,7 @@ export function ClioDocumentWorkspace({
         const message = `${result.isPdf ? 'PDF' : artifact.name} opened in ${result.appName}.${
           result.desktopCopy
             ? ' Opened a desktop copy; edits are local to this copy.'
-            : result.copy.auto_checkpoint
+            : result.copy?.auto_checkpoint
               ? ' Stable saves become immutable revisions.'
               : ''
         }`;
@@ -284,6 +226,15 @@ export function ClioDocumentWorkspace({
       const bytes = await repository.readArtifactBytesFor(artifact);
       downloadBytes(bytes, artifact.media_type, artifact.name);
     },
+  });
+  const revealSource = useMutation({
+    mutationFn: async () =>
+      revealFileBytes(
+        artifact.name.split(/[\\/]/u).at(-1)!,
+        await repository.documentContent(artifact.id),
+      ),
+    onSuccess: () => toast.success('Desktop copy shown in its folder.'),
+    onError: (error: Error) => toast.error(error.message),
   });
   const resolveConflict = useMutation({
     mutationFn: (resolution: 'keep-current' | 'use-working-copy') =>
@@ -331,7 +282,7 @@ export function ClioDocumentWorkspace({
               <p className="text-sm font-medium">
                 {profileLabel(manifest.data ?? effectiveManifest)}
               </p>
-              {savedPreview.data ? (
+              {needsPdfPreview && pdfPreview.data ? (
                 <p className="text-xs text-muted-foreground">Saved PDF preview</p>
               ) : null}
               <p className="break-all font-mono text-xs text-muted-foreground">
@@ -418,6 +369,8 @@ export function ClioDocumentWorkspace({
                 onOpen={(target) => createWorkingCopy.mutate(target)}
                 onPdfDownload={() => rendition.mutate()}
                 onDownload={() => downloadSource.mutate()}
+                onReveal={() => revealSource.mutate()}
+                revealPending={revealSource.isPending}
                 hideDownload={sharedFileActions}
               />
             ) : null}
@@ -425,12 +378,11 @@ export function ClioDocumentWorkspace({
               label="Refresh document revision"
               refreshing={
                 manifest.isFetching ||
-                savedPreview.isFetching ||
+                pdfPreview.isFetching ||
                 content.isFetching ||
                 reviews.isFetching
               }
               onRefresh={async () => {
-                preparedPdf.current = undefined;
                 await Promise.all([
                   queryClient.invalidateQueries({
                     queryKey: queryKeys.key('document-manifest', settings.endpoint),
@@ -438,6 +390,8 @@ export function ClioDocumentWorkspace({
                   queryClient.invalidateQueries({
                     queryKey: queryKeys.key('document-content', settings.endpoint),
                   }),
+                  // The PDF belongs to this immutable artifact. Refresh its
+                  // bytes/metadata without restarting a successful conversion.
                   reviews.refetch(),
                   editorHealth.refetch(),
                 ]);
@@ -450,21 +404,11 @@ export function ClioDocumentWorkspace({
             {status}
           </p>
         ) : null}
-        {createWorkingCopy.error ||
-        rendition.error ||
-        savedPreview.error ||
-        downloadSource.error ? (
+        {createWorkingCopy.error || rendition.error || downloadSource.error ? (
           <Alert variant="destructive">
             <AlertTitle>Document action failed</AlertTitle>
             <AlertDescription>
-              {
-                (
-                  createWorkingCopy.error ??
-                  rendition.error ??
-                  savedPreview.error ??
-                  downloadSource.error
-                )?.message
-              }
+              {(createWorkingCopy.error ?? rendition.error ?? downloadSource.error)?.message}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -487,9 +431,23 @@ export function ClioDocumentWorkspace({
               content={content.data}
               editor={editor}
               fallback={fallbackPreview}
-              fit="width"
+              fit="page"
               manifest={effectiveManifest}
               onPdfSelection={setSelection}
+              previewError={
+                (needsPdfPreview ? pdfPreview.error?.message : undefined) ??
+                (effectiveManifest?.profile === 'pdf' ? content.error?.message : undefined)
+              }
+              previewPending={needsPdfPreview && (pdfPreview.isPending || pdfPreview.isFetching)}
+              previewLabel={
+                manifest.data?.pdf_rendition_artifact_id
+                  ? 'Loading PDF preview…'
+                  : 'Rendering PDF preview…'
+              }
+              onRetryPreview={() => {
+                if (pdfPreview.isError) void pdfPreview.refetch();
+                else void content.refetch();
+              }}
               text={textContent}
             />
           </div>
@@ -557,6 +515,10 @@ function DocumentPreview({
   fit,
   manifest,
   onPdfSelection,
+  previewError,
+  previewPending,
+  previewLabel,
+  onRetryPreview,
   text,
 }: {
   content?: Uint8Array;
@@ -565,6 +527,10 @@ function DocumentPreview({
   fit: 'page' | 'width';
   manifest?: DocumentManifest;
   onPdfSelection: (anchor: DocumentAnchor) => void;
+  previewError?: string;
+  previewPending: boolean;
+  previewLabel: string;
+  onRetryPreview: () => void;
   text?: string;
 }) {
   if (editor?.status === 'ready' && editor.editor_url) {
@@ -581,6 +547,24 @@ function DocumentPreview({
     );
   }
   if (!manifest) return fallback;
+  if (previewError && !previewPending) {
+    return (
+      <div className="space-y-3 p-4" role="alert">
+        <ResourceUnavailable label="PDF preview failed" detail={previewError} />
+        <Button onClick={onRetryPreview} size="sm" variant="outline">
+          Retry preview
+        </Button>
+      </div>
+    );
+  }
+  if (previewPending && !content) {
+    return (
+      <div className="space-y-3 p-4" role="status" aria-live="polite">
+        <p className="text-sm text-muted-foreground">{previewLabel}</p>
+        <ResourceLoading label={previewLabel} />
+      </div>
+    );
+  }
   if (manifest.profile === 'pdf') {
     return (
       // The viewer owns its own scroll region so it can mount only the pages in
@@ -625,13 +609,10 @@ function DocumentPreview({
   }
   if (!directProfiles.has(manifest.profile)) {
     return (
-      <Alert>
-        <FileCheck2Icon aria-hidden="true" />
-        <AlertTitle>{profileLabel(manifest)} remains canonical</AlertTitle>
-        <AlertDescription>
-          Open it in a desktop editor, use an available embedded editor, or render a PDF preview.
-        </AlertDescription>
-      </Alert>
+      <ResourceUnavailable
+        label="Preview unavailable"
+        detail={`PDF previews are not supported for this ${profileLabel(manifest).toLowerCase()}.`}
+      />
     );
   }
   return fallback;
@@ -776,12 +757,6 @@ function profileLabel(manifest?: DocumentManifest) {
     'odf-slides': 'OpenDocument presentation',
   };
   return labels[manifest.profile] ?? 'Document';
-}
-
-function editorLabel(provider: string) {
-  if (provider === 'onlyoffice') return 'ONLYOFFICE';
-  if (provider === 'collabora') return 'Collabora';
-  return 'desktop editor';
 }
 
 function reviewStatusValue(status: 'queued' | 'dispatched' | 'human-note' | 'failed' | 'stale') {

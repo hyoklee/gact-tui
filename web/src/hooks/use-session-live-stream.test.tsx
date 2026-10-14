@@ -136,7 +136,7 @@ describe('useSessionLiveStream resume recovery', () => {
       ['pending-questions', 'http://127.0.0.1:8790'],
       ['session-observability', 'http://127.0.0.1:8790', 'sess_1', 'processes'],
       ['sessions', 'http://127.0.0.1:8790', 'all'],
-      ['execution-provenance', 'http://127.0.0.1:8790', 'sess_1'],
+      ['execution-provenance', 'http://127.0.0.1:8790'],
     ]);
   });
 
@@ -173,7 +173,7 @@ describe('useSessionLiveStream resume recovery', () => {
 
     expect(keys).toContainEqual(['transcript', 'http://127.0.0.1:8790', 'sess_1']);
     expect(keys).toContainEqual(['sessions', 'http://127.0.0.1:8790', 'ws_1']);
-    expect(keys).toContainEqual(['execution-provenance', 'http://127.0.0.1:8790', 'sess_1']);
+    expect(keys).toContainEqual(['execution-provenance', 'http://127.0.0.1:8790']);
   });
 
   it('no longer treats the turn boundary or a finished fs/shell tool call as a Files-view trigger', () => {
@@ -223,7 +223,7 @@ describe('useSessionLiveStream resume recovery', () => {
         sessionId: 'sess_1',
         workspaceId: 'ws_1',
       }),
-    ).toContainEqual(['execution-provenance', 'http://127.0.0.1:8790', 'sess_1']);
+    ).toContainEqual(['execution-provenance', 'http://127.0.0.1:8790']);
   });
 
   it('refreshes the reads each resource event actually changes', () => {

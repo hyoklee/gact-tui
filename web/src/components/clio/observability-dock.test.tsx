@@ -16,6 +16,7 @@ vi.mock('@/providers/connection-provider', () => ({
 import { ClioObservabilityDock, ClioObservabilityView } from './observability-dock';
 
 beforeEach(() => {
+  localStorage.clear();
   Object.defineProperty(URL, 'createObjectURL', {
     configurable: true,
     value: vi.fn(() => 'blob:artifact-preview'),
@@ -247,7 +248,7 @@ describe('ClioObservabilityView', () => {
     expect(liveRegionAfter).toHaveTextContent('Working');
   });
 
-  it('opens a child duration centrally and uses shift-click for a durable canvas tab', async () => {
+  it('opens a child duration in a tab and uses Shift-click for the center', async () => {
     const user = userEvent.setup();
     const onOpenSubagent = vi.fn();
     const child = {
@@ -293,10 +294,10 @@ describe('ClioObservabilityView', () => {
     // disambiguates it from the toggle.
     const childLane = screen.getByRole('button', { name: /geospatial #1,/iu });
     await user.click(childLane);
-    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'conversation');
+    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'canvas');
 
     fireEvent.click(childLane, { shiftKey: true });
-    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'canvas');
+    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'conversation');
   });
 
   it('keeps child conversations directly accessible beside the observability control', async () => {
@@ -354,7 +355,7 @@ describe('ClioObservabilityView', () => {
         name: /geospatial #1 Completed Resolve the region and identify the nearest stations/u,
       }),
     );
-    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'conversation');
+    expect(onOpenSubagent).toHaveBeenLastCalledWith(child, 'canvas');
 
     await user.click(screen.getByRole('button', { name: 'Browse child conversations' }));
     await user.click(screen.getByRole('button', { name: 'Open geospatial #1 in canvas' }));
@@ -496,14 +497,11 @@ describe('ClioObservabilityView', () => {
     expect(screen.getByRole('region', { name: 'Observed execution spans' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Zoom in' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Zoom out' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Main agent' })).toBeVisible();
-    // Every owner's non-tool lanes get their own "Agent work" child group
-    // (executionGantt names it generically per-owner, not per-title), so the
-    // main turn's own reasoning group AND the ndp #1 process's own reasoning
-    // group both render one — two rows sharing the label, not a duplicate.
-    const agentWorkGroups = screen.getAllByRole('button', { name: 'Agent work' });
-    expect(agentWorkGroups).toHaveLength(2);
-    for (const group of agentWorkGroups) expect(group).toBeVisible();
+    expect(screen.getByText('Main agent', { exact: true })).toBeVisible();
+    // Agent durations appear directly beside their named owner. Expanding an
+    // owner is only needed when it has tool-call rows to inspect.
+    expect(screen.queryByRole('button', { name: 'Agent work' })).not.toBeInTheDocument();
+    expect(document.querySelectorAll('[data-slot="gantt-bar"]')).toHaveLength(2);
     // Renders once as the owner group's row title and once as the span's own
     // event label.
     for (const element of screen.getAllByText('ndp #1')) expect(element).toBeVisible();

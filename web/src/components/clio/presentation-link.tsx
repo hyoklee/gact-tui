@@ -1,3 +1,4 @@
+import { subagentOpenTarget } from './subagent-navigation';
 import { useContext } from 'react';
 import { Link } from 'react-router-dom';
 import type { ToolPresentationBlock } from '@clio/core/v3';
@@ -51,13 +52,13 @@ export function PresentationLink({
   const child = Object.values(navigation?.subagents ?? {}).find(
     (run) => run.child_session_id === uri,
   );
-  let open: (() => void) | undefined;
+  let open: ((event: { shiftKey: boolean }) => void) | undefined;
   if (block.target === 'artifact' && artifact && navigation?.onOpenArtifact)
     open = () => navigation.onOpenArtifact?.(artifact);
   else if (block.target === 'resource' && resource && navigation?.onOpenResource)
     open = () => navigation.onOpenResource?.(resource);
   else if (block.target === 'session' && child && navigation?.onOpenSubagent)
-    open = () => navigation.onOpenSubagent?.(child, 'conversation');
+    open = (event) => navigation.onOpenSubagent?.(child, subagentOpenTarget(event));
   else if (block.target === 'work' && navigation?.onOpenWork) open = navigation.onOpenWork;
   else if (block.target === 'surface' && navigation?.surfaces?.[uri])
     open = () => {

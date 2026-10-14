@@ -1,23 +1,15 @@
 import { useContext } from 'react';
 import { FileTextIcon } from 'lucide-react';
 import type { ToolPresentationBlock } from '@clio/core/v3';
-import { TerminalContent } from '@/components/ai-elements/terminal';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { BoundedResult } from './bounded-result';
 import { PresentationNavigation } from './presentation-navigation';
 
 /**
- * One saved stream inside a terminal card: what was kept, how it ends, and a
- * way to open all of it (grouping lives in `tool-result-saved-output-blocks`).
+ * Saved-file metadata and its open action, attached to the single output section.
+ * Excerpts belong to that section's shared preview, not another result segment.
  */
-export function SavedTerminalOutput({
-  block,
-  lines,
-}: {
-  block: ToolPresentationBlock;
-  lines: number;
-}) {
+export function SavedTerminalOutput({ block }: { block: ToolPresentationBlock }) {
   const navigation = useContext(PresentationNavigation);
   const uri = block.uri ?? '';
   const onOpenFile = navigation?.onOpenFile;
@@ -58,18 +50,6 @@ export function SavedTerminalOutput({
           action
         )}
       </div>
-      {block.text ? (
-        <div className="mt-1 min-w-0">
-          {block.detail ? <p className="px-3 text-xs text-zinc-500">{block.detail}</p> : null}
-          <BoundedResult lines={lines} title={block.detail || block.label || 'Saved output'}>
-            <TerminalContent className="max-h-none overflow-visible bg-zinc-950 p-3 text-zinc-100">
-              <pre className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
-                {block.text}
-              </pre>
-            </TerminalContent>
-          </BoundedResult>
-        </div>
-      ) : null}
     </section>
   );
 }

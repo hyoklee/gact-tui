@@ -3,6 +3,7 @@ import type {
   Artifact,
   A2UIActionLifecycle,
   A2UISurface,
+  AsyncProcess,
   AttentionAvailable,
   ClioRepository,
   Message as DomainMessage,
@@ -17,9 +18,12 @@ import type {
 } from '@clio/core/v3';
 import type { ConversationDisplayMode } from '@/providers/conversation-display-provider';
 import type { McpAppResponseActivityData } from './mcp-app-surface';
+import type { FileSearchLocation } from '@/lib/search-matches';
 import type { SubagentOpenTarget } from './subagent-card';
 import type { TurnPreparationProps } from './turn-preparation';
 import type { ConversationModelBoundary } from './conversation-model-boundaries';
+import type { ConversationForkOrigin } from './conversation-fork-origin';
+import type { ConversationTurnPresentation } from './conversation-turn-model';
 
 export interface ClioConversationProps {
   messages: readonly DomainMessage[];
@@ -32,8 +36,11 @@ export interface ClioConversationProps {
    * `workspace_file` block's path belongs to.
    */
   workspaceId?: string;
+  sessionId?: string;
+  forkOrigin?: ConversationForkOrigin;
   tools: Record<string, ToolInvocation>;
   tasks: Record<string, DomainTask>;
+  processes?: readonly AsyncProcess[];
   subagents: Record<string, SubagentRun>;
   artifacts: Record<string, Artifact>;
   surfaces: Record<string, A2UISurface>;
@@ -55,12 +62,16 @@ export interface ClioConversationProps {
   onActionCardAction?: (action: ActionCardAction) => void | Promise<unknown>;
   onForkFromMessage?: (messageId: string) => void | Promise<unknown>;
   forkingMessageId?: string;
+  markedMessageIds?: ReadonlySet<string>;
+  markingMessageId?: string;
+  onMarkMessage?: (messageId: string, marked: boolean) => Promise<void>;
   onRewindToMessage?: (messageId: string) => void | Promise<unknown>;
   rewindingMessageId?: string;
   onRetryMessage?: (messageId: string) => void | Promise<unknown>;
   retryingMessageId?: string;
   onOpenArtifact?: (artifact: Artifact) => void;
   onOpenFile?: (path: string) => void;
+  onOpenFileReference?: (path: string, location: FileSearchLocation) => void;
   onOpenWork?: () => void;
   onOpenResource?: (
     resource: WorkspaceResource,
@@ -86,6 +97,20 @@ export interface ClioConversationProps {
 }
 
 export interface ConversationMessageRowProps extends Omit<ClioConversationProps, 'messages'> {
+  /** Feedback consumed at recorded boundaries inside this response. */
+  feedbackMessages?: readonly DomainMessage[];
+  /** Harness entries displayed inside the following response's activity group. */
+  injectionMessages?: readonly DomainMessage[];
+  /** Retain the original message anchor without rendering a second injection row. */
+  injectionsGrouped?: boolean;
+  active?: boolean;
+  /** Canonical first iteration of the latest live activity group, including joined continuations. */
+  liveActivityId?: string;
+  responseContinued?: boolean;
+  /** A resumed segment of the same response, without a repeated sender header. */
+  responseContinuation?: boolean;
+  /** Ordered activity joined across adjacent internal continuation turns. */
+  turnPresentation?: ConversationTurnPresentation;
   displayMode: ConversationDisplayMode;
   message: DomainMessage;
   index: number;

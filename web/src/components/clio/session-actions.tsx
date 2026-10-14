@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { MoreIcon } from '@/lib/icon-vocabulary';
 import { useState } from 'react';
+import type { Session } from '@clio/core/v3';
+import { toast } from 'sonner';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,11 +28,21 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ClioShareSessionDialog } from './share-session-dialog';
+import {
+  DeleteResourceDialog,
+  RenameResourceDialog,
+  type ResourceActions,
+  type ResourceTarget,
+} from './resource-dialogs';
+import { downloadSessionExport } from './session-export-download';
+import { SessionExportMenu } from './session-export-menu';
+import { SessionLifecycleMenuItems, SessionOrganizeMenuItems } from './session-management-menu';
 
 export interface ClioSessionActionsProps {
   title: string;
   disabled?: boolean;
-  onFork: () => Promise<void>;
+  management?: { session: Session; actions: ResourceActions; endpoint: string };
+  onFork?: () => Promise<void>;
   onCompact: () => Promise<void>;
   /** Secondary escape hatch to the OS's own terminal app. Undefined hides
    * the menu item (browser hosts, or a workspace with no known path). */
@@ -42,6 +54,7 @@ export interface ClioSessionActionsProps {
 export function ClioSessionActions({
   title,
   disabled,
+  management,
   onFork,
   onCompact,
   onOpenSystemTerminal,
@@ -51,6 +64,8 @@ export function ClioSessionActions({
   const [confirmation, setConfirmation] = useState<'compact' | 'undo'>();
   const [sharing, setSharing] = useState(false);
   const [pending, setPending] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<ResourceTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ResourceTarget | null>(null);
   const run = async (action: () => Promise<void>) => {
     setPending(true);
     try {
@@ -70,6 +85,20 @@ export function ClioSessionActions({
       setConfirmation(undefined);
     }
   };
+  const runManagementAction = (action: () => Promise<void>, success: string) => {
+    void run(async () => {
+      try {
+        await action();
+        toast.success(success);
+      } catch (reason) {
+        toast.error(reason instanceof Error ? reason.message : String(reason), {
+          duration: Infinity,
+          closeButton: true,
+        });
+        throw reason;
+      }
+    });
+  };
   return (
     <>
       <DropdownMenu>
@@ -84,21 +113,51 @@ export function ClioSessionActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-64">
-          <DropdownMenuItem className="whitespace-nowrap" onSelect={() => void run(onFork)}>
-            <GitForkIcon aria-hidden="true" /> Branch into a new session
-          </DropdownMenuItem>
+          {management ? (
+            <>
+              <SessionOrganizeMenuItems
+                actions={management.actions}
+                onAction={runManagementAction}
+                onRename={setRenameTarget}
+                session={management.session}
+              />
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
+          {onFork ? (
+            <DropdownMenuItem className="whitespace-nowrap" onSelect={() => void run(onFork)}>
+              <GitForkIcon aria-hidden="true" /> Branch into a new session
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem className="whitespace-nowrap" onSelect={() => setSharing(true)}>
             <Share2Icon aria-hidden="true" /> Share read-only link
           </DropdownMenuItem>
+          {management ? (
+            <SessionExportMenu
+              onExport={(mode) =>
+                runManagementAction(
+                  () =>
+                    downloadSessionExport(
+                      management.actions,
+                      management.endpoint,
+                      management.session.id,
+                      title,
+                      mode,
+                    ),
+                  'Session archive prepared for download',
+                )
+              }
+            />
+          ) : null}
+          <DropdownMenuSeparator />
           {onOpenSystemTerminal ? (
             <DropdownMenuItem
               className="whitespace-nowrap"
-              onSelect={() => void onOpenSystemTerminal()}
+              onSelect={() => void run(onOpenSystemTerminal)}
             >
               <ExternalLinkIcon aria-hidden="true" /> Open in system terminal
             </DropdownMenuItem>
           ) : null}
-          <DropdownMenuSeparator />
           <DropdownMenuItem
             className="whitespace-nowrap"
             onSelect={() => setConfirmation('compact')}
@@ -112,6 +171,17 @@ export function ClioSessionActions({
           >
             <Undo2Icon aria-hidden="true" /> Remove last message
           </DropdownMenuItem>
+          {management ? (
+            <>
+              <DropdownMenuSeparator />
+              <SessionLifecycleMenuItems
+                actions={management.actions}
+                onAction={runManagementAction}
+                onDelete={setDeleteTarget}
+                session={management.session}
+              />
+            </>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
       <AlertDialog
@@ -150,6 +220,22 @@ export function ClioSessionActions({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {management && renameTarget ? (
+        <RenameResourceDialog
+          actions={management.actions}
+          key={`rename:${renameTarget.id}`}
+          onClose={() => setRenameTarget(null)}
+          target={renameTarget}
+        />
+      ) : null}
+      {management && deleteTarget ? (
+        <DeleteResourceDialog
+          actions={management.actions}
+          key={`delete:${deleteTarget.id}`}
+          onClose={() => setDeleteTarget(null)}
+          target={deleteTarget}
+        />
+      ) : null}
       <ClioShareSessionDialog
         onOpenChange={setSharing}
         onShare={onShare}

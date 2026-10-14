@@ -1,6 +1,7 @@
 import type { ClioRepository, PendingInteraction, Task, ToolInvocation } from '@clio/core/v3';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 // The plan review renders Markdown through a React.lazy boundary. Importing the
 // Markdown module graph (streamdown + math + cjk plugins) here loads it while the
 // file is collected, which has no timeout, so the lazy boundary resolves from the
@@ -51,39 +52,6 @@ function iteration(overrides: Partial<ConversationIteration> = {}): Conversation
     ...overrides,
   };
 }
-
-describe('ConversationTurn Activity folding', () => {
-  function activityHeader() {
-    return screen.getByRole('button', { name: /Activity/u });
-  }
-
-  it('stays open while the agent works, then folds when the answer starts', () => {
-    const { rerender } = render(
-      <ConversationTurn iterations={[iteration()]} mode="chain" subagents={{}} />,
-    );
-    expect(activityHeader()).toHaveAttribute('aria-expanded', 'true');
-
-    rerender(
-      <ConversationTurn answerStarted iterations={[iteration()]} mode="chain" subagents={{}} />,
-    );
-
-    expect(activityHeader()).toHaveAttribute('aria-expanded', 'false');
-  });
-
-  it('opens a finished turn folded, and keeps the reader open once they open it', () => {
-    const { rerender } = render(
-      <ConversationTurn answerStarted iterations={[iteration()]} mode="chain" subagents={{}} />,
-    );
-    expect(activityHeader()).toHaveAttribute('aria-expanded', 'false');
-
-    fireEvent.click(activityHeader());
-    rerender(
-      <ConversationTurn answerStarted iterations={[iteration()]} mode="chain" subagents={{}} />,
-    );
-
-    expect(activityHeader()).toHaveAttribute('aria-expanded', 'true');
-  });
-});
 
 describe('ConversationTurn incomplete state', () => {
   it('shows the interrupted state of a cancelled turn in full mode', () => {
@@ -266,6 +234,7 @@ describe('ConversationTurn correlated work placement', () => {
         mode="full"
         subagents={{ [child.id]: child }}
       />,
+      { wrapper: MemoryRouter },
     );
 
     const lane = screen.getByRole('region', { name: 'Full agent activity' });
@@ -277,6 +246,8 @@ describe('ConversationTurn correlated work placement', () => {
       'tool:call_read',
       'subagent:handoff_returned',
     ]);
+    expect(screen.queryByText(child.task)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show result for Delegate' }));
     expect(screen.getByText(child.task)).toBeVisible();
     expect(screen.queryByText(child.result)).not.toBeInTheDocument();
   });
@@ -350,8 +321,10 @@ describe('ConversationTurn correlated work placement', () => {
       name: 'Workflow steps: inventory → verification',
     });
     expect(group).toBeVisible();
-    expect(group).toHaveTextContent('inventory #1');
-    expect(group).toHaveTextContent('verification #1');
+    expect(group).toHaveTextContent('inventory');
+    expect(group).toHaveTextContent('verification');
+    expect(within(group).getAllByText('Delegate', { exact: true })).toHaveLength(2);
+    expect(within(group).getAllByText('Subagent result', { exact: true })).toHaveLength(2);
     expect(
       screen.queryByText('inventory #1', { selector: '[data-turn-activity^="subagent"] *' }),
     ).not.toBeInTheDocument();
@@ -436,6 +409,7 @@ describe('ConversationTurn correlated work placement', () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /^Activity:/ }));
     expect(screen.getByText('v2ex_ui_echo closed')).toBeVisible();
     expect(screen.getAllByTestId('active-mcp-app')).toHaveLength(1);
     expect(screen.getByTestId('active-mcp-app')).toHaveTextContent('app_2');
@@ -604,7 +578,7 @@ describe('ConversationTurn correlated work placement', () => {
     expect(screen.getByText('Comment')).toBeVisible();
     expect(screen.getByText('Use the measured steel dimensions.')).toBeVisible();
     expect(screen.queryByText('beam')).not.toBeInTheDocument();
-    expect(screen.getByText('Answer sent to the agent')).toBeVisible();
+    expect(screen.queryByText('Answer sent to the agent')).not.toBeInTheDocument();
     expect(screen.queryByText('Validated by MCP schema')).not.toBeInTheDocument();
     expect(screen.queryByText('Response returned to MCP')).not.toBeInTheDocument();
   });
@@ -725,6 +699,7 @@ describe('ConversationTurn announced state', () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /^Activity:/ }));
     const line = document.querySelector('[data-turn-activity="task:task_permission"]');
     expect(line).toHaveTextContent('Permission needed');
     expect(line).not.toHaveTextContent('waiting_permission');

@@ -36,7 +36,7 @@ import {
   type ObservabilityActivityItem,
 } from './observability-activity';
 import { ClioEvidenceView } from './observability-evidence';
-import { ClioProcessLanes } from './observability-processes';
+import { ObservabilityWork } from './observability-work';
 import { ClioStatus } from './status';
 import { getToolActivityTitle, getToolStatus, getToolSummary } from './tool-presentation';
 import type { SubagentOpenTarget } from './subagent-card';
@@ -85,6 +85,7 @@ export function ClioObservabilityView({
   onOpenFile,
   onOpenResource,
   onOpenSubagent,
+  onCancelTask,
   executionProvenance,
   provenanceProviders,
   artifactProvenanceProvider,
@@ -94,6 +95,9 @@ export function ClioObservabilityView({
   onProvenanceProviderChange,
   resources,
   sessionId,
+  sessions,
+  familyProvenance,
+  familyProvenancePending,
   requestedView,
   interactions = [],
 }: ClioObservabilityDockProps) {
@@ -207,6 +211,13 @@ export function ClioObservabilityView({
                 process.parent_turn_id ??
                 (process.kind === 'mcp-task' ? `mcp-task:${process.id}` : undefined),
               timing: process.updated_at || process.created_at ? 'event' : undefined,
+              rootSessionId: process.root_session_id,
+              ownerSessionId: process.child_session_id ?? process.owner_session_id,
+              ownerLabel: process.title,
+              parentSessionId: process.parent_session_id,
+              taskId: process.id,
+              taskPath: process.task_path,
+              depth: process.depth ?? process.task_path?.length,
             }),
           )),
       ...agentInteractionActivityItems(
@@ -308,7 +319,13 @@ export function ClioObservabilityView({
               label="Background work"
               pending={processesPending}
             />
-            <ClioProcessLanes
+            <ObservabilityWork
+              familyProvenance={familyProvenance}
+              familyProvenancePending={familyProvenancePending}
+              sessionId={sessionId}
+              sessions={sessions}
+              artifacts={artifacts}
+              onOpenArtifact={onOpenArtifact}
               executionProvenance={executionProvenance}
               messages={messages}
               onOpenSubagent={onOpenSubagent}
@@ -337,6 +354,7 @@ export function ClioObservabilityView({
               providers={provenanceProviders}
             />
             <ClioEvidenceView
+              onCancelTask={onCancelTask}
               artifacts={artifacts}
               contextFiles={contextFiles}
               diffs={diffs}

@@ -1,5 +1,6 @@
 import { vocab } from '@/lib/brand-vocabulary';
 import { connectionScope } from '@/lib/connection-scope';
+import { openKnowledge } from '@/lib/knowledge-navigation';
 import { connectionIsLocal } from '@/lib/connection';
 import { queryKeys } from '@/lib/query-keys';
 import type { ConnectedSourceState, SourceProvider, WorkspaceReference } from '@clio/core/v3';
@@ -32,6 +33,8 @@ import { ConnectedSourceForm } from './connected-source-form';
 import { linkAccessNames } from './connected-source-labels';
 import { ConnectedSourceDetail } from './connected-source-detail';
 import { SourceProviderLogo } from './source-provider-logo';
+import { SourceProviderInfo } from './source-provider-info';
+import type { ObsidianChoice } from './obsidian-source-form';
 import { InfoTip } from './info-tip';
 import { DesktopFolderUpload } from './desktop-folder-upload';
 import { ConnectedSourceActions } from './connected-source-actions';
@@ -43,6 +46,7 @@ import type { SourceDownloadSelection } from './source-download-selection';
 /** The same trusted connection and browse surface serves the composer and Files tab. */
 export function ConnectedSourcePicker({
   workspaceId,
+  sessionId,
   open,
   onOpenChange,
   onSelect,
@@ -52,10 +56,13 @@ export function ConnectedSourcePicker({
   initialFolder,
   initialDownloaded,
   initialSourceId,
+  initialProviderId,
+  initialObsidianChoice,
   manageOnly = false,
   onDownloadStarted,
 }: {
   workspaceId: string;
+  sessionId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect?: (reference: WorkspaceReference) => void;
@@ -65,6 +72,8 @@ export function ConnectedSourcePicker({
   initialFolder?: string;
   initialDownloaded?: boolean;
   initialSourceId?: string;
+  initialProviderId?: string;
+  initialObsidianChoice?: ObsidianChoice;
   manageOnly?: boolean;
   onDownloadStarted?: (
     source: ConnectedSourceState,
@@ -123,6 +132,7 @@ export function ConnectedSourcePicker({
             <ConnectedSourceContents
               key={`${scope}:${initialSourceId ?? ''}`}
               workspaceId={workspaceId}
+              sessionId={sessionId}
               manageOnly={manageOnly}
               onDownloadStarted={onDownloadStarted}
               onUploadFiles={onUploadFiles}
@@ -130,6 +140,8 @@ export function ConnectedSourcePicker({
               initialFolder={initialFolder}
               initialDownloaded={initialDownloaded}
               initialSourceId={initialSourceId}
+              initialProviderId={initialProviderId}
+              initialObsidianChoice={initialObsidianChoice}
               headerActions={headerActions}
               onDiscard={() => {
                 if (activeScope.current === scope) onOpenChange(false);
@@ -155,6 +167,7 @@ export function ConnectedSourcePicker({
 /** Reuse trusted account and workspace-source controls in Attach and Settings. */
 export function ConnectedSourceContents({
   workspaceId,
+  sessionId,
   manageOnly,
   onDownloadStarted,
   onSelect,
@@ -164,11 +177,14 @@ export function ConnectedSourceContents({
   initialFolder,
   initialDownloaded,
   initialSourceId,
+  initialProviderId,
+  initialObsidianChoice,
   headerActions,
   onDiscard,
   settingsView = false,
 }: {
   workspaceId: string;
+  sessionId?: string;
   manageOnly: boolean;
   onDownloadStarted?: (
     source: ConnectedSourceState,
@@ -182,6 +198,8 @@ export function ConnectedSourceContents({
   initialFolder?: string;
   initialDownloaded?: boolean;
   initialSourceId?: string;
+  initialProviderId?: string;
+  initialObsidianChoice?: ObsidianChoice;
   headerActions: HTMLDivElement | null;
   onDiscard: () => void;
   settingsView?: boolean;
@@ -210,6 +228,8 @@ export function ConnectedSourceContents({
   const select = (id: string) =>
     privateSelection ? setManagedSelection(id) : queryClient.setQueryData(selectionKey, id);
   const [provider, setProvider] = useState<SourceProvider>();
+  const [providerIntent, setProviderIntent] = useState(initialProviderId);
+  const [obsidianChoice, setObsidianChoice] = useState(initialObsidianChoice);
   const [accountLogin, setAccountLogin] = useState<SourceProvider>();
   const [editing, setEditing] = useState<ConnectedSourceState>();
   const [desktopUpload, setDesktopUpload] = useState(Boolean(initialFolderFiles?.length));
@@ -322,18 +342,22 @@ export function ConnectedSourceContents({
         }}
       />
     );
-  if (provider)
+  const activeProvider =
+    provider ?? providers.data?.providers.find((row) => row.id === providerIntent);
+  if (activeProvider)
     return (
       <>
         {editing && toolbar(editing, false)}
         <ConnectedSourceForm
           workspaceId={workspaceId}
-          provider={provider}
+          provider={activeProvider}
+          obsidianChoice={obsidianChoice}
           source={editing}
           hostLabel={hostLabel}
           browseStartPath={host.data?.effective.root}
           onBack={() => {
             setProvider(undefined);
+            setProviderIntent(undefined);
             setEditing(undefined);
           }}
           onConnected={(connected) => {
@@ -343,8 +367,13 @@ export function ConnectedSourceContents({
             );
             select(connected.id);
             setProvider(undefined);
+            setProviderIntent(undefined);
             setEditing(undefined);
             onChanged?.();
+            if (connected.source_kind === 'knowledge') {
+              openKnowledge(connectionScope(settings), workspaceId, connected);
+              onDiscard();
+            }
           }}
         />
       </>
@@ -353,9 +382,20 @@ export function ConnectedSourceContents({
     return (
       <>
         {toolbar(source)}
+        {source.source_kind === 'knowledge' && source.connected && (
+          <Button
+            onClick={() => {
+              openKnowledge(connectionScope(settings), workspaceId, source);
+              onDiscard();
+            }}
+          >
+            Open knowledge
+          </Button>
+        )}
         <ConnectedSourceDetail
           key={source.id}
           workspaceId={workspaceId}
+          sessionId={sessionId}
           source={source}
           initialFolder={source.id === initialFolderSourceId ? initialFolder : undefined}
           initialDownloaded={source.id === initialFolderSourceId ? initialDownloaded : undefined}
@@ -432,11 +472,14 @@ export function ConnectedSourceContents({
                   <div className="flex min-w-48 flex-1 items-center gap-3">
                     <SourceProviderLogo provider={row.id} />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">
+                      <p className="flex items-center gap-2 text-sm font-medium">
                         {row.id === 'local' ? `Use a folder on ${hostLabel}` : row.name}
+                        <SourceProviderInfo provider={row} />
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {row.id === 'local' ? (
+                        {row.id === 'obsidian' ? (
+                          'Knowledge graphs from linked notes'
+                        ) : row.id === 'local' ? (
                           'Choose data already on this machine'
                         ) : row.authentication === 'browser' ? (
                           row.authenticated ? (
@@ -455,6 +498,19 @@ export function ConnectedSourceContents({
                     </div>
                   </div>
                   <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+                    {row.id === 'obsidian' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!workspaceId}
+                        onClick={() => {
+                          setObsidianChoice('new');
+                          setProvider(row);
+                        }}
+                      >
+                        New vault
+                      </Button>
+                    )}
                     {row.authentication === 'browser' &&
                       (row.authenticated ? (
                         <ConnectedAccountActions provider={row} />
@@ -479,7 +535,10 @@ export function ConnectedSourceContents({
                       size="sm"
                       variant="outline"
                       disabled={!workspaceId}
-                      onClick={() => setProvider(row)}
+                      onClick={() => {
+                        setObsidianChoice('existing');
+                        setProvider(row);
+                      }}
                     >
                       Connect
                     </Button>

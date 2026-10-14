@@ -282,6 +282,7 @@ function GanttBar<TData = unknown>({
     <Comp
       type="button"
       data-slot="gantt-bar"
+      data-event-id={event.id}
       data-milestone={milestone || undefined}
       data-all-day={occurrence.allDay || undefined}
       data-recurring={occurrence.isRecurring || undefined}

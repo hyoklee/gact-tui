@@ -3,10 +3,8 @@ import type {
   PendingInteractionField,
   PendingInteractionResponse,
 } from '@clio/core/v3';
-import { AlertTriangleIcon, ExternalLinkIcon, MessageCircleQuestionIcon } from 'lucide-react';
-import { CloseIcon } from '@/lib/icon-vocabulary';
-import { useState, type ChangeEvent, type ReactNode } from 'react';
-import { Frame, FrameHeader, FramePanel, FrameTitle } from '@/components/reui/frame';
+import { AlertTriangleIcon, ExternalLinkIcon } from 'lucide-react';
+import { useState, type ChangeEvent } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -20,13 +18,13 @@ import {
   FieldTitle,
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { openExternalUrl } from '@/tauri/external-url';
-import { pendingInteractionDomId } from './interaction-control';
-import { OwnerAttribution, ResponseErrorNotice } from './pending-interaction-notices';
-import { TechnicalDetails } from './technical-details';
+import { ResponseErrorNotice } from './pending-interaction-notices';
+import { QuestionResponseFrame as QuestionFrame } from './question-response-frame';
 
 interface QuestionSurfaceProps {
   interaction: PendingInteraction;
@@ -76,7 +74,7 @@ export function StructuredQuestionResponse(props: QuestionSurfaceProps) {
   return (
     <QuestionFrame {...props}>
       <ResponseErrorNotice error={props.responseError} />
-      <FieldGroup className="gap-4">
+      <FieldGroup className="gap-3">
         {fields.map((field) => (
           <SchemaField
             disabled={props.disabled || sending}
@@ -96,8 +94,8 @@ export function StructuredQuestionResponse(props: QuestionSurfaceProps) {
           />
         ))}
       </FieldGroup>
-      <div className="mt-4 flex justify-end">
-        <Button disabled={props.disabled || sending} onClick={() => void submit()}>
+      <div className="mt-2 flex justify-end">
+        <Button size="sm" disabled={props.disabled || sending} onClick={() => void submit()}>
           {sending ? 'Sending…' : 'Send response'}
         </Button>
       </div>
@@ -156,8 +154,9 @@ export function UrlConsentResponse(props: QuestionSurfaceProps) {
       </dl>
       {navigationError ? <FieldError className="mt-3">{navigationError}</FieldError> : null}
       <ResponseErrorNotice error={props.responseError} />
-      <div className="mt-4 flex flex-wrap justify-end gap-2">
+      <div className="mt-2 flex flex-wrap justify-end gap-2">
         <Button
+          size="sm"
           disabled={props.disabled || sending}
           onClick={() =>
             void props
@@ -171,71 +170,16 @@ export function UrlConsentResponse(props: QuestionSurfaceProps) {
         >
           Decline
         </Button>
-        <Button disabled={props.disabled || sending || !url} onClick={() => void accept()}>
+        <Button
+          size="sm"
+          disabled={props.disabled || sending || !url}
+          onClick={() => void accept()}
+        >
           <ExternalLinkIcon aria-hidden="true" />
           Open link
         </Button>
       </div>
     </QuestionFrame>
-  );
-}
-
-function QuestionFrame({ children, ...props }: QuestionSurfaceProps & { children: ReactNode }) {
-  const canCancel = (props.interaction.actions ?? []).includes('cancel');
-  return (
-    <Frame
-      className="min-w-0 self-stretch"
-      data-interaction-kind={props.interaction.kind}
-      dense
-      id={pendingInteractionDomId(props.interaction.id)}
-      spacing="sm"
-      tabIndex={-1}
-    >
-      <FrameHeader className="relative flex-row items-start gap-2 pr-10">
-        <MessageCircleQuestionIcon
-          aria-hidden="true"
-          className="mt-0.5 size-4 shrink-0 text-action"
-        />
-        <div className="min-w-0 flex-1">
-          <FrameTitle className="line-clamp-3">
-            {props.interaction.prompt ?? props.interaction.title}
-          </FrameTitle>
-          <OwnerAttribution
-            interaction={props.interaction}
-            ownerLabel={props.ownerLabel}
-            show={props.showOwner}
-          />
-          {props.interaction.routing_state === 'agent_elicitation_fallback_to_human' ? (
-            <>
-              <p className="mt-1 text-xs text-muted-foreground">
-                The specialist could not answer this, so it needs you.
-              </p>
-              {props.interaction.fallback_detail ? (
-                <TechnicalDetails
-                  className="mt-1 text-xs text-muted-foreground"
-                  title="Technical details"
-                >
-                  <code>{props.interaction.fallback_detail}</code>
-                </TechnicalDetails>
-              ) : null}
-            </>
-          ) : null}
-        </div>
-        {canCancel ? (
-          <Button
-            aria-label="Cancel question"
-            className="absolute right-2 top-1"
-            disabled={props.disabled}
-            onClick={() => void props.onResponse(props.interaction, { action: 'cancel' })}
-            size="icon-sm"
-            variant="ghost"
-          >
-            <CloseIcon aria-hidden="true" />
-          </Button>
-        ) : null}
-      </FrameHeader>
-      <FramePanel className="min-w-0 overflow-hidden">{children}</FramePanel>
-    </Frame>
   );
 }
 
@@ -265,25 +209,27 @@ function SchemaField({
             const key = String(option);
             const checked = selected.some((item) => Object.is(item, option));
             return (
-              <FieldLabel htmlFor={`${id}-${index}`} key={key}>
-                <Field orientation="horizontal">
-                  <Checkbox
-                    checked={checked}
-                    disabled={disabled}
-                    id={`${id}-${index}`}
-                    onCheckedChange={(next) =>
-                      onChange(
-                        next === true
-                          ? [...selected, option]
-                          : selected.filter((item) => !Object.is(item, option)),
-                      )
-                    }
-                  />
-                  <FieldContent>
-                    <FieldTitle>{field.enum_names?.[index] ?? key}</FieldTitle>
-                  </FieldContent>
-                </Field>
-              </FieldLabel>
+              <Label
+                className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50"
+                htmlFor={`${id}-${index}`}
+                key={key}
+              >
+                <Checkbox
+                  checked={checked}
+                  disabled={disabled}
+                  id={`${id}-${index}`}
+                  onCheckedChange={(next) =>
+                    onChange(
+                      next === true
+                        ? [...selected, option]
+                        : selected.filter((item) => !Object.is(item, option)),
+                    )
+                  }
+                />
+                <FieldContent>
+                  <FieldTitle>{field.enum_names?.[index] ?? key}</FieldTitle>
+                </FieldContent>
+              </Label>
             );
           })}
         </div>
@@ -302,14 +248,16 @@ function SchemaField({
           value={value === undefined ? '' : String(value)}
         >
           {enumValues.map((option, index) => (
-            <FieldLabel htmlFor={`${id}-${index}`} key={String(option)}>
-              <Field orientation="horizontal">
-                <RadioGroupItem id={`${id}-${index}`} value={String(option)} />
-                <FieldContent>
-                  <FieldTitle>{field.enum_names?.[index] ?? String(option)}</FieldTitle>
-                </FieldContent>
-              </Field>
-            </FieldLabel>
+            <Label
+              className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50"
+              htmlFor={`${id}-${index}`}
+              key={String(option)}
+            >
+              <RadioGroupItem id={`${id}-${index}`} value={String(option)} />
+              <FieldContent>
+                <FieldTitle>{field.enum_names?.[index] ?? String(option)}</FieldTitle>
+              </FieldContent>
+            </Label>
           ))}
         </RadioGroup>
         <FieldError>{error}</FieldError>

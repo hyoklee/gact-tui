@@ -55,9 +55,7 @@ function resolveInstallerProviderSelection(options: InstallerOptions): string | 
   if (options.provider_ids) return options.provider_ids;
   if (options.provider_families) return expandLegacyProviderFamilies(options.provider_families);
   const reason =
-    options.provider_ids === ''
-      ? 'installer_provider_selection_empty'
-      : 'installer_options_absent';
+    options.provider_ids === '' ? 'installer_provider_selection_empty' : 'installer_options_absent';
   console.info(
     '[installer] no installer provider preference recorded — leaving provider visibility untouched',
     { reason },
@@ -186,7 +184,7 @@ const LEGACY_PROVIDER_FAMILIES: Record<string, readonly string[]> = {
   openai: ['codex', 'openai'],
   anthropic: ['anthropic', 'claude_code'],
   google: ['gemini', 'vertex_ai'],
-  argonne: ['argonne_sophia', 'argonne_metis'],
+  argonne: ['argonne_sophia', 'argonne_metis', 'argonne_minerva', 'argonne_tara'],
   local: ['lm_studio', 'ollama', 'llama_cpp', 'vllm'],
   other: ['azure_openai', 'bedrock', 'nvidia_nim', 'openrouter'],
 };
@@ -201,7 +199,14 @@ function expandLegacyProviderFamilies(families: string): string {
 }
 
 function normalizeProviderIdList(ids: string): string {
-  return [...new Set(ids.split(',').map((providerId) => providerId.trim()).filter(Boolean))]
+  return [
+    ...new Set(
+      ids
+        .split(',')
+        .map((providerId) => providerId.trim())
+        .filter(Boolean),
+    ),
+  ]
     .sort()
     .join(',');
 }
