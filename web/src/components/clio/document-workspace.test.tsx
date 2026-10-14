@@ -175,11 +175,11 @@ describe('ClioDocumentWorkspace', () => {
     expect(await screen.findByText('PDF preview')).toBeVisible();
     expect(repository.createDocumentRendition).toHaveBeenCalledTimes(1);
     await userEvent.click(
-      screen.getByRole('button', { name: 'Refresh document revision', exact: true }),
+      screen.getByRole('button', { name: 'Refresh document revision' }),
     );
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'Refresh document revision', exact: true }),
+        screen.getByRole('button', { name: 'Refresh document revision' }),
       ).toBeEnabled(),
     );
     expect(repository.documentContent).toHaveBeenCalledTimes(2);
