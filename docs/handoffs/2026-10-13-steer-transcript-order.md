@@ -27,6 +27,11 @@ human message to appear once before that reply and withholds a live completion
 footer. The prior expectation that the result replaces the call ID is corrected;
 no wire-order assertion is removed.
 
+Hosted CI caught the added regression exceeding the conversation test file's
+800-line limit. The complete live steering case and helper now live in
+`conversation-live-steering.test.tsx`; their text and assertions are unchanged.
+The original test file is back below the limit.
+
 Local validation is source/diff inspection and Prettier only. No local test
 suites, browser probes, app builds/reloads or inference were run. Hosted CI must
 qualify this exact head before merging. The installed build is unchanged. This
