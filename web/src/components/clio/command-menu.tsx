@@ -280,7 +280,15 @@ export function ClioCommandMenu({
           Number(right.id === sessionId) - Number(left.id === sessionId) ||
           sessionInteractionAt(right).localeCompare(sessionInteractionAt(left)),
       )[0];
-    if (!target) {
+    const targetRoute =
+      request.kind === 'workspace-file' &&
+      targetWorkspace &&
+      location.pathname === newConversationRoute(targetWorkspace)
+        ? location.pathname
+        : target
+          ? `/workspaces/${encodeURIComponent(target.workspace_id)}/sessions/${encodeURIComponent(target.id)}`
+          : undefined;
+    if (!targetRoute) {
       toast.error('Open a conversation in this workspace to view this file.');
       return;
     }
@@ -289,12 +297,9 @@ export function ClioCommandMenu({
         ? { ...request, artifact: { ...request.artifact } }
         : { ...request };
     finish(() =>
-      navigate(
-        `/workspaces/${encodeURIComponent(target.workspace_id)}/sessions/${encodeURIComponent(target.id)}`,
-        {
-          state: { globalSearchResource: { scope: connectionScope(settings), request: snapshot } },
-        },
-      ),
+      navigate(targetRoute, {
+        state: { globalSearchResource: { scope: connectionScope(settings), request: snapshot } },
+      }),
     );
   };
 

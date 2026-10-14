@@ -82,6 +82,23 @@ test('a file found from Settings opens in the remembered workspace canvas', asyn
   await expect(page.getByRole('heading', { name: 'Plant study notes', exact: true })).toBeVisible();
 });
 
+test('a file found from a new conversation retains its unsent draft and route', async ({
+  page,
+}) => {
+  const fixture = await installSearchFixture(page, endpoint);
+  const route = `/workspaces/${fixture.workspace.id}/new`;
+  await page.goto(route);
+  const composer = page.getByRole('combobox', { name: /Ask .+ to investigate/u });
+  await composer.fill('Keep this unsent review draft.');
+  await page.keyboard.press('Control+k');
+  await page.getByPlaceholder(placeholder).fill('plant-study.md');
+  await page.getByRole('option', { name: 'notes/plant-study.md', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${route}$`, 'u'));
+  await expect(page.getByRole('heading', { name: 'Plant study notes', exact: true })).toBeVisible();
+  await expect(composer).toHaveValue('Keep this unsent review draft.');
+  expect(fixture.state.created).toBe(0);
+});
+
 test('the compact Settings menu hands focus to the shared global search', async ({ page }) => {
   await installSearchFixture(page, endpoint);
   await page.setViewportSize({ width: 640, height: 800 });

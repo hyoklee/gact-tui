@@ -264,6 +264,25 @@ describe('ClioCommandMenu workspace search', () => {
       '"kind":"workspace-file","path":"results/stations.csv"',
     );
   });
+  it.each([true, false])(
+    'opens a file in the current new-conversation canvas (existing session=%s)',
+    async (hasSession) => {
+      const route = '/workspaces/ws_current/new';
+      localStorage.setItem('clio.last-workspace-route:http%3A%2F%2F127.0.0.1%3A8787', route);
+      if (!hasSession) repository.allSessions.mockResolvedValue([]);
+      const user = userEvent.setup();
+      renderMenu(vi.fn(), route, false);
+      await user.keyboard('{Control>}k{/Control}');
+      await user.keyboard('stations');
+      await user.click(await screen.findByRole('option', { name: /results\/stations.csv/u }));
+      expect(screen.getByTestId('location')).toHaveTextContent(route);
+      expect(screen.getByTestId('location-state')).toHaveTextContent(
+        '"kind":"workspace-file","path":"results/stations.csv"',
+      );
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    },
+  );
+
   it('keeps global search open with its draft when a connection cannot be reached', async () => {
     repository.switchConnection.mockRejectedValue(new Error('Transport unavailable'));
     const user = userEvent.setup();
