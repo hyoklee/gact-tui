@@ -166,6 +166,27 @@ describe('ClioDocumentWorkspace', () => {
     expect(repository.createDocumentRendition).toHaveBeenCalledTimes(1);
   });
 
+  it('refreshes an immutable preview without requesting another conversion', async () => {
+    repository.documentManifest.mockResolvedValue({ ...manifest, profile: 'ooxml-slides' });
+    repository.documentContent.mockResolvedValue(new TextEncoder().encode('%PDF-preview'));
+    repository.artifactReviews.mockResolvedValue([]);
+    repository.documentEditorHealth.mockResolvedValue({ providers: [] });
+    renderWorkspace();
+    expect(await screen.findByText('PDF preview')).toBeVisible();
+    expect(repository.createDocumentRendition).toHaveBeenCalledTimes(1);
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Refresh document revision', exact: true }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Refresh document revision', exact: true }),
+      ).toBeEnabled(),
+    );
+    expect(repository.documentContent).toHaveBeenCalledTimes(2);
+    expect(repository.createDocumentRendition).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('PDF preview')).toBeVisible();
+  });
+
   it('shows a conversion error, keeps it across tab reopening, and retries explicitly', async () => {
     repository.documentManifest.mockResolvedValue({ ...manifest, profile: 'ooxml-slides' });
     repository.documentContent.mockResolvedValue(new TextEncoder().encode('%PDF-retry'));

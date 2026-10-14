@@ -390,9 +390,8 @@ export function ClioDocumentWorkspace({
                   queryClient.invalidateQueries({
                     queryKey: queryKeys.key('document-content', settings.endpoint),
                   }),
-                  queryClient.invalidateQueries({
-                    queryKey: pdfOptions.queryKey,
-                  }),
+                  // The PDF belongs to this immutable artifact. Refresh its
+                  // bytes/metadata without restarting a successful conversion.
                   reviews.refetch(),
                   editorHealth.refetch(),
                 ]);
