@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { connectionScope } from '@/lib/connection-scope';
+import { MemoryRouter } from 'react-router-dom';
 const fixtures = vi.hoisted(() => ({
   endpoint: 'https://clio-one',
   token: 'one',
@@ -45,11 +46,13 @@ afterEach(cleanup);
 function content(client: QueryClient) {
   return (
     <QueryClientProvider client={client}>
-      <DataSourceSettings />
+      <MemoryRouter>
+        <DataSourceSettings />
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }
-it('manages accounts without querying or modifying workspace sources', async () => {
+it('manages accounts without querying or modifying workspace sources until Connect is chosen', async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const scope = connectionScope({ endpoint: fixtures.endpoint, token: fixtures.token });
   client.setQueryData(['connected-storage-selection', scope, 'w'], 'attach-selection');
@@ -60,7 +63,7 @@ it('manages accounts without querying or modifying workspace sources', async () 
   expect(screen.getByRole('button', { name: 'Log in' })).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'All accounts' }));
   expect(screen.queryByRole('combobox', { name: 'Workspace' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Connect Globus' })).toBeVisible();
   expect(screen.queryByText('Local folder')).not.toBeInTheDocument();
   expect(screen.queryByText('Your sources')).not.toBeInTheDocument();
   expect(fixtures.repository.workspaces).not.toHaveBeenCalled();

@@ -385,7 +385,10 @@ export function BlockBody({
               ? `Removed from todo list, was ${status}`
               : status;
       return (
-        <div className="flex items-start gap-2 py-1">
+        <div
+          className="grid min-w-0 grid-cols-[1rem_minmax(0,1fr)_auto] items-start gap-x-2 py-1"
+          data-slot="todo-row"
+        >
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -404,11 +407,17 @@ export function BlockBody({
               <TooltipContent>{accessibleStatus}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <span className={block.change === 'removed' ? 'text-muted-foreground line-through' : ''}>
+          <span
+            data-slot="todo-label"
+            className={cn(
+              'min-w-0 leading-6 [overflow-wrap:anywhere]',
+              block.change === 'removed' && 'text-muted-foreground line-through',
+            )}
+          >
             {text}
           </span>
           {block.change === 'added' || block.change === 'removed' ? (
-            <span className="shrink-0 text-xs text-muted-foreground">
+            <span className="text-xs leading-6 text-muted-foreground" data-slot="todo-change">
               {block.change === 'added' ? 'Added' : 'Removed'}
             </span>
           ) : null}

@@ -15,7 +15,7 @@ import { useRepository } from '@/hooks/use-repository';
 import { HostPathPicker } from './host-path-picker';
 import { InfoTip } from './info-tip';
 import { SourceProviderLogo } from './source-provider-logo';
-import { ObsidianSourceForm } from './obsidian-source-form';
+import { ObsidianSourceForm, type ObsidianChoice } from './obsidian-source-form';
 import { SourceSshTarget } from './source-ssh-target';
 import { GitHubRevisionPicker } from './github-revision-picker';
 
@@ -26,6 +26,7 @@ export function ConnectedSourceForm({
   hostLabel,
   browseStartPath,
   source,
+  obsidianChoice,
   onConnected,
   onBack,
 }: {
@@ -34,6 +35,7 @@ export function ConnectedSourceForm({
   hostLabel: string;
   browseStartPath?: string;
   source?: ConnectedSourceState;
+  obsidianChoice?: ObsidianChoice;
   onConnected: (source: ConnectedSourceState) => void;
   onBack: () => void;
 }) {
@@ -93,6 +95,7 @@ export function ConnectedSourceForm({
   );
   return provider.id === 'obsidian' && !source ? (
     <ObsidianSourceForm
+      initialChoice={obsidianChoice}
       workspaceId={workspaceId}
       hostLabel={hostLabel}
       browseStartPath={browseStartPath}

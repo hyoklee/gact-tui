@@ -71,7 +71,7 @@ export function TodoList<T>({
               type="button"
               aria-label={`${open ? 'Hide' : 'Show'} completed ${completed.length}`}
               variant="ghost"
-              className="group h-7 gap-1.5 px-1 text-xs font-normal text-muted-foreground hover:bg-transparent hover:text-foreground"
+              className="group h-7 gap-1.5 border-0 px-0 text-xs font-normal text-muted-foreground hover:bg-transparent hover:text-foreground"
             >
               {open ? 'Hide completed' : 'Show completed'}
               <span className="tabular-nums">{completed.length}</span>
