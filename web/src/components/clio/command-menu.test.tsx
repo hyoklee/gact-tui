@@ -124,6 +124,24 @@ afterEach(() => {
 });
 
 describe('ClioCommandMenu workspace search', () => {
+  it('focuses the search immediately on each open and keeps the assistant shortcut inside its input', async () => {
+    const user = userEvent.setup();
+    renderMenu();
+    await user.keyboard('{Control>}k{/Control}');
+    const input = screen.getByPlaceholderText('Search work, files, artifacts, or actions…');
+    await waitFor(() => expect(input).toHaveFocus());
+    const shortcut = screen.getByRole('button', { name: /^Ask .+ Search Tab$/u });
+    expect(shortcut.closest('[data-slot="input-group"]')).toContainElement(input);
+    await user.keyboard('station');
+    expect(input).toHaveValue('station');
+    await user.keyboard('{Escape}');
+    await user.keyboard('{Control>}k{/Control}');
+    await waitFor(() =>
+      expect(
+        screen.getByPlaceholderText('Search work, files, artifacts, or actions…'),
+      ).toHaveFocus(),
+    );
+  });
   it('opens matching files and artifacts in the shared canvas', async () => {
     const user = userEvent.setup();
     const onOpenResource = renderMenu();

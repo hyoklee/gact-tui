@@ -9,6 +9,7 @@ test('search orders sessions first, highlights snippets, and focuses the actual 
   await page.goto(`/workspaces/${fixture.workspace.id}/sessions/${fixture.session.id}`);
   await expect(page.getByText('Review the study protocol.', { exact: true })).toBeAttached();
   await page.keyboard.press('Control+k');
+  await expect(page.getByPlaceholder('Search work, files, artifacts, or actions…')).toBeFocused();
   const input = page.getByPlaceholder('Search work, files, artifacts, or actions…');
   await input.fill('plant');
   await expect(
@@ -56,7 +57,7 @@ test('Tab enters the dedicated assistant, Enter submits, and a scoped citation o
     .getByPlaceholder('Search work, files, artifacts, or actions…')
     .fill('Where is the reviewer handoff?');
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('textbox', { name: /^Ask .+ Search$/u })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: /^Ask .+ Search$/u })).toBeFocused();
   expect(fixture.state.created).toBe(0);
   await page.getByRole('textbox', { name: /^Ask .+ Search$/u }).press('Enter');
   await expect(page.getByRole('link', { name: 'Read the archived notes' })).toBeVisible();
@@ -65,4 +66,64 @@ test('Tab enters the dedicated assistant, Enter submits, and a scoped citation o
   await expect.poll(() => fixture.state.deleted).toEqual(['sess_search_fixture']);
   expect(fixture.state.submitted).toHaveLength(1);
   expect(fixture.state.submitted[0].parts[0].text).toBe('Where is the reviewer handoff?');
+});
+
+test('search switches modes in both directions with its draft and a single compact input row', async ({
+  page,
+}) => {
+  const fixture = await installSearchFixture(page, endpoint);
+  await page.goto(`/workspaces/${fixture.workspace.id}/sessions/${fixture.session.id}`);
+  await expect(page.getByText('Review the study protocol.', { exact: true })).toBeAttached();
+  await page.keyboard.press('Control+k');
+  const input = page.getByPlaceholder('Search work, files, artifacts, or actions…');
+  await expect(input).toBeFocused();
+  await page.keyboard.type('Keep my draft');
+  const shortcut = page.getByRole('button', { name: /^Ask .+ Search Tab$/u });
+  await expect(shortcut).toBeVisible();
+  expect(
+    await shortcut.evaluate((button) => {
+      const group = button.closest('[data-slot="input-group"]');
+      const input = group?.querySelector('input');
+      if (!group || !input) return false;
+      const bounds = button.getBoundingClientRect();
+      const row = group.getBoundingClientRect();
+      return (
+        bounds.top >= row.top &&
+        bounds.bottom <= row.bottom &&
+        bounds.left >= input.getBoundingClientRect().right
+      );
+    }),
+  ).toBe(true);
+  const assistant = page.getByRole('textbox', { name: /^Ask .+ Search$/u });
+  await page.keyboard.press('Tab');
+  await expect(assistant).toBeFocused();
+  await expect(assistant).toHaveValue('Keep my draft');
+  await page.keyboard.press('Shift+Tab');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('Keep my draft');
+  await page.keyboard.press('Tab');
+  await expect(assistant).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('Keep my draft');
+  await shortcut.click();
+  await expect(assistant).toBeFocused();
+  await page.getByRole('button', { name: /^Choose .+ Search model$/u }).click();
+  const picker = page.getByRole('dialog', { name: /^Choose .+ Search model$/u });
+  await expect(picker).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(assistant).toBeVisible();
+  expect(fixture.state.created).toBe(0);
+  await page.getByRole('button', { name: /^Choose .+ Search model$/u }).click();
+  await picker.getByText('qwen3-vl-8b', { exact: true }).click();
+  await expect(page.getByRole('button', { name: /^Choose .+ Search model$/u })).toContainText(
+    'qwen3-vl-8b',
+  );
+  await assistant.press('Enter');
+  await expect.poll(() => fixture.state.submitted).toHaveLength(1);
+  expect(fixture.state.submitted[0].model).toEqual({
+    provider_id: 'lmstudio',
+    model_id: 'qwen3-vl-8b',
+  });
+  await expect(page.getByRole('link', { name: 'Read the archived notes' })).toBeVisible();
 });
