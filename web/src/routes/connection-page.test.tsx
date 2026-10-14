@@ -166,7 +166,10 @@ it('keeps global search open on first launch and resumes workspace opening after
 });
 
 it('defers an in-flight startup navigation until global search closes', async () => {
-  mocks.recents = [{ endpoint: 'http://127.0.0.1:8788', label: 'Contained' }];
+  // Managed startup has no saved-service probe competing for this controlled promise.
+  mocks.inTauri = true;
+  mocks.managedConnectionReady = true;
+  mocks.managedConnection = { endpoint: 'http://127.0.0.1:8788' };
   let finishConnection: (value: { endpoint: string }) => void = () => undefined;
   mocks.resolveConnection.mockReturnValueOnce(
     new Promise<{ endpoint: string }>((resolve) => {
