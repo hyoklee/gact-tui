@@ -233,7 +233,7 @@ mod acceptance {
                 std::thread::spawn(move || {
                     let result = (|| -> Result<(), String> {
                         wait_for_document(&window)?;
-                        window.eval(r#"const b=document.createElement('button'); b.style='position:fixed;left:0;top:0;width:160px;height:70px'; b.textContent='Download CSV'; b.onclick=()=>{const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['activity,hours\nCoding,30'],{type:'text/csv'})); a.download='sample.csv'; document.body.append(a); a.click(); a.remove();}; document.body.append(b); window.__clioFrameReady='csv';"#).map_err(|error| error.to_string())?;
+                        window.eval(r#"(()=>{const b=document.createElement('button'); b.style='position:fixed;left:0;top:0;width:160px;height:70px'; b.textContent='Download CSV'; b.onclick=()=>{const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['activity,hours\nCoding,30'],{type:'text/csv'})); a.download='sample.csv'; document.body.append(a); a.click(); a.remove();}; document.body.append(b); window.__clioFrameReady='csv';})()"#).map_err(|error| error.to_string())?;
                         click_download(&window, "csv")?;
                         verify_download(&window, &targets[0], b"activity,hours\nCoding,30")?;
                         dialog_state(&window, true)?;
