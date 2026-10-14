@@ -1,4 +1,4 @@
-import type { ClioRepository, Message as DomainMessage } from '@clio/core/v3';
+import { type ClioRepository, type Message as DomainMessage } from '@clio/core/v3';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
