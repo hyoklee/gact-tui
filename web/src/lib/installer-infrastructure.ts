@@ -1,4 +1,5 @@
 import { toast } from 'sonner';
+import { finishInstallerNativeSearch } from '@/lib/installer-native-search';
 import { createRepository, type ConnectionSettings } from '@/lib/connection';
 import {
   WEB_MCP_COMMAND,
@@ -92,6 +93,10 @@ export async function finishInstallerInfrastructure(settings: ConnectionSettings
     }
   }
   if (options.web_search === 'not_requested' || options.web_search === 'configured') return;
+  if (options.web_search === 'native_requested') {
+    await finishInstallerNativeSearch(repository);
+    return;
+  }
   const catalog = await repository.managedServiceCatalog('local');
   const service = catalog.services.find((candidate) => candidate.id === 'web_search');
   const variant = service?.variants.find((candidate) => candidate.compatible);
@@ -149,7 +154,8 @@ export async function finishInstallerInfrastructure(settings: ConnectionSettings
   await completeInstallerWebSearch();
   toast.success('CLIO Search is ready', {
     id: 'installer-web-search-ready',
-    description: 'Web search and document reading are available to your agents.',
+    description:
+      'Web search is available to your agents. Document conversion is an optional service feature.',
   });
 }
 
@@ -186,7 +192,7 @@ const LEGACY_PROVIDER_FAMILIES: Record<string, readonly string[]> = {
   google: ['gemini', 'vertex_ai'],
   argonne: ['argonne_sophia', 'argonne_metis', 'argonne_minerva', 'argonne_tara'],
   local: ['lm_studio', 'ollama', 'llama_cpp', 'vllm'],
-  other: ['azure_openai', 'bedrock', 'nvidia_nim', 'openrouter'],
+  other: ['azure_openai', 'bedrock', 'nvidia_nim', 'openrouter', 'amsc_mag'],
 };
 const KNOWN_PROVIDER_IDS = new Set(Object.values(LEGACY_PROVIDER_FAMILIES).flat());
 

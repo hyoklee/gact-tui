@@ -7,6 +7,7 @@ import { inTauri } from '@/lib/transport/tauri-runtime';
  */
 export type WebSearchInstallStatus =
   | 'not_requested'
+  | 'native_requested'
   | 'pending'
   | 'deployed'
   | 'needs_attention'

@@ -159,6 +159,11 @@ jobs:
       - name: Managed package startup progress
         working-directory: desktop/src-tauri
         run: cargo test --lib execution_install::tests -- --test-threads=1
+      - name: Long credential storage regressions
+        run: cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --lib credential_chunks::tests
+      - name: Real Windows keyring long-credential round trip
+        if: runner.os == 'Windows'
+        run: cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --lib credentials::tests::windows_long_credential -- --test-threads=1
       - name: Download lifecycle regressions
         run: cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --lib downloads::tests
       - name: Native file associations and confinement

@@ -61,6 +61,62 @@ describe('finishInstallerInfrastructure', () => {
     });
   });
 
+  it('installs native search without the Docker gateway or MCP sidecar for current installers', async () => {
+    mocks.read.mockResolvedValue({
+      schema: 4,
+      web_search: 'native_requested',
+      clio_kit: 'bundled',
+    });
+    mocks.managedServiceCatalog.mockResolvedValue({
+      services: [
+        { id: 'searxng', state: 'not_installed', variants: [{ id: 'native', compatible: true }] },
+      ],
+    });
+    mocks.runManagedServiceAction.mockResolvedValue({ id: 'owned-native-operation' });
+    mocks.infrastructureOperation.mockResolvedValue({ state: 'succeeded' });
+    await finishInstallerInfrastructure({ endpoint: 'http://127.0.0.1:17800' });
+    expect(mocks.runManagedServiceAction.mock.calls).toEqual([
+      [
+        'searxng',
+        { target_id: 'local', action: 'install', variant_id: 'native', configuration: {} },
+      ],
+      ['searxng', { target_id: 'local', action: 'start', variant_id: 'native', configuration: {} }],
+    ]);
+    expect(mocks.configure).not.toHaveBeenCalled();
+    expect(mocks.complete).toHaveBeenCalledOnce();
+  });
+
+  it('does not mark native setup complete when its real operation fails', async () => {
+    mocks.read.mockResolvedValue({
+      schema: 4,
+      web_search: 'native_requested',
+      clio_kit: 'bundled',
+    });
+    mocks.managedServiceCatalog.mockResolvedValue({
+      services: [
+        { id: 'searxng', state: 'stopped', variants: [{ id: 'native', compatible: true }] },
+      ],
+    });
+    mocks.runManagedServiceAction.mockResolvedValue({ id: 'owned-native-operation' });
+    mocks.infrastructureOperation.mockResolvedValue({
+      state: 'failed',
+      error: 'Start refused: occupied port',
+    });
+    await expect(
+      finishInstallerInfrastructure({ endpoint: 'http://127.0.0.1:17800' }),
+    ).rejects.toThrow('occupied port');
+    expect(mocks.complete).not.toHaveBeenCalled();
+    expect(mocks.configure).not.toHaveBeenCalled();
+  });
+
+  it('keeps MAG and each selected ALCF server visible as independent choices', () => {
+    applyInstallerProviderVisibility('amsc_mag,argonne_minerva,argonne_tara', 'beta71-install');
+    const hidden = JSON.parse(window.localStorage.getItem('clio.hidden-providers.v1') ?? '[]');
+    for (const id of ['amsc_mag', 'argonne_minerva', 'argonne_tara'])
+      expect(hidden).not.toContain(id);
+    for (const id of ['argonne_sophia', 'argonne_metis', 'openai']) expect(hidden).toContain(id);
+  });
+
   it('makes installer-selected providers visible without activating one', async () => {
     mocks.read.mockResolvedValue({
       schema: 4,
@@ -159,7 +215,7 @@ describe('finishInstallerInfrastructure', () => {
   it('makes every known provider id visible, including claude_code and all four ALCF ids', () => {
     applyInstallerProviderVisibility(
       'codex,claude_code,openai,anthropic,gemini,vertex_ai,lm_studio,ollama,llama_cpp,vllm,' +
-        'argonne_sophia,argonne_metis,argonne_minerva,argonne_tara,azure_openai,bedrock,nvidia_nim,openrouter',
+        'argonne_sophia,argonne_metis,argonne_minerva,argonne_tara,azure_openai,bedrock,nvidia_nim,openrouter,amsc_mag',
       'install-1',
     );
 

@@ -104,11 +104,17 @@ fn store(endpoint: &str, secret: &str) -> Result<(), String> {
 }
 
 fn read(endpoint: &str) -> Result<Option<String>, String> {
-    credential_chunks::load(&KeyringSlots(CREDENTIAL_SERVICE), credential_account(endpoint)?)
+    credential_chunks::load(
+        &KeyringSlots(CREDENTIAL_SERVICE),
+        credential_account(endpoint)?,
+    )
 }
 
 fn delete(endpoint: &str) -> Result<(), String> {
-    credential_chunks::delete(&KeyringSlots(CREDENTIAL_SERVICE), credential_account(endpoint)?)
+    credential_chunks::delete(
+        &KeyringSlots(CREDENTIAL_SERVICE),
+        credential_account(endpoint)?,
+    )
 }
 
 /// Save one connection token in the current user's operating-system credential store.
@@ -229,6 +235,34 @@ mod tests {
         credential_account, provider_credential_account, ssh_credential_account,
         ssh_identity_filename,
     };
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_long_credential() {
+        use super::KeyringSlots;
+        use crate::credential_chunks;
+        let slots = KeyringSlots("ai.iowarp.clio.beta71.credential-acceptance");
+        let account = format!("owned-test-{:032x}", rand::random::<u128>());
+        let result = std::panic::catch_unwind(|| {
+            for secret in [
+                "a".repeat(8000),
+                "𝄞é".repeat(1600),
+                "short-replacement".into(),
+            ] {
+                credential_chunks::save(&slots, &account, &secret).expect("OS keyring save");
+                assert_eq!(
+                    credential_chunks::load(&slots, &account).expect("OS keyring read"),
+                    Some(secret)
+                );
+            }
+        });
+        credential_chunks::delete(&slots, &account)
+            .expect("Remove only this owned test credential");
+        assert!(credential_chunks::load(&slots, &account).unwrap().is_none());
+        if let Err(error) = result {
+            std::panic::resume_unwind(error);
+        }
+    }
 
     #[test]
     fn connection_address_is_the_stable_credential_account() {
