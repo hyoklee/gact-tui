@@ -64,6 +64,31 @@ async function openFixture(page: Page, type?: string, content?: string, shortTra
         label: 'long-readable-evidence-filename-that-must-not-push-status-outside-the-row.txt',
       });
     }
+    if (type === 'check') {
+      data.tools[0].presentation.blocks = [
+        {
+          id: 'current',
+          type: 'check',
+          state: 'pending',
+          change: 'added',
+          text: 'Inspect evidence',
+        },
+        { id: 'complete', type: 'check', state: 'completed', text: 'Read the source' },
+        ...[
+          'Short task',
+          'Review the exported presentation and its rendered slides before registering the final artifact. '.repeat(
+            3,
+          ),
+          'Check measurements',
+        ].map((text, index) => ({
+          id: `removed-${index}`,
+          type: 'check',
+          state: 'pending',
+          change: 'removed',
+          text,
+        })),
+      ];
+    }
     await route.fulfill({ response, json: data });
   });
   await page.goto(`/workspaces/ws_flat_ndp/sessions/${session}`);
@@ -82,6 +107,69 @@ async function openFixture(page: Page, type?: string, content?: string, shortTra
   await expect(
     page.getByRole('button', { name: 'Technical details for Search EarthScope catalog' }),
   ).toBeVisible();
+}
+
+for (const width of [640, 1003]) {
+  test(`todo controls, wrapped titles and change labels align at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1037 });
+    await openFixture(page, 'check');
+    const changes = page.locator('[data-slot="todo-changes"]');
+    await expect(changes).toHaveCount(1);
+    await expect(changes.getByText('1/2 current', { exact: true })).toBeVisible();
+    await changes.getByRole('button', { name: 'Show completed 1', exact: true }).click();
+    await changes.getByRole('button', { name: 'Show more', exact: true }).click();
+    await expect(
+      changes.getByRole('list', { name: 'Removed todos' }).getByRole('listitem'),
+    ).toHaveCount(3);
+    const rows = changes.locator('[data-slot="todo-row"]');
+    await expect(rows).toHaveCount(5);
+    const geometry = await changes.evaluate((element) => {
+      const textLeft = (node: Element) => {
+        const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+        const text = walker.nextNode();
+        if (!text) throw new Error('Expected visible control text');
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        return range.getBoundingClientRect().left;
+      };
+      const left = element.getBoundingClientRect().left;
+      return {
+        controls: [
+          element.querySelector('[data-slot="todo-list"] > p')!,
+          ...Array.from(element.querySelectorAll('button')).filter((button) =>
+            /^(Hide completed|Show less)/u.test(button.textContent ?? ''),
+          ),
+        ].map((node) => textLeft(node) - left),
+        rows: Array.from(element.querySelectorAll('[data-slot="todo-row"]'), (row) => {
+          const icon = row.querySelector('[role="img"]')!.getBoundingClientRect();
+          const label = row.querySelector('[data-slot="todo-label"]')!.getBoundingClientRect();
+          const change = row.querySelector('[data-slot="todo-change"]')?.getBoundingClientRect();
+          return {
+            icon: icon.left - left,
+            label: label.left - left,
+            height: label.height,
+            changeTop: change ? change.top - label.top : undefined,
+            changeRight: change ? change.right - element.getBoundingClientRect().right : undefined,
+          };
+        }),
+        overflow: element.scrollWidth - element.clientWidth,
+      };
+    });
+    expect(geometry.controls).toHaveLength(3);
+    for (const left of geometry.controls) expect(Math.abs(left)).toBeLessThan(1);
+    for (const row of geometry.rows) {
+      expect(Math.abs(row.icon)).toBeLessThan(1);
+      expect(row.label).toBeCloseTo(24, 0);
+      if (row.changeTop !== undefined) expect(Math.abs(row.changeTop)).toBeLessThan(1);
+      if (row.changeRight !== undefined) expect(Math.abs(row.changeRight)).toBeLessThan(1);
+    }
+    expect(geometry.rows.some((row) => row.height > 24)).toBe(true);
+    expect(geometry.overflow).toBeLessThan(2);
+    await changes.getByRole('button', { name: 'Show less', exact: true }).click();
+    await expect(
+      changes.getByRole('list', { name: 'Removed todos' }).locator('li:not([inert])'),
+    ).toHaveCount(1);
+  });
 }
 
 test('session Work is a readable canvas peer with accessible task state', async ({ page }) => {
