@@ -143,6 +143,51 @@ fn malformed_base64_request_body_is_a_typed_error() {
 }
 
 #[test]
+fn office_attachments_remain_byte_exact_binary_responses() {
+    let payload: Vec<u8> = (0u8..=255).collect();
+    for content_type in [
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Application/Vnd.Openxmlformats-Officedocument.Presentationml.Presentation; name=deck.pptx",
+    ] {
+        let stub = HttpStub::serve(
+            http_response("HTTP/1.1 200 OK", content_type, &payload),
+            Duration::ZERO,
+        );
+        let response = gact_http(req("GET", stub.url("/v1/artifact"), None))
+            .expect("Office bytes must not be decoded as UTF-8");
+        assert_eq!(response.status, 200);
+        assert_eq!(response.body_encoding, "base64", "{content_type}");
+        assert_eq!(BASE64_STANDARD.decode(response.body).unwrap(), payload);
+    }
+}
+
+#[test]
+fn structured_text_media_types_still_use_text_responses() {
+    let payload = "UTF-8 evidence: café".as_bytes();
+    for content_type in [
+        "text/plain; charset=utf-8",
+        "application/json",
+        "application/problem+json",
+        "application/xml",
+        "application/vnd.clio+xml",
+        "image/svg+xml",
+        "application/javascript",
+        "application/x-www-form-urlencoded",
+    ] {
+        let stub = HttpStub::serve(
+            http_response("HTTP/1.1 200 OK", content_type, payload),
+            Duration::ZERO,
+        );
+        let response = gact_http(req("GET", stub.url("/v1/document"), None))
+            .expect("Structured text should remain readable");
+        assert_eq!(response.body_encoding, "text", "{content_type}");
+        assert_eq!(response.body.as_bytes(), payload);
+    }
+}
+
+#[test]
 fn oversized_response_is_a_typed_cap_error() {
     // One byte past the ceiling: the bridge buffers the whole body in memory
     // and base64-encodes binary, so an unbounded read is an out-of-memory
