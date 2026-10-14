@@ -51,11 +51,13 @@ export function useHiddenProviders() {
     window.addEventListener(PROVIDER_VISIBILITY_CHANGED_EVENT, refresh);
     return () => window.removeEventListener(PROVIDER_VISIBILITY_CHANGED_EVENT, refresh);
   }, []);
-  const setProviderHidden = useCallback(
-    (providerId: string, hidden: boolean): Set<string> => {
+  const setProvidersHidden = useCallback(
+    (providerIds: readonly string[], hidden: boolean): Set<string> => {
       const next = new Set(hiddenProviders);
-      if (hidden) next.add(providerId);
-      else next.delete(providerId);
+      for (const providerId of providerIds) {
+        if (hidden) next.add(providerId);
+        else next.delete(providerId);
+      }
       setHiddenProviders(next);
       // Only a stored change is announced: the other surfaces re-read storage,
       // which would otherwise revert this tab's in-memory choice.
@@ -66,5 +68,9 @@ export function useHiddenProviders() {
     },
     [hiddenProviders],
   );
-  return { hiddenProviders, setProviderHidden };
+  const setProviderHidden = useCallback(
+    (providerId: string, hidden: boolean) => setProvidersHidden([providerId], hidden),
+    [setProvidersHidden],
+  );
+  return { hiddenProviders, setProviderHidden, setProvidersHidden };
 }

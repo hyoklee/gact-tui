@@ -21,6 +21,8 @@ const providerIdNames: Record<string, string> = {
   vllm: 'vLLM',
   argonne_metis: 'ALCF Metis',
   argonne_sophia: 'ALCF Sophia',
+  argonne_minerva: 'ALCF Minerva',
+  argonne_tara: 'ALCF Tara',
   argonne_local_vllm: 'vLLM',
 };
 
@@ -35,6 +37,8 @@ const providerSummaries: Record<string, string> = {
   ollama: 'Use models served by Ollama on the connected agent.',
   argonne_metis: 'Use Metis models available through your ALCF account.',
   argonne_sophia: 'Use Sophia models available through your ALCF account.',
+  argonne_minerva: 'Use Minerva models available through your ALCF account.',
+  argonne_tara: 'Use Tara models available through your ALCF account.',
   argonne_local_vllm: 'Use a compatible model service connected to this agent.',
 };
 
@@ -94,6 +98,8 @@ export const providerLogoIds: Record<string, string> = {
   // Argonne National Laboratory's triangle mark (public domain, see README).
   argonne_metis: 'argonne',
   argonne_sophia: 'argonne',
+  argonne_minerva: 'argonne',
+  argonne_tara: 'argonne',
   argonne_local_vllm: 'argonne',
 };
 
