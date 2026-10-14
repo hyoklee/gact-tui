@@ -41,8 +41,9 @@ export function SettingsNavigation({
         if (mobile) {
           openingSearch.current = true;
           setMobileOpen(false);
+        } else {
+          window.dispatchEvent(new Event('clio:open-command-menu'));
         }
-        window.dispatchEvent(new Event('clio:open-command-menu'));
       }}
     >
       <SearchIcon aria-hidden="true" className="size-3.5" />
@@ -78,6 +79,8 @@ export function SettingsNavigation({
               if (openingSearch.current) {
                 event.preventDefault();
                 openingSearch.current = false;
+                // Radix removes the old focus scope after this callback returns.
+                queueMicrotask(() => window.dispatchEvent(new Event('clio:open-command-menu')));
               }
             }}
             align="end"

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { FolderIcon } from 'lucide-react';
@@ -82,7 +82,7 @@ it('opens the global palette and preserves grouped navigation context', async ()
   expect(nav.getAllByRole('link')).toHaveLength(2);
 });
 
-it('closes the compact settings menu when opening global search', async () => {
+it('opens global search after the compact settings menu has closed', async () => {
   const user = userEvent.setup();
   render(
     <MemoryRouter>
@@ -95,9 +95,10 @@ it('closes the compact settings menu when opening global search', async () => {
     </MemoryRouter>,
   );
   await user.click(screen.getByRole('button', { name: 'Choose settings section' }));
-  const opened = vi.fn();
+  const opened = vi.fn(() => screen.queryByRole('menu'));
   window.addEventListener('clio:open-command-menu', opened, { once: true });
   await user.click(screen.getByRole('menuitem', { name: 'Search everywhere from settings menu' }));
-  expect(opened).toHaveBeenCalledOnce();
+  await waitFor(() => expect(opened).toHaveBeenCalledOnce());
+  expect(opened).toHaveReturnedWith(null);
   expect(screen.queryByRole('menu')).not.toBeInTheDocument();
 });

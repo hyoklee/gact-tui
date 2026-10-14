@@ -28,12 +28,12 @@ test('global search applies themes from Settings and opens settings, hosts and e
   page,
 }) => {
   await installSearchFixture(page, endpoint);
-  const { agents } = await (await page.request.get(`${endpoint}/v1/agents`)).json();
   const reviewer = {
-    ...agents[0],
     id: 'global-reviewer',
     title: 'Global Search Reviewer',
     description: 'Review global search evidence.',
+    source: 'user',
+    enabled: true,
     keywords: ['search-proof'],
   };
   await page.route('**/v1/agents', (route) => route.fulfill({ json: { agents: [reviewer] } }));
