@@ -95,8 +95,17 @@ export function ClioCommandMenu({
   const workspaceRoute = returnRouteFromState(location.state, settings.endpoint);
   const routeParams = useParams();
   // Make parser results scalar dependencies so React Compiler preserves the result caches.
-  const workspaceId = String(routeParams.workspaceId ?? workspaceIdFromRoute(workspaceRoute) ?? '');
-  const sessionId = String(routeParams.sessionId ?? sessionIdFromRoute(workspaceRoute) ?? '');
+  const currentWorkspaceId = workspaceIdFromRoute(location.pathname);
+  const currentSessionId = sessionIdFromRoute(location.pathname);
+  const workspaceId = String(
+    routeParams.workspaceId ?? currentWorkspaceId ?? workspaceIdFromRoute(workspaceRoute) ?? '',
+  );
+  const sessionId = String(
+    routeParams.sessionId ??
+      currentSessionId ??
+      (currentWorkspaceId ? undefined : sessionIdFromRoute(workspaceRoute)) ??
+      '',
+  );
   const artifacts = useLiveStore((state) => state.entities.artifacts);
   const workspaces = useQuery({
     enabled: open && credentialsReady,
