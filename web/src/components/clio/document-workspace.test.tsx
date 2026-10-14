@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClioDocumentWorkspace } from './document-workspace';
-import type { Artifact } from '@clio/core/v3';
+import type { Artifact, DocumentManifest } from '@clio/core/v3';
 import {
   documentApplications,
   openDocumentWorkingCopy,
@@ -66,6 +66,10 @@ afterEach(() => {
 });
 beforeEach(() => {
   host.native = true;
+  repository.createDocumentRendition.mockReset().mockResolvedValue({
+    converter: 'test-converter',
+    artifact: { ...manifest, artifact_id: 'new_pdf', profile: 'pdf', name: 'preview.pdf' },
+  });
   vi.mocked(openDocumentWorkingCopy).mockResolvedValue(undefined);
   vi.mocked(documentApplications).mockImplementation(async (name) =>
     name.endsWith('.pdf')
@@ -74,9 +78,11 @@ beforeEach(() => {
   );
 });
 
-function renderWorkspace(artifactOverrides: Partial<Artifact> = {}) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+function renderWorkspace(
+  artifactOverrides: Partial<Artifact> = {},
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
+  const result = render(
     <QueryClientProvider client={queryClient}>
       <ClioDocumentWorkspace
         artifact={{
@@ -92,9 +98,129 @@ function renderWorkspace(artifactOverrides: Partial<Artifact> = {}) {
       />
     </QueryClientProvider>,
   );
+  return { ...result, queryClient };
 }
 
 describe('ClioDocumentWorkspace', () => {
+  it.each(['ooxml-word', 'ooxml-slides', 'ooxml-sheet'] as const)(
+    'automatically renders a missing PDF preview for %s',
+    async (profile) => {
+      repository.documentManifest.mockResolvedValue({ ...manifest, profile });
+      repository.documentContent.mockResolvedValue(new TextEncoder().encode('%PDF-1.7'));
+      repository.artifactReviews.mockResolvedValue([]);
+      let finish!: (value: { artifact: DocumentManifest }) => void;
+      repository.createDocumentRendition.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+      renderWorkspace();
+      expect(await screen.findByText('Rendering PDF preview…')).toBeVisible();
+      expect(repository.createDocumentRendition).toHaveBeenCalledWith('artifact_3', 'sess_1');
+      expect(screen.queryByText(/remains canonical/u)).not.toBeInTheDocument();
+      await act(async () =>
+        finish({
+          artifact: { ...manifest, artifact_id: 'new_pdf', name: 'preview.pdf', profile: 'pdf' },
+        }),
+      );
+      expect(await screen.findByText('PDF preview')).toBeVisible();
+      expect(repository.documentContent).toHaveBeenCalledWith('new_pdf', expect.anything());
+      expect(repository.createDocumentRendition).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('joins an in-flight preview after reopening the tab and when downloading PDF', async () => {
+    repository.documentManifest.mockResolvedValue({ ...manifest, profile: 'ooxml-slides' });
+    repository.documentContent.mockResolvedValue(new TextEncoder().encode('%PDF-preview'));
+    repository.artifactReviews.mockResolvedValue([]);
+    let finish!: (value: { artifact: DocumentManifest }) => void;
+    repository.createDocumentRendition.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const first = renderWorkspace();
+    expect(await screen.findByText('Rendering PDF preview…')).toBeVisible();
+    first.unmount();
+    renderWorkspace({}, first.queryClient);
+    expect(await screen.findByText('Rendering PDF preview…')).toBeVisible();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Open in' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Download PDF' }));
+    expect(downloadBytes).not.toHaveBeenCalled();
+    await act(async () =>
+      finish({
+        artifact: { ...manifest, artifact_id: 'new_pdf', name: 'preview.pdf', profile: 'pdf' },
+      }),
+    );
+    expect(await screen.findByText('PDF preview')).toBeVisible();
+    await waitFor(() =>
+      expect(downloadBytes).toHaveBeenCalledWith(
+        new TextEncoder().encode('%PDF-preview'),
+        'application/pdf',
+        'preview.pdf',
+      ),
+    );
+    expect(repository.createDocumentRendition).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes an immutable preview without requesting another conversion', async () => {
+    repository.documentManifest.mockResolvedValue({ ...manifest, profile: 'ooxml-slides' });
+    repository.documentContent.mockResolvedValue(new TextEncoder().encode('%PDF-preview'));
+    repository.artifactReviews.mockResolvedValue([]);
+    repository.documentEditorHealth.mockResolvedValue({ providers: [] });
+    renderWorkspace();
+    expect(await screen.findByText('PDF preview')).toBeVisible();
+    expect(repository.createDocumentRendition).toHaveBeenCalledTimes(1);
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Refresh document revision' }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Refresh document revision' }),
+      ).toBeEnabled(),
+    );
+    expect(repository.documentContent).toHaveBeenCalledTimes(2);
+    expect(repository.createDocumentRendition).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('PDF preview')).toBeVisible();
+  });
+
+  it('shows a conversion error, keeps it across tab reopening, and retries explicitly', async () => {
+    repository.documentManifest.mockResolvedValue({ ...manifest, profile: 'ooxml-slides' });
+    repository.documentContent.mockResolvedValue(new TextEncoder().encode('%PDF-retry'));
+    repository.artifactReviews.mockResolvedValue([]);
+    repository.createDocumentRendition.mockRejectedValueOnce(new Error('Renderer access denied'));
+    const first = renderWorkspace();
+    expect(await screen.findByText('PDF preview failed')).toBeVisible();
+    expect(screen.getByText('Renderer access denied')).toBeVisible();
+    first.unmount();
+    renderWorkspace({}, first.queryClient);
+    expect(await screen.findByText('PDF preview failed')).toBeVisible();
+    expect(repository.createDocumentRendition).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole('button', { name: 'Retry preview' }));
+    expect(await screen.findByText('PDF preview')).toBeVisible();
+    expect(repository.createDocumentRendition).toHaveBeenCalledTimes(2);
+  });
+
+  it('exposes an error and retry if the retained PDF bytes cannot be read', async () => {
+    repository.documentManifest.mockImplementation(async (id: string) =>
+      id === 'saved_pdf'
+        ? { ...manifest, artifact_id: id, profile: 'pdf' }
+        : { ...manifest, profile: 'ooxml-slides', pdf_rendition_artifact_id: 'saved_pdf' },
+    );
+    repository.documentContent
+      .mockRejectedValueOnce(new Error('PDF bytes unavailable'))
+      .mockResolvedValue(new TextEncoder().encode('%PDF-restored'));
+    repository.artifactReviews.mockResolvedValue([]);
+    renderWorkspace();
+    expect(await screen.findByText('PDF bytes unavailable')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Retry preview' }));
+    expect(await screen.findByText('PDF preview')).toBeVisible();
+    expect(repository.createDocumentRendition).not.toHaveBeenCalled();
+  });
+
   it('converts once and opens/downloads the PDF bytes while keeping the source preview', async () => {
     repository.documentManifest.mockResolvedValue(manifest);
     repository.documentContent.mockImplementation(async (id: string) =>
