@@ -305,6 +305,18 @@ mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    #[test]
+    fn schema5_native_search_and_individual_provider_choices_are_preserved() {
+        let options = parse_options(r#"{"schema":5,"web_search":"native_requested","llama_cpp":"not_requested","clio_kit":"bundled","provider_ids":"amsc_mag,argonne_minerva,argonne_tara","installed_at":"beta71-install"}"#).unwrap();
+        assert_eq!(options.schema, 5);
+        assert_eq!(options.web_search, "native_requested");
+        assert_eq!(
+            options.provider_ids.as_deref(),
+            Some("amsc_mag,argonne_minerva,argonne_tara")
+        );
+        assert_eq!(options.installed_at.as_deref(), Some("beta71-install"));
+    }
+
     fn test_root() -> PathBuf {
         let suffix = SystemTime::now()
             .duration_since(UNIX_EPOCH)

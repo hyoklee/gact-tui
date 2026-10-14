@@ -37,7 +37,8 @@ function wait(milliseconds: number): Promise<void> {
 
 /**
  * Resolve the installer's recorded provider selection, if any. `provider_ids`
- * (schema 4+) is authoritative; the pre-v4 `provider_families` field is
+ * (schema 5+) is authoritative for the complete provider inventory; older
+ * inventories keep newly offered providers available. The pre-v4 `provider_families` field is
  * expanded only when it is genuinely present in the file. When NEITHER is
  * present, this returns `undefined` ("no installer preference") rather than
  * synthesizing a default such as "openai": the caller must leave provider
@@ -53,8 +54,14 @@ function wait(milliseconds: number): Promise<void> {
  * no other diagnostics channel for this path, hence `console.info`.
  */
 function resolveInstallerProviderSelection(options: InstallerOptions): string | undefined {
-  if (options.provider_ids) return options.provider_ids;
-  if (options.provider_families) return expandLegacyProviderFamilies(options.provider_families);
+  if (options.provider_ids)
+    return includePreviouslyUnofferedProviders(options, options.provider_ids);
+  if (options.provider_families) {
+    return includePreviouslyUnofferedProviders(
+      options,
+      expandLegacyProviderFamilies(options.provider_families),
+    );
+  }
   const reason =
     options.provider_ids === '' ? 'installer_provider_selection_empty' : 'installer_options_absent';
   console.info(
@@ -67,6 +74,7 @@ function resolveInstallerProviderSelection(options: InstallerOptions): string | 
 /** Finish the lightweight agent registration for infrastructure deployed by NSIS. */
 export async function finishInstallerInfrastructure(settings: ConnectionSettings): Promise<void> {
   const options = await readInstallerOptions();
+  migratePreviouslyUnofferedProviders(options);
   const selectedProviders = resolveInstallerProviderSelection(options);
   const appliedThisRevision = applyInstallerProviderVisibility(
     selectedProviders,
@@ -195,6 +203,64 @@ const LEGACY_PROVIDER_FAMILIES: Record<string, readonly string[]> = {
   other: ['azure_openai', 'bedrock', 'nvidia_nim', 'openrouter', 'amsc_mag'],
 };
 const KNOWN_PROVIDER_IDS = new Set(Object.values(LEGACY_PROVIDER_FAMILIES).flat());
+
+function includePreviouslyUnofferedProviders(options: InstallerOptions, selection: string): string {
+  if (options.schema >= 5) return selection;
+  const visible = new Set(
+    selection
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean),
+  );
+  // Older wizards offered neither MAG nor these two ALCF servers. Their
+  // absence cannot represent a deliberate choice to hide those new options.
+  visible.add('amsc_mag');
+  if (visible.has('argonne_sophia') || visible.has('argonne_metis')) {
+    visible.add('argonne_minerva');
+    visible.add('argonne_tara');
+  }
+  return [...visible].join(',');
+}
+
+function migratePreviouslyUnofferedProviders(options: InstallerOptions): void {
+  if (typeof window === 'undefined' || options.schema >= 5) return;
+  const selection =
+    options.provider_ids ||
+    (options.provider_families ? expandLegacyProviderFamilies(options.provider_families) : '');
+  if (!selection) return;
+  const revision = options.installed_at || UNSTAMPED_INSTALLER_REVISION;
+  const inventoryKey = 'clio.installer-provider-inventory.v1';
+  if (window.localStorage.getItem(inventoryKey) === revision) return;
+  if (window.localStorage.getItem(INSTALLER_REVISION_STORAGE_KEY) === revision) {
+    const selected = new Set(selection.split(',').map((id) => id.trim()));
+    const generatedHidden = [...KNOWN_PROVIDER_IDS]
+      .filter((id) => id !== 'amsc_mag' && !selected.has(id))
+      .sort();
+    let hidden: unknown;
+    try {
+      hidden = JSON.parse(window.localStorage.getItem(HIDDEN_PROVIDERS_STORAGE_KEY) || 'null');
+    } catch {
+      // Unreadable or manually changed preferences are never replaced.
+      console.warn('[installer] provider visibility preference is unreadable; preserving it');
+      window.localStorage.setItem(inventoryKey, revision);
+      return;
+    }
+    if (
+      Array.isArray(hidden) &&
+      hidden.every((id) => typeof id === 'string') &&
+      JSON.stringify([...hidden].sort()) === JSON.stringify(generatedHidden)
+    ) {
+      const visible = new Set(includePreviouslyUnofferedProviders(options, selection).split(','));
+      const migrated = hidden.filter((id) => !visible.has(id));
+      if (migrated.length !== hidden.length) {
+        window.localStorage.setItem(HIDDEN_PROVIDERS_STORAGE_KEY, JSON.stringify(migrated));
+        window.dispatchEvent(new Event(PROVIDER_VISIBILITY_CHANGED_EVENT));
+      }
+    }
+  }
+  // Run once even when user changes made the old generated state ambiguous.
+  window.localStorage.setItem(inventoryKey, revision);
+}
 
 function expandLegacyProviderFamilies(families: string): string {
   return families

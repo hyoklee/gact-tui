@@ -615,7 +615,7 @@ FunctionEnd
 !macro CLIO_WRITE_INSTALLER_OPTIONS
   CreateDirectory "$LOCALAPPDATA\${BUNDLEID}"
   FileOpen $2 "$LOCALAPPDATA\${BUNDLEID}\installer-options.json" w
-  FileWrite $2 '{$\"schema$\":4,$\"web_search$\":$\"'
+  FileWrite $2 '{$\"schema$\":5,$\"web_search$\":$\"'
   FileWrite $2 $ClioWebSearchStatus
   FileWrite $2 '$\",$\"llama_cpp$\":$\"'
   FileWrite $2 $ClioLlamaCppStatus

@@ -677,11 +677,11 @@ test('the setup pages are skipped for passive and update installs', () => {
   assert.equal(skipCalls.length, 2);
 });
 
-test('installer-options.json is always written through the one v4-schema macro', () => {
+test('installer-options.json is always written through the one v5-schema macro', () => {
   const hooks = readFileSync(resolve(root, 'src-tauri', 'installer-hooks.nsh'), 'utf8');
   const writeCalls = hooks.match(/!insertmacro CLIO_WRITE_INSTALLER_OPTIONS/g) ?? [];
   assert.equal(writeCalls.length, 2);
-  assert.match(hooks, /\$\\"schema\$\\":4/);
+  assert.match(hooks, /\$\\"schema\$\\":5/);
   assert.match(hooks, /\$\\"web_search\$\\":\$\\"'/);
   assert.match(hooks, /\$\\"llama_cpp\$\\":\$\\"'/);
   assert.match(hooks, /\$\\"clio_kit\$\\":\$\\"bundled\$\\"/);
