@@ -11,7 +11,7 @@ import {
   NetworkIcon,
 } from 'lucide-react';
 import { SettingsIcon } from '@/lib/icon-vocabulary';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { brand } from '@brand';
 import type { ClioWorkbenchOpenRequest } from '@/components/clio/workbench';
@@ -35,6 +35,7 @@ import { SearchHighlight } from './search-highlight';
 import { messageSearchHash } from '@/lib/search-matches';
 import { projectText } from '@/lib/attention-text';
 import { connectionScope } from '@/lib/connection-scope';
+import { InputGroupButton } from '@/components/ui/input-group';
 import {
   Dialog,
   DialogContent,
@@ -71,6 +72,7 @@ export function ClioCommandMenu({
   const [aiMode, setAiMode] = useState(false);
   const [query, setQuery] = useState('');
   const [serverQuery, setServerQuery] = useState('');
+  const searchInput = useRef<HTMLInputElement>(null);
   const [recentThreshold] = useState(() => Date.now() - 7 * 24 * 60 * 60 * 1000);
   const { workspaceId = '', sessionId = '' } = useParams();
   const navigate = useNavigate();
@@ -147,6 +149,9 @@ export function ClioCommandMenu({
     const timer = window.setTimeout(() => setServerQuery(query.trim()), SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [query]);
+  useEffect(() => {
+    if (open && !aiMode) searchInput.current?.focus();
+  }, [open, aiMode]);
 
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const matchingFiles = useMemo(
@@ -237,6 +242,10 @@ export function ClioCommandMenu({
       <DialogContent
         className={`top-[10dvh] max-h-[80dvh] translate-y-0 overflow-hidden p-0 ${aiMode ? 'sm:max-w-3xl' : 'sm:max-w-2xl'}`}
         showCloseButton={false}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          searchInput.current?.focus();
+        }}
         onEscapeKeyDown={(event) => {
           if (aiMode) {
             event.preventDefault();
@@ -264,9 +273,21 @@ export function ClioCommandMenu({
         ) : (
           <Command shouldFilter={false}>
             <CommandInput
+              ref={searchInput}
+              autoFocus
+              className="min-w-0"
               onValueChange={setQuery}
               placeholder="Search work, files, artifacts, or actions…"
               value={query}
+              trailing={
+                <InputGroupButton
+                  className="text-xs text-muted-foreground"
+                  onClick={() => setAiMode(true)}
+                >
+                  Ask {vocab.agent} Search{' '}
+                  <kbd className="rounded border px-1 text-[10px]">Tab</kbd>
+                </InputGroupButton>
+              }
               onKeyDown={(event) => {
                 if (event.key === 'Tab' && !event.shiftKey && !event.nativeEvent.isComposing) {
                   event.preventDefault();
@@ -274,13 +295,6 @@ export function ClioCommandMenu({
                 }
               }}
             />
-            <button
-              className="flex w-full items-center gap-2 border-b px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted"
-              onClick={() => setAiMode(true)}
-              type="button"
-            >
-              Ask {vocab.agent} Search<span className="ml-auto rounded border px-1.5">Tab</span>
-            </button>
             <CommandList className="max-h-[68dvh]">
               <CommandEmpty>
                 {memory.isFetching ? 'Searching conversations…' : 'No matching work or action.'}

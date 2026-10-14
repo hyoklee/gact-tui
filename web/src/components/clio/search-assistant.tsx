@@ -1,7 +1,7 @@
 import { vocab } from '@/lib/brand-vocabulary';
 import type { Session } from '@clio/core/v3';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeftIcon, SendIcon, SparklesIcon } from 'lucide-react';
+import { ArrowLeftIcon, ChevronDownIcon, SendIcon, SparklesIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -12,6 +12,9 @@ import { useLiveSessionTranscript } from '@/hooks/use-live-session-transcript';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { connectionScope } from '@/lib/connection-scope';
 import { isSessionActive } from '@/lib/session-state';
+import type { ClioModelOption } from '@/lib/model-options';
+import { useProviderGroups } from '@/hooks/use-provider-groups';
+import { ClioModelPicker } from './model-picker';
 import type { ClioWorkbenchOpenRequest } from './workbench';
 import { ClioConversation } from './conversation';
 
@@ -36,6 +39,8 @@ export function ClioSearchAssistant({
   const repository = useRepository();
   const { settings } = useConnectionSettings();
   const [session, setSession] = useState<Session>();
+  const [model, setModel] = useState<ClioModelOption>();
+  const { options, catalog } = useProviderGroups();
   const held = useRef<Session | undefined>(undefined);
   const alive = useRef(true);
   const sending = useRef(false);
@@ -94,6 +99,7 @@ export function ClioSearchAssistant({
         idempotency_key: id,
         behavior: { execution_mode: 'execute', confirmation_policy: 'ask' },
         delivery: 'start',
+        ...(model ? { model: { provider_id: model.providerId, model_id: model.id } } : {}),
         parts: [{ type: 'text', text }],
       });
       if (alive.current) onQueryChange('');
@@ -112,14 +118,43 @@ export function ClioSearchAssistant({
   return (
     <div className="flex min-h-0 flex-col" data-slot="search-assistant">
       <div className="flex items-center gap-2 border-b px-3 py-2">
-        <Button size="icon-sm" variant="ghost" aria-label="Back to search results" onClick={onBack}>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Back to search results"
+          title="Back to search results (Shift+Tab or Esc)"
+          onClick={onBack}
+        >
           <ArrowLeftIcon />
         </Button>
         <SparklesIcon aria-hidden="true" className="size-4 text-blue-500" />
         <span className="text-sm font-semibold">{vocab.agent} Search</span>
-        <span className="ml-auto truncate text-xs text-muted-foreground">
-          {session?.model_id ?? fleet.data?.search?.model_id ?? 'Conversation or service model'}
-        </span>
+        <ClioModelPicker
+          title={`Choose ${vocab.agent} Search model`}
+          options={options}
+          model={model?.id ?? session?.model_id ?? fleet.data?.search?.model_id}
+          provider={model?.providerId ?? session?.provider_id ?? fleet.data?.search?.provider_id}
+          catalogStatus={catalog.isPending ? 'loading' : catalog.isError ? 'error' : 'ready'}
+          onRetryCatalog={() => void catalog.refetch()}
+          onChange={setModel}
+          trigger={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto min-w-0 max-w-[45%] shrink gap-1 px-1.5 text-xs font-normal"
+              aria-label={`Choose ${vocab.agent} Search model`}
+              disabled={submitting || active || unavailable}
+            >
+              <span className="truncate">
+                {model?.id ??
+                  session?.model_id ??
+                  fleet.data?.search?.model_id ??
+                  'Conversation or service model'}
+              </span>
+              <ChevronDownIcon aria-hidden="true" className="size-3 shrink-0" />
+            </Button>
+          }
+        />
         <Link className="text-xs text-primary" to="/settings/fleet" onClick={onClose}>
           Fleet
         </Link>
@@ -137,6 +172,12 @@ export function ClioSearchAssistant({
           placeholder="Ask about conversations, messages, and files…"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Tab' && event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              onBack();
+            }
+          }}
         />
         <Button
           type="submit"
@@ -193,7 +234,7 @@ export function ClioSearchAssistant({
         <div className="px-6 py-10 text-center text-sm text-muted-foreground">
           Find a previous decision, locate a passage, or ask what your files say.
           <br />
-          Press Enter to search with your Fleet model.
+          Press Enter to search with the selected model.
         </div>
       )}
       {submitting || active ? (

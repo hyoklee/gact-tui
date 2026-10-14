@@ -120,12 +120,23 @@ for (const layout of [
             size_bytes: source.length,
           })),
         });
+        // This fixture never edits either metadata record. Load the original
+        // API envelopes once, then serve them without an idle upstream proxy
+        // socket spanning screenshot and viewer interactions.
+        const artifactResponse = await page.request.get(`${endpoint}/v1/artifacts/${sourceId}`);
+        expect(artifactResponse.ok()).toBe(true);
+        const originalArtifact = await artifactResponse.json();
+        const editableArtifact = amendRecord(originalArtifact.artifact);
+        const artifactsResponse = await page.request.get(
+          `${endpoint}/v1/sessions/${sessionId}/artifacts?include_children=true&include_used=true&limit=200`,
+        );
+        expect(artifactsResponse.ok()).toBe(true);
+        const originalArtifacts = await artifactsResponse.json();
         await page.route('**/v1/**', async (route) => {
           const url = new URL(route.request().url());
           const path = url.pathname;
           if (path === `/v1/sessions/${sessionId}/artifacts`) {
-            const response = await route.fetch();
-            const body = await response.json();
+            const body = structuredClone(originalArtifacts);
             body.artifacts = body.artifacts.map(amendRecord);
             const preview = structuredClone(body.artifacts[0]);
             preview.name = `${name}.v1.pdf`;
@@ -147,13 +158,15 @@ for (const layout of [
             }));
             body.artifacts.push(preview);
             body.count = body.artifacts.length;
-            await route.fulfill({ response, json: body });
+            await route.fulfill({ json: body });
           } else if (path === `/v1/artifacts/${sourceId}`) {
-            const response = await route.fetch();
-            const body = await response.json();
-            body.artifact = amendRecord(body.artifact);
-            body.resolved = body.artifact.versions[0];
-            await route.fulfill({ response, json: body });
+            await route.fulfill({
+              json: {
+                ...originalArtifact,
+                artifact: editableArtifact,
+                resolved: editableArtifact.versions[0],
+              },
+            });
           } else if (path === `/v1/artifacts/${sourceId}/lineage`) {
             await route.fulfill({
               json: {

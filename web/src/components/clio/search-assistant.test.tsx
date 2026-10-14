@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ClioSearchAssistant } from './search-assistant';
 import { vocab } from '@/lib/brand-vocabulary';
@@ -26,6 +27,28 @@ vi.mock('@/hooks/use-live-session-transcript', () => ({
   }),
 }));
 vi.mock('./conversation', () => ({ ClioConversation: () => <div>Search transcript</div> }));
+vi.mock('@/hooks/use-provider-groups', () => ({
+  useProviderGroups: () => ({
+    options: [],
+    catalog: { isPending: false, isError: false, refetch: vi.fn() },
+  }),
+}));
+vi.mock('./model-picker', () => ({
+  ClioModelPicker: ({
+    trigger,
+    onChange,
+  }: {
+    trigger: ReactNode;
+    onChange: (choice: { providerId: string; id: string }) => void;
+  }) => (
+    <>
+      {trigger}
+      <button onClick={() => onChange({ providerId: 'codex', id: 'alternate-search-model' })}>
+        Use alternate search model
+      </button>
+    </>
+  ),
+}));
 const opened = {
   id: 'search_1',
   workspace_id: 'ws_current',
@@ -44,7 +67,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
-function show(onQueryChange = vi.fn()) {
+function show(onQueryChange = vi.fn(), onBack = vi.fn()) {
   return render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -55,7 +78,7 @@ function show(onQueryChange = vi.fn()) {
           parentSessionId="parent_1"
           query="Where did we discuss the plant?"
           onQueryChange={onQueryChange}
-          onBack={vi.fn()}
+          onBack={onBack}
           onClose={vi.fn()}
         />
       </MemoryRouter>
@@ -83,6 +106,43 @@ it('starts only on submit, inherits its server-selected route, and deletes only 
   view.unmount();
   expect(mocks.repository.deleteSession).toHaveBeenCalledWith('search_1');
   expect(mocks.repository.deleteSession).not.toHaveBeenCalledWith('parent_1');
+});
+it('chooses the next search model inline while retaining the temporary chat and server default', async () => {
+  const user = userEvent.setup();
+  show();
+  await screen.findByText('fleet-search-model');
+  await user.click(screen.getByRole('button', { name: `Search with ${vocab.agent}` }));
+  await waitFor(() => expect(mocks.repository.submitMessage).toHaveBeenCalledTimes(1));
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: `Search with ${vocab.agent}` })).toBeEnabled(),
+  );
+  await user.click(screen.getByRole('button', { name: 'Use alternate search model' }));
+  expect(
+    screen.getByRole('button', { name: `Choose ${vocab.agent} Search model` }),
+  ).toHaveTextContent('alternate-search-model');
+  await user.click(screen.getByRole('button', { name: `Search with ${vocab.agent}` }));
+  await waitFor(() => expect(mocks.repository.submitMessage).toHaveBeenCalledTimes(2));
+  expect(mocks.repository.openSearchSession).toHaveBeenCalledTimes(1);
+  expect(mocks.repository.submitMessage.mock.calls[0][1]).not.toHaveProperty('model');
+  expect(mocks.repository.submitMessage.mock.calls[1]).toEqual([
+    'search_1',
+    expect.objectContaining({
+      model: { provider_id: 'codex', model_id: 'alternate-search-model' },
+    }),
+  ]);
+  expect(mocks.repository.deleteSession).not.toHaveBeenCalled();
+});
+
+it('returns to normal search with Shift+Tab without submitting or changing the draft', async () => {
+  const onBack = vi.fn();
+  const onQueryChange = vi.fn();
+  show(onQueryChange, onBack);
+  const input = screen.getByRole('textbox', { name: `Ask ${vocab.agent} Search` });
+  expect(input).toHaveFocus();
+  await userEvent.setup().keyboard('{Shift>}{Tab}{/Shift}');
+  expect(onBack).toHaveBeenCalledOnce();
+  expect(onQueryChange).not.toHaveBeenCalled();
+  expect(mocks.repository.openSearchSession).not.toHaveBeenCalled();
 });
 it('retires a late-created search if the person closed it before creation returned', async () => {
   let resolve!: (value: typeof opened) => void;
