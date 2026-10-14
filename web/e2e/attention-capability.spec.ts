@@ -30,7 +30,11 @@ for (const scenario of [
     );
     await page.goto(workspaceUrl);
     await availability;
-    const answer = page.getByText('Baseline complete.', { exact: true });
+    // The initial plain paragraph is the lazy Markdown fallback. Select only
+    // after its rendered container replaces it, or that replacement clears the range.
+    const answer = page
+      .locator('#message-msg_baseline_1 [data-slot="message-text"] > div')
+      .getByText('Baseline complete.', { exact: true });
     await expect(answer).toBeVisible();
     const actions = page.getByRole('toolbar', { name: 'Selection actions' });
     // Initial query hydration can replace the answer DOM. Re-select until the
