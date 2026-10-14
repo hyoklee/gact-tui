@@ -53,12 +53,19 @@ export interface ProviderNodeData {
   group: ProviderGroup;
 }
 
+export interface ProviderFamilyNodeData {
+  kind: 'provider-family';
+  group: ProviderGroup;
+  serverIds: string[];
+  expanded: boolean;
+}
+
 export interface ModelNodeData {
   kind: 'model';
   choice: ClioModelOption;
 }
 
-export type PickerNodeData = ProviderNodeData | ModelNodeData;
+export type PickerNodeData = ProviderNodeData | ProviderFamilyNodeData | ModelNodeData;
 
 export function providerHealthPresentation(
   health: ProviderHealth,

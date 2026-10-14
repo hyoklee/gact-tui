@@ -146,10 +146,7 @@ describe('finishInstallerInfrastructure', () => {
   });
 
   it('leaves visibility untouched when no provider selection was resolved', () => {
-    window.localStorage.setItem(
-      'clio.hidden-providers.v1',
-      JSON.stringify(['argonne_sophia']),
-    );
+    window.localStorage.setItem('clio.hidden-providers.v1', JSON.stringify(['argonne_sophia']));
 
     applyInstallerProviderVisibility(undefined, 'install-1');
 
@@ -159,15 +156,32 @@ describe('finishInstallerInfrastructure', () => {
     ]);
   });
 
-  it('makes every known provider id visible, including claude_code and both ALCF ids', () => {
+  it('makes every known provider id visible, including claude_code and all four ALCF ids', () => {
     applyInstallerProviderVisibility(
       'codex,claude_code,openai,anthropic,gemini,vertex_ai,lm_studio,ollama,llama_cpp,vllm,' +
-        'argonne_sophia,argonne_metis,azure_openai,bedrock,nvidia_nim,openrouter',
+        'argonne_sophia,argonne_metis,argonne_minerva,argonne_tara,azure_openai,bedrock,nvidia_nim,openrouter',
       'install-1',
     );
 
     const hidden = JSON.parse(window.localStorage.getItem('clio.hidden-providers.v1') ?? '[]');
     expect(hidden).toEqual([]);
+  });
+
+  it('expands the legacy Argonne family into all four ALCF servers', async () => {
+    mocks.read.mockResolvedValue({
+      schema: 3,
+      web_search: 'not_requested',
+      llama_cpp: 'not_requested',
+      clio_kit: 'bundled',
+      provider_families: 'argonne',
+      installed_at: 'install-alcf',
+    });
+    await finishInstallerInfrastructure({ endpoint: 'http://127.0.0.1:17800' });
+    const hidden = JSON.parse(window.localStorage.getItem('clio.hidden-providers.v1') ?? '[]');
+    for (const id of ['argonne_sophia', 'argonne_metis', 'argonne_minerva', 'argonne_tara']) {
+      expect(hidden).not.toContain(id);
+    }
+    expect(hidden).toContain('openai');
   });
 
   it('keeps Anthropic API and Claude Code as independent visibility choices', () => {
