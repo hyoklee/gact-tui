@@ -1,6 +1,7 @@
 import type { PendingInteraction, PendingInteractionResponse } from '@clio/core/v3';
 import { useState, type ReactNode } from 'react';
-import { MinusIcon, PlusIcon } from 'lucide-react';
+import { MinusIcon } from 'lucide-react';
+import { AddIcon } from '@/lib/icon-vocabulary';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { FieldContent, FieldLabel, FieldTitle } from '@/components/ui/field';
@@ -379,7 +380,7 @@ function QuestionComment({
         {expanded ? (
           <MinusIcon aria-hidden="true" className="size-3.5" />
         ) : (
-          <PlusIcon aria-hidden="true" className="size-3.5" />
+          <AddIcon aria-hidden="true" className="size-3.5" />
         )}
       </Button>
       {expanded ? children : null}
