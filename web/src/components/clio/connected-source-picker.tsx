@@ -458,7 +458,7 @@ export function ConnectedSourceContents({
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {row.id === 'obsidian' ? (
-                          'Local vault or Headless Sync copy'
+                          'Create a vault, attach existing notes, or use Sync'
                         ) : row.id === 'local' ? (
                           'Choose data already on this machine'
                         ) : row.authentication === 'browser' ? (

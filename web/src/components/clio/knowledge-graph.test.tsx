@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { KnowledgeGraph } from './knowledge-graph';
+import { KnowledgeGraphGeometry } from './knowledge-graph-geometry';
 import type { KnowledgeGraphLayout } from '@/lib/knowledge-graph-layout';
 
 class LayoutWorker {
@@ -91,6 +92,54 @@ function camera() {
   const [x, y, scale] = transform.match(/-?\d+(?:\.\d+)?/g)!.map(Number);
   return { x, y, scale };
 }
+
+it('selects the nearest dot when a dense graph overlaps SVG hit areas, preserving keyboard identity', () => {
+  const onSelect = vi.fn();
+  const onHover = vi.fn();
+  const graph: KnowledgeGraphLayout = {
+    nodes: ['a', 'b'].map((id, index) => ({
+      id,
+      title: id,
+      degree: 0,
+      radius: 3,
+      x: index * 18,
+      y: 0,
+    })),
+    edges: [],
+  };
+  vi.stubGlobal(
+    'DOMPoint',
+    class {
+      constructor(
+        public x: number,
+        public y: number,
+      ) {}
+      matrixTransform() {
+        return { x: (this.x - 40) / 2, y: (this.y - 80) / 2 };
+      }
+    },
+  );
+  render(
+    <svg>
+      <KnowledgeGraphGeometry
+        graph={graph}
+        active=""
+        selected=""
+        scale={0.2}
+        onSelect={onSelect}
+        onHover={onHover}
+      />
+    </svg>,
+  );
+  const paintedLast = screen.getByRole('button', { name: 'Open b, 0 linked notes' });
+  Object.defineProperty(paintedLast, 'getScreenCTM', { value: () => ({ inverse: () => ({}) }) });
+  fireEvent.click(paintedLast, { clientX: 40, clientY: 80, detail: 1 });
+  expect(onSelect).toHaveBeenLastCalledWith('a');
+  fireEvent.mouseMove(paintedLast, { clientX: 40, clientY: 80 });
+  expect(onHover).toHaveBeenLastCalledWith('a');
+  fireEvent.keyDown(paintedLast, { key: 'Enter' });
+  expect(onSelect).toHaveBeenLastCalledWith('b');
+});
 
 it('keeps initial framing visible when a reader narrows the canvas, preserving manual zoom and geometry', () => {
   const onSelect = vi.fn();
