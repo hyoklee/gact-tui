@@ -1,3 +1,8 @@
+import {
+  INFRASTRUCTURE_SECTIONS,
+  isInfrastructureSection,
+  type InfrastructureSection,
+} from '@/lib/application-destinations';
 import { queryKeys } from '@/lib/query-keys';
 import { INFRASTRUCTURE_POLL_MS } from '@/lib/runtime-limits';
 import type {
@@ -11,16 +16,11 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRightIcon,
-  BotIcon,
   BookOpenCheckIcon,
   CableIcon,
   ChevronLeftIcon,
   NetworkIcon,
   ServerIcon,
-  WrenchIcon,
-  LayoutDashboardIcon,
-  HardDriveIcon,
-  HistoryIcon,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
@@ -561,51 +561,6 @@ function effectiveToolCatalog(
     });
   }
   return [...projected.values()];
-}
-
-type InfrastructureSection = 'overview' | 'agent' | 'tools' | 'services' | 'models' | 'activity';
-
-const INFRASTRUCTURE_SECTIONS = [
-  {
-    id: 'overview',
-    label: 'Overview',
-    icon: LayoutDashboardIcon,
-    description: 'Your connected hosts, services, and current work.',
-  },
-  {
-    id: 'agent',
-    label: `${vocab.agent} hosts`,
-    icon: BotIcon,
-    description: `Confirm that ${vocab.agent} itself and the components it depends on are ready.`,
-  },
-  {
-    id: 'services',
-    label: 'Services',
-    icon: CableIcon,
-    description: `Install, connect, operate, and verify the services that give ${vocab.agent} more capabilities.`,
-  },
-  {
-    id: 'models',
-    label: 'Models & storage',
-    icon: HardDriveIcon,
-    description: 'Choose where each host keeps models, service data, and evidence.',
-  },
-  {
-    id: 'tools',
-    label: 'Tools',
-    icon: WrenchIcon,
-    description: 'Inspect tools available to the selected session.',
-  },
-  {
-    id: 'activity',
-    label: 'Activity',
-    icon: HistoryIcon,
-    description: 'Follow deployments, downloads, and lifecycle operations.',
-  },
-] as const;
-
-function isInfrastructureSection(value: string | undefined): value is InfrastructureSection {
-  return INFRASTRUCTURE_SECTIONS.some((item) => item.id === value);
 }
 
 function SetupCard({

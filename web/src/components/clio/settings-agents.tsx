@@ -3,7 +3,9 @@ import type { AgentDefinition } from '@clio/core/v3';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BotIcon, SparklesIcon, WrenchIcon } from 'lucide-react';
 import { AddIcon, DeleteIcon, MoreIcon } from '@/lib/icon-vocabulary';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { agentSearchTarget } from '@/lib/global-search-commands';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -38,6 +40,7 @@ export function AgentSettings() {
   const repository = useRepository();
   const queryClient = useQueryClient();
   const { settings } = useConnectionSettings();
+  const location = useLocation();
   const [editing, setEditing] = useState<AgentDefinition | null>();
   const [deleting, setDeleting] = useState<AgentDefinition>();
   const agents = useQuery({
@@ -48,6 +51,12 @@ export function AgentSettings() {
     queryKey: queryKeys.key('tools', settings.endpoint),
     queryFn: ({ signal }) => repository.tools(signal),
   });
+  useEffect(() => {
+    if (!location.hash.startsWith('#agent-')) return;
+    const row = document.getElementById(location.hash.slice(1));
+    row?.scrollIntoView({ block: 'center' });
+    row?.focus({ preventScroll: true });
+  }, [location.key, location.hash, agents.data]);
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.key('agents', settings.endpoint) });
   const save = useMutation({
@@ -163,6 +172,9 @@ function AgentRow({
     : undefined;
   return (
     <ClioInteractiveRow
+      id={agentSearchTarget(agent.id)}
+      tabIndex={-1}
+      className="target:border-primary/50 target:bg-primary/10"
       actions={
         editable ? (
           <DropdownMenu>

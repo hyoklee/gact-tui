@@ -2,16 +2,8 @@ import { vocab } from '@/lib/brand-vocabulary';
 import { queryKeys } from '@/lib/query-keys';
 import type { Artifact, MemorySearchHit } from '@clio/core/v3';
 import { useQuery } from '@tanstack/react-query';
-import {
-  ActivityIcon,
-  BoxIcon,
-  CableIcon,
-  FileIcon,
-  MessageSquareTextIcon,
-  NetworkIcon,
-} from 'lucide-react';
-import { SettingsIcon } from '@/lib/icon-vocabulary';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { BoxIcon, FileIcon, FolderIcon, MessageSquareTextIcon } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { brand } from '@brand';
 import type { ClioWorkbenchOpenRequest } from '@/components/clio/workbench';
@@ -30,12 +22,21 @@ import { SEARCH_DEBOUNCE_MS } from '@/lib/runtime-limits';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { ClioRelativeTime } from './relative-time';
 import { useLiveStore } from '@/store/live-store';
+import { useCommandMenuVisibility } from '@/store/command-menu-visibility';
 import { ClioSearchAssistant } from './search-assistant';
 import { SearchHighlight } from './search-highlight';
 import { messageSearchHash } from '@/lib/search-matches';
 import { projectText } from '@/lib/attention-text';
 import { connectionScope } from '@/lib/connection-scope';
 import { InputGroupButton } from '@/components/ui/input-group';
+import { GlobalSearchResults } from './global-search-results';
+import {
+  returnRouteFromState,
+  workspaceIdFromRoute,
+  sessionIdFromRoute,
+  newConversationRoute,
+} from '@/lib/workspace-route-memory';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -72,19 +73,47 @@ export function ClioCommandMenu({
   const [aiMode, setAiMode] = useState(false);
   const [query, setQuery] = useState('');
   const [serverQuery, setServerQuery] = useState('');
+  const setVisible = useCommandMenuVisibility((state) => state.setOpen);
+  const changeOpen = useCallback(
+    (value: boolean) => {
+      setVisible(value);
+      setOpen(value);
+      if (!value) {
+        setQuery('');
+        setAiMode(false);
+      }
+    },
+    [setVisible],
+  );
+  useEffect(() => () => setVisible(false), [setVisible]);
   const searchInput = useRef<HTMLInputElement>(null);
   const [recentThreshold] = useState(() => Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const { workspaceId = '', sessionId = '' } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const repository = useRepository();
-  const { settings } = useConnectionSettings();
+  const { settings, credentialsReady = true, credentialError } = useConnectionSettings();
+  const workspaceRoute = returnRouteFromState(location.state, settings.endpoint);
+  const routeParams = useParams();
+  // Make parser results scalar dependencies so React Compiler preserves the result caches.
+  const currentWorkspaceId = workspaceIdFromRoute(location.pathname);
+  const currentSessionId = sessionIdFromRoute(location.pathname);
+  const workspaceId = String(
+    routeParams.workspaceId ?? currentWorkspaceId ?? workspaceIdFromRoute(workspaceRoute) ?? '',
+  );
+  const sessionId = String(
+    routeParams.sessionId ??
+      currentSessionId ??
+      (currentWorkspaceId ? undefined : sessionIdFromRoute(workspaceRoute)) ??
+      '',
+  );
   const artifacts = useLiveStore((state) => state.entities.artifacts);
   const workspaces = useQuery({
+    enabled: open && credentialsReady,
     queryKey: queryKeys.key('workspaces', settings.endpoint, connectionScope(settings)),
     queryFn: ({ signal }) => repository.workspaces(signal),
   });
   const sessions = useQuery({
+    enabled: open && credentialsReady,
     queryKey: queryKeys.key('sessions', settings.endpoint, 'all', connectionScope(settings)),
     queryFn: ({ signal }) => repository.allSessions(signal),
   });
@@ -107,7 +136,7 @@ export function ClioCommandMenu({
     ),
     queryFn: ({ signal }) =>
       repository.workspaceFiles(workspaceId, signal, { excludeServiceStorage: true }),
-    enabled: Boolean(workspaceId),
+    enabled: open && credentialsReady && !aiMode && Boolean(workspaceId),
   });
   const memory = useQuery({
     queryKey: queryKeys.key(
@@ -123,7 +152,7 @@ export function ClioCommandMenu({
         { includeCrossSession: true, limit: COMMAND_MENU_LIMITS.memoryHits },
         signal,
       ),
-    enabled: open && !aiMode && serverQuery.length >= 2,
+    enabled: open && credentialsReady && !aiMode && serverQuery.length >= 2,
   });
 
   // 'command-palette' used to also be reachable via the native View menu
@@ -131,11 +160,11 @@ export function ClioCommandMenu({
   // listener below already toggles the palette directly, so no
   // useMenuAction registration is needed.
   useEffect(() => {
-    const openMenu = () => setOpen(true);
+    const openMenu = () => changeOpen(true);
     const handleKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        setOpen((value) => !value);
+        changeOpen(!open);
       }
     };
     window.addEventListener('clio:open-command-menu', openMenu);
@@ -144,7 +173,7 @@ export function ClioCommandMenu({
       window.removeEventListener('clio:open-command-menu', openMenu);
       window.removeEventListener('keydown', handleKey);
     };
-  }, []);
+  }, [open, changeOpen]);
   useEffect(() => {
     const timer = window.setTimeout(() => setServerQuery(query.trim()), SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
@@ -154,6 +183,7 @@ export function ClioCommandMenu({
   }, [open, aiMode]);
 
   const normalizedQuery = query.trim().toLocaleLowerCase();
+  const searchWorkspaceId = workspaceId || workspaces.data?.[0]?.id;
   const matchingFiles = useMemo(
     () =>
       normalizedQuery
@@ -210,13 +240,30 @@ export function ClioCommandMenu({
   }, [normalizedQuery, recentThreshold, sessionId, sessions.data, workspaceNames]);
 
   const finish = (action: () => void) => {
-    setOpen(false);
-    setAiMode(false);
-    setQuery('');
+    changeOpen(false);
     action();
   };
   const openRoute = (path: string) =>
-    finish(() => navigate(path, { state: { from: location.pathname } }));
+    finish(() =>
+      navigate(path, {
+        state: {
+          endpoint: settings.endpoint,
+          from: location.pathname.startsWith('/workspaces/') ? location.pathname : workspaceRoute,
+        },
+      }),
+    );
+  const openWorkspace = (id: string) => {
+    const latest = (sessions.data ?? [])
+      .filter((item) => item.workspace_id === id && !item.archived && isPrimarySession(item))
+      .sort((left, right) =>
+        sessionInteractionAt(right).localeCompare(sessionInteractionAt(left)),
+      )[0];
+    openRoute(
+      latest
+        ? `/workspaces/${encodeURIComponent(id)}/sessions/${encodeURIComponent(latest.id)}`
+        : newConversationRoute(id),
+    );
+  };
   const openMemoryHit = (hit: MemorySearchHit) => {
     const session = sessions.data?.find((candidate) => candidate.id === hit.session_id);
     const targetWorkspace = hit.workspace_id || session?.workspace_id;
@@ -225,20 +272,48 @@ export function ClioCommandMenu({
       `/workspaces/${encodeURIComponent(targetWorkspace)}/sessions/${encodeURIComponent(hit.session_id)}${messageSearchHash(hit.message_id, hit.part_id ?? undefined, query.trim())}`,
     );
   };
-  const openResource = (request: ClioWorkbenchOpenRequest) =>
-    finish(() => onOpenResource?.(request));
+  const openResource = (request: ClioWorkbenchOpenRequest) => {
+    if (onOpenResource) return finish(() => onOpenResource(request));
+    const targetWorkspace =
+      request.kind === 'artifact'
+        ? request.artifact.workspace_id
+        : request.kind === 'workspace-file'
+          ? (request.workspaceId ?? workspaceId)
+          : workspaceId;
+    const target = (sessions.data ?? [])
+      .filter(
+        (item) => item.workspace_id === targetWorkspace && !item.archived && isPrimarySession(item),
+      )
+      .sort(
+        (left, right) =>
+          Number(right.id === sessionId) - Number(left.id === sessionId) ||
+          sessionInteractionAt(right).localeCompare(sessionInteractionAt(left)),
+      )[0];
+    const targetRoute =
+      request.kind === 'workspace-file' &&
+      targetWorkspace &&
+      location.pathname === newConversationRoute(targetWorkspace)
+        ? location.pathname
+        : target
+          ? `/workspaces/${encodeURIComponent(target.workspace_id)}/sessions/${encodeURIComponent(target.id)}`
+          : undefined;
+    if (!targetRoute) {
+      toast.error('Open a conversation in this workspace to view this file.');
+      return;
+    }
+    const snapshot =
+      request.kind === 'artifact'
+        ? { ...request, artifact: { ...request.artifact } }
+        : { ...request };
+    finish(() =>
+      navigate(targetRoute, {
+        state: { globalSearchResource: { scope: connectionScope(settings), request: snapshot } },
+      }),
+    );
+  };
 
   return (
-    <Dialog
-      onOpenChange={(value) => {
-        setOpen(value);
-        if (!value) {
-          setQuery('');
-          setAiMode(false);
-        }
-      }}
-      open={open}
-    >
+    <Dialog onOpenChange={changeOpen} open={open}>
       <DialogContent
         className={`top-[10dvh] max-h-[80dvh] translate-y-0 overflow-hidden p-0 ${aiMode ? 'sm:max-w-3xl' : 'sm:max-w-2xl'}`}
         showCloseButton={false}
@@ -259,16 +334,16 @@ export function ClioCommandMenu({
             Search sessions, matching passages, files, or ask the search assistant.
           </DialogDescription>
         </DialogHeader>
-        {aiMode ? (
+        {aiMode && searchWorkspaceId ? (
           <ClioSearchAssistant
             key={connectionScope(settings)}
-            workspaceId={workspaceId || 'ws_default'}
+            workspaceId={searchWorkspaceId}
             parentSessionId={sessionId || undefined}
             query={query}
             onQueryChange={setQuery}
             onBack={() => setAiMode(false)}
             onClose={() => finish(() => {})}
-            onOpenResource={onOpenResource}
+            onOpenResource={openResource}
           />
         ) : (
           <Command shouldFilter={false}>
@@ -282,6 +357,7 @@ export function ClioCommandMenu({
               trailing={
                 <InputGroupButton
                   className="text-xs text-muted-foreground"
+                  disabled={!credentialsReady || !searchWorkspaceId}
                   onClick={() => setAiMode(true)}
                 >
                   Ask {vocab.agent} Search{' '}
@@ -289,12 +365,28 @@ export function ClioCommandMenu({
                 </InputGroupButton>
               }
               onKeyDown={(event) => {
-                if (event.key === 'Tab' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                if (
+                  event.key === 'Tab' &&
+                  !event.shiftKey &&
+                  !event.nativeEvent.isComposing &&
+                  credentialsReady &&
+                  searchWorkspaceId
+                ) {
                   event.preventDefault();
                   setAiMode(true);
                 }
               }}
             />
+            {!credentialsReady && !credentialError ? (
+              <p role="status" className="px-3 py-2 text-xs text-muted-foreground">
+                Waiting for the default backend…
+              </p>
+            ) : null}
+            {credentialError ? (
+              <p role="alert" className="px-3 py-2 text-xs text-destructive">
+                {credentialError}
+              </p>
+            ) : null}
             <CommandList className="max-h-[68dvh]">
               <CommandEmpty>
                 {memory.isFetching ? 'Searching conversations…' : 'No matching work or action.'}
@@ -332,6 +424,35 @@ export function ClioCommandMenu({
                 <p role="alert" className="px-3 py-2 text-xs text-destructive">
                   Conversation search failed. {memory.error.message}
                 </p>
+              ) : null}
+              {normalizedQuery &&
+              (workspaces.data ?? []).some((item) =>
+                `${item.display_name} ${item.name} ${item.path}`
+                  .toLocaleLowerCase()
+                  .includes(normalizedQuery),
+              ) ? (
+                <CommandGroup heading="Workspaces">
+                  {(workspaces.data ?? [])
+                    .filter((item) =>
+                      `${item.display_name} ${item.name} ${item.path}`
+                        .toLocaleLowerCase()
+                        .includes(normalizedQuery),
+                    )
+                    .slice(0, 20)
+                    .map((item) => (
+                      <CommandItem
+                        key={item.id}
+                        value={`workspace:${item.id}`}
+                        onSelect={() => openWorkspace(item.id)}
+                      >
+                        <FolderIcon aria-hidden="true" />
+                        <span className="min-w-0 flex-1 truncate">
+                          <SearchHighlight text={item.display_name} query={query} />
+                        </span>
+                        <CommandShortcut>Workspace</CommandShortcut>
+                      </CommandItem>
+                    ))}
+                </CommandGroup>
               ) : null}
               {serverQuery === query.trim() && memory.data?.hits.length ? (
                 <CommandGroup heading="Matching messages">
@@ -400,32 +521,12 @@ export function ClioCommandMenu({
                   ))}
                 </CommandGroup>
               ) : null}
-              {['connections', 'runs', 'infrastructure', 'settings'].some(
-                (title) => !normalizedQuery || title.includes(normalizedQuery),
-              ) ? (
-                <CommandGroup heading="Navigation">
-                  {[
-                    { path: '/', title: 'Connections', icon: CableIcon },
-                    { path: '/runs', title: 'Runs', icon: ActivityIcon },
-                    { path: '/infrastructure', title: 'Infrastructure', icon: NetworkIcon },
-                    { path: '/settings/general', title: 'Settings', icon: SettingsIcon },
-                  ]
-                    .filter(
-                      (item) =>
-                        !normalizedQuery ||
-                        item.title.toLocaleLowerCase().includes(normalizedQuery),
-                    )
-                    .map((item) => (
-                      <CommandItem
-                        key={item.path}
-                        value={`navigation:${item.path}`}
-                        onSelect={() => openRoute(item.path)}
-                      >
-                        <item.icon aria-hidden="true" />
-                        <SearchHighlight text={item.title} query={query} />
-                      </CommandItem>
-                    ))}
-                </CommandGroup>
+              {open ? (
+                <GlobalSearchResults
+                  query={query}
+                  onRoute={openRoute}
+                  onFinish={() => finish(() => {})}
+                />
               ) : null}
             </CommandList>
           </Command>

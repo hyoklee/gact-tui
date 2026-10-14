@@ -1,8 +1,10 @@
-import { useLocation } from 'react-router-dom';
+import { matchPath, useLocation } from 'react-router-dom';
 import App from '@/App';
 import { ComposerDraftSessionBoundary } from '@/components/ai-elements/composer-draft-session-boundary';
 import { PromptInputProvider } from '@/components/ai-elements/prompt-input';
 import { AppErrorBoundary } from './app-error-boundary';
+import { ClioCommandMenu } from './command-menu';
+import { SelectionActionsProvider } from './selection-actions';
 
 /** Resets a failed route when the user deliberately navigates elsewhere. */
 export function RouteErrorBoundary() {
@@ -16,13 +18,21 @@ export function RouteErrorBoundary() {
     // exists to react to. It still catches a throw from the provider or that boundary.
     <AppErrorBoundary>
       <PromptInputProvider>
-        <ComposerDraftSessionBoundary>
-          {/* Inner boundary is keyed by route: it resets a failed route view without
-              disturbing the composer state held above it. */}
-          <AppErrorBoundary key={resetKey}>
-            <App />
-          </AppErrorBoundary>
-        </ComposerDraftSessionBoundary>
+        <SelectionActionsProvider>
+          <ComposerDraftSessionBoundary>
+            {/* Global search must survive the route reset, including a shortcut
+                pressed while a lazy destination is still loading. WorkspacePage
+                retains its own search owner with canvas resource callbacks. */}
+            {!matchPath('/workspaces/:workspaceId/sessions/:sessionId', location.pathname) ? (
+              <ClioCommandMenu />
+            ) : null}
+            {/* Inner boundary is keyed by route: it resets a failed route view without
+                disturbing the composer or global search state held above it. */}
+            <AppErrorBoundary key={resetKey}>
+              <App />
+            </AppErrorBoundary>
+          </ComposerDraftSessionBoundary>
+        </SelectionActionsProvider>
       </PromptInputProvider>
     </AppErrorBoundary>
   );

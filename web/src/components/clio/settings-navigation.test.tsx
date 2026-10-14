@@ -1,8 +1,8 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { FolderIcon } from 'lucide-react';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { SettingsNavigation } from './settings-navigation';
 afterEach(cleanup);
 function Location() {
@@ -31,14 +31,12 @@ it('exposes every section in the compact menu and keeps the workspace return rou
     </MemoryRouter>,
   );
   await user.click(screen.getByRole('button', { name: 'Choose settings section' }));
-  expect(screen.getAllByRole('menuitem')).toHaveLength(2);
+  expect(screen.getAllByRole('menuitem')).toHaveLength(3);
   expect(screen.getByRole('menuitem', { name: 'Marketplaces' })).toHaveAttribute(
     'aria-current',
     'page',
   );
-  await user.type(screen.getByRole('textbox', { name: 'Search settings sections' }), 'appear');
-  expect(screen.getAllByRole('menuitem')).toHaveLength(1);
-  await user.keyboard('{ArrowDown}');
+  screen.getByRole('menuitem', { name: 'Appearance' }).focus();
   expect(screen.getByRole('menuitem', { name: 'Appearance' })).toHaveFocus();
   await user.keyboard('{Enter}');
   expect(screen.getByLabelText('Current route')).toHaveTextContent('"path":"/settings/appearance"');
@@ -48,7 +46,7 @@ it('exposes every section in the compact menu and keeps the workspace return rou
   expect(screen.queryByRole('menu')).not.toBeInTheDocument();
 });
 
-it('searches grouped destinations and keywords while preserving navigation context', async () => {
+it('opens the global palette and preserves grouped navigation context', async () => {
   const user = userEvent.setup();
   render(
     <MemoryRouter initialEntries={['/settings/appearance']}>
@@ -71,16 +69,36 @@ it('searches grouped destinations and keywords while preserving navigation conte
     </MemoryRouter>,
   );
   const nav = within(screen.getByRole('navigation', { name: 'Settings sections' }));
-  await user.type(screen.getByRole('textbox', { name: 'Search settings' }), 'drive');
+  const opened = vi.fn();
+  window.addEventListener('clio:open-command-menu', opened, { once: true });
+  await user.click(screen.getByRole('button', { name: 'Search everywhere' }));
+  expect(opened).toHaveBeenCalledOnce();
   expect(nav.getByRole('link', { name: 'Data sources' })).toBeVisible();
-  expect(nav.queryByRole('link', { name: 'Appearance' })).not.toBeInTheDocument();
+  expect(nav.getByRole('link', { name: 'Appearance' })).toBeVisible();
   await user.click(nav.getByRole('link', { name: 'Data sources' }));
   expect(screen.getByLabelText('Current route')).toHaveTextContent(
     '"from":"/workspaces/ws/sessions/sess"',
   );
-  await user.clear(screen.getByRole('textbox', { name: 'Search settings' }));
-  await user.type(screen.getByRole('textbox', { name: 'Search settings' }), 'missing');
-  expect(nav.getByRole('status')).toHaveTextContent('No matching settings.');
-  await user.click(screen.getByRole('button', { name: 'Clear settings search' }));
   expect(nav.getAllByRole('link')).toHaveLength(2);
+});
+
+it('opens global search after the compact settings menu has closed', async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter>
+      <SettingsNavigation
+        sections={[{ id: 'general', label: 'General', icon: FolderIcon }]}
+        section="general"
+        endpoint="http://delta"
+        workspaceRoute="/workspaces/ws/sessions/sess"
+      />
+    </MemoryRouter>,
+  );
+  await user.click(screen.getByRole('button', { name: 'Choose settings section' }));
+  const opened = vi.fn(() => screen.queryByRole('menu'));
+  window.addEventListener('clio:open-command-menu', opened, { once: true });
+  await user.click(screen.getByRole('menuitem', { name: 'Search everywhere from settings menu' }));
+  await waitFor(() => expect(opened).toHaveBeenCalledOnce());
+  expect(opened).toHaveReturnedWith(null);
+  expect(screen.queryByRole('menu')).not.toBeInTheDocument();
 });
