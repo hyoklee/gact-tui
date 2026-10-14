@@ -645,6 +645,9 @@ test('renders dense flat-NDP semantics with accessible interactions', async ({
   await expect(firstRailLandmark).toBeVisible();
   await firstRailLandmark.hover();
   const railPreview = page.locator('[data-slot="hover-card-content"]');
+  // Moving across a dense rail can leave the preceding card in its exit phase.
+  // Require that it has closed before asserting the newly hovered preview.
+  await expect(railPreview).toHaveCount(1);
   const railPreviewTitle = railPreview.locator('p.font-semibold');
   await expect(railPreviewTitle).toHaveText('Sanitized evidence ledger entry 1.');
   await expect(railPreviewTitle).toHaveCSS('font-weight', '600');
