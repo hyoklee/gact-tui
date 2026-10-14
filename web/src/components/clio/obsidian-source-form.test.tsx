@@ -31,7 +31,7 @@ vi.mock('./host-path-picker', () => ({
   ),
 }));
 import { ObsidianSourceForm } from './obsidian-source-form';
-import { DataSourceSettings } from './settings-data-sources';
+import { ObsidianAccountSettings } from './obsidian-account-settings';
 
 const ready = {
   installed: true,
@@ -169,7 +169,7 @@ it('drops the chosen host folder when switching to a different CLIO connection',
   expect(screen.queryByText('/host/notes')).not.toBeInTheDocument();
 });
 
-it('offers managed installation in Settings and keeps account setup separate from workspace sources', async () => {
+it('offers managed installation and keeps account setup separate from workspace sources', async () => {
   const missing = {
     ...ready,
     installed: false,
@@ -186,11 +186,10 @@ it('offers managed installation in Settings and keeps account setup separate fro
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(
     <QueryClientProvider client={client}>
-      <DataSourceSettings />
+      <ObsidianAccountSettings />
     </QueryClientProvider>,
   );
   const user = userEvent.setup();
-  await user.click(await screen.findByRole('button', { name: 'Manage Obsidian' }));
   await user.click(await screen.findByRole('button', { name: 'Install Sync client' }));
   expect(await screen.findByRole('button', { name: 'Installing client…' })).toBeDisabled();
   expect(fixtures.repository.installObsidian).toHaveBeenCalledTimes(1);
@@ -204,10 +203,28 @@ it('offers managed installation in Settings and keeps account setup separate fro
   fixtures.endpoint = 'https://clio-two';
   view.rerender(
     <QueryClientProvider client={client}>
-      <DataSourceSettings />
+      <ObsidianAccountSettings />
     </QueryClientProvider>,
   );
-  await user.click(await screen.findByRole('button', { name: 'Manage Obsidian' }));
   expect(await screen.findByLabelText('Account password')).toHaveValue('');
   expect(fixtures.repository.createConnectedSource).not.toHaveBeenCalled();
+});
+
+it('starts Connect on existing notes with read-only access and no account requirement', async () => {
+  const client = new QueryClient();
+  render(
+    <QueryClientProvider client={client}>
+      <ObsidianSourceForm
+        workspaceId="w"
+        hostLabel="DESKTOP"
+        initialChoice="existing"
+        onConnected={vi.fn()}
+        onBack={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  expect(screen.getByRole('radio', { name: 'Attach an existing vault or folder' })).toBeChecked();
+  expect(screen.getByRole('checkbox', { name: /create and edit notes/ })).not.toBeChecked();
+  expect(screen.getByRole('button', { name: 'Connect vault' })).toBeDisabled();
+  expect(fixtures.repository.obsidianStatus).not.toHaveBeenCalled();
 });
