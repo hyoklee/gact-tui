@@ -71,6 +71,7 @@ import { ClioOnlyOfficeEditor } from './onlyoffice-editor';
 import { ClioPdfPreview } from './pdf-preview';
 import { ClioStatus } from './status';
 import { TechnicalDetails } from './technical-details';
+import { ResourceLoading, ResourceUnavailable } from './resource-states';
 import { HtmlPreview } from './html-file-preview';
 import { DocumentSourceView } from './document-source-view';
 import { isDocumentSourceProfile } from './document-open-policy';
@@ -91,7 +92,6 @@ export function ClioDocumentWorkspace({
   const { settings } = useConnectionSettings();
   const queryClient = useQueryClient();
   const previewRef = useRef<HTMLDivElement>(null);
-  const preparedPdf = useRef<Promise<DocumentManifest> | undefined>(undefined);
   const [selection, setSelection] = useState<DocumentAnchor>();
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewText, setReviewText] = useState('');
@@ -103,16 +103,27 @@ export function ClioDocumentWorkspace({
     queryKey: queryKeys.key('document-manifest', settings.endpoint, artifact.id),
     queryFn: ({ signal }) => repository.documentManifest(artifact.id, signal),
   });
-  const previewId =
-    manifest.data && !directProfiles.has(manifest.data.profile)
-      ? manifest.data.pdf_rendition_artifact_id
-      : undefined;
-  const savedPreview = useQuery({
-    queryKey: queryKeys.key('document-manifest', settings.endpoint, previewId),
-    queryFn: ({ signal }) => repository.documentManifest(previewId!, signal),
-    enabled: Boolean(previewId),
+  const needsPdfPreview = Boolean(
+    manifest.data &&
+      !directProfiles.has(manifest.data.profile) &&
+      (manifest.data.pdf_rendition_artifact_id || manifest.data.rendition_formats.includes('pdf')),
+  );
+  // One immutable rendition is shared by preview, PDF export and native PDF opening.
+  // Do not abort conversion when a tab unmounts: reopening joins the same request.
+  const pdfOptions = {
+    queryKey: queryKeys.key('document-pdf', settings.endpoint, artifact.id),
+    queryFn: () => prepareDocumentPdf(repository, manifest.data, artifact.session_id),
+    staleTime: Infinity,
+    retry: false as const,
+  };
+  const pdfPreview = useQuery({
+    ...pdfOptions,
+    enabled: needsPdfPreview,
+    retryOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
-  const effectiveManifest = savedPreview.data ?? manifest.data;
+  const effectiveManifest = (needsPdfPreview ? pdfPreview.data : undefined) ?? manifest.data;
   const content = useQuery({
     queryKey: queryKeys.key('document-content', settings.endpoint, effectiveManifest?.artifact_id),
     queryFn: ({ signal }) => repository.documentContent(effectiveManifest!.artifact_id, signal),
@@ -172,17 +183,7 @@ export function ClioDocumentWorkspace({
       });
     },
   });
-  const preparePdf = () => {
-    preparedPdf.current ??= prepareDocumentPdf(
-      repository,
-      manifest.data,
-      artifact.session_id,
-    ).catch((error: unknown) => {
-      preparedPdf.current = undefined;
-      throw error;
-    });
-    return preparedPdf.current;
-  };
+  const preparePdf = () => queryClient.fetchQuery(pdfOptions);
   const rendition = useMutation({
     mutationFn: async () => {
       const pdf = await preparePdf();
@@ -281,7 +282,7 @@ export function ClioDocumentWorkspace({
               <p className="text-sm font-medium">
                 {profileLabel(manifest.data ?? effectiveManifest)}
               </p>
-              {savedPreview.data ? (
+              {needsPdfPreview && pdfPreview.data ? (
                 <p className="text-xs text-muted-foreground">Saved PDF preview</p>
               ) : null}
               <p className="break-all font-mono text-xs text-muted-foreground">
@@ -377,18 +378,20 @@ export function ClioDocumentWorkspace({
               label="Refresh document revision"
               refreshing={
                 manifest.isFetching ||
-                savedPreview.isFetching ||
+                pdfPreview.isFetching ||
                 content.isFetching ||
                 reviews.isFetching
               }
               onRefresh={async () => {
-                preparedPdf.current = undefined;
                 await Promise.all([
                   queryClient.invalidateQueries({
                     queryKey: queryKeys.key('document-manifest', settings.endpoint),
                   }),
                   queryClient.invalidateQueries({
                     queryKey: queryKeys.key('document-content', settings.endpoint),
+                  }),
+                  queryClient.invalidateQueries({
+                    queryKey: pdfOptions.queryKey,
                   }),
                   reviews.refetch(),
                   editorHealth.refetch(),
@@ -402,21 +405,11 @@ export function ClioDocumentWorkspace({
             {status}
           </p>
         ) : null}
-        {createWorkingCopy.error ||
-        rendition.error ||
-        savedPreview.error ||
-        downloadSource.error ? (
+        {createWorkingCopy.error || rendition.error || downloadSource.error ? (
           <Alert variant="destructive">
             <AlertTitle>Document action failed</AlertTitle>
             <AlertDescription>
-              {
-                (
-                  createWorkingCopy.error ??
-                  rendition.error ??
-                  savedPreview.error ??
-                  downloadSource.error
-                )?.message
-              }
+              {(createWorkingCopy.error ?? rendition.error ?? downloadSource.error)?.message}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -442,6 +435,20 @@ export function ClioDocumentWorkspace({
               fit="width"
               manifest={effectiveManifest}
               onPdfSelection={setSelection}
+              previewError={
+                (needsPdfPreview ? pdfPreview.error?.message : undefined) ??
+                (effectiveManifest?.profile === 'pdf' ? content.error?.message : undefined)
+              }
+              previewPending={needsPdfPreview && (pdfPreview.isPending || pdfPreview.isFetching)}
+              previewLabel={
+                manifest.data?.pdf_rendition_artifact_id
+                  ? 'Loading PDF preview…'
+                  : 'Rendering PDF preview…'
+              }
+              onRetryPreview={() => {
+                if (pdfPreview.isError) void pdfPreview.refetch();
+                else void content.refetch();
+              }}
               text={textContent}
             />
           </div>
@@ -509,6 +516,10 @@ function DocumentPreview({
   fit,
   manifest,
   onPdfSelection,
+  previewError,
+  previewPending,
+  previewLabel,
+  onRetryPreview,
   text,
 }: {
   content?: Uint8Array;
@@ -517,6 +528,10 @@ function DocumentPreview({
   fit: 'page' | 'width';
   manifest?: DocumentManifest;
   onPdfSelection: (anchor: DocumentAnchor) => void;
+  previewError?: string;
+  previewPending: boolean;
+  previewLabel: string;
+  onRetryPreview: () => void;
   text?: string;
 }) {
   if (editor?.status === 'ready' && editor.editor_url) {
@@ -533,6 +548,24 @@ function DocumentPreview({
     );
   }
   if (!manifest) return fallback;
+  if (previewError && !previewPending) {
+    return (
+      <div className="space-y-3 p-4" role="alert">
+        <ResourceUnavailable label="PDF preview failed" detail={previewError} />
+        <Button onClick={onRetryPreview} size="sm" variant="outline">
+          Retry preview
+        </Button>
+      </div>
+    );
+  }
+  if (previewPending && !content) {
+    return (
+      <div className="space-y-3 p-4" role="status" aria-live="polite">
+        <p className="text-sm text-muted-foreground">{previewLabel}</p>
+        <ResourceLoading label={previewLabel} />
+      </div>
+    );
+  }
   if (manifest.profile === 'pdf') {
     return (
       // The viewer owns its own scroll region so it can mount only the pages in
@@ -577,13 +610,10 @@ function DocumentPreview({
   }
   if (!directProfiles.has(manifest.profile)) {
     return (
-      <Alert>
-        <FileCheck2Icon aria-hidden="true" />
-        <AlertTitle>{profileLabel(manifest)} remains canonical</AlertTitle>
-        <AlertDescription>
-          Open it in a desktop editor, use an available embedded editor, or render a PDF preview.
-        </AlertDescription>
-      </Alert>
+      <ResourceUnavailable
+        label="Preview unavailable"
+        detail={`PDF previews are not supported for this ${profileLabel(manifest).toLowerCase()}.`}
+      />
     );
   }
   return fallback;

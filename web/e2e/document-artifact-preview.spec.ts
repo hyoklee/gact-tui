@@ -41,8 +41,11 @@ for (const layout of [
 ]) {
   test.describe(layout.name, () => {
     test.use({ viewport: layout.viewport });
-    for (const item of cases) {
-      test(`opens the editable ${item.extension} artifact with its saved PDF preview`, async ({
+    for (const item of cases.flatMap((item) => [
+      { ...item, saved: true },
+      ...(item.extension === 'pptx' ? [{ ...item, saved: false }] : []),
+    ])) {
+      test(`opens the editable ${item.extension} artifact with ${item.saved ? 'its saved' : 'an automatically rendered'} PDF preview`, async ({
         page,
       }, testInfo) => {
         const source = readFileSync(
@@ -60,6 +63,10 @@ for (const layout of [
         const hash = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
         const errors: string[] = [];
         const conversions: string[] = [];
+        let finishConversion!: () => void;
+        const conversionResponse = new Promise<void>((resolve) => {
+          finishConversion = resolve;
+        });
         let holdRefresh = false;
         let finishRefresh!: () => void;
         const refreshResponse = new Promise<void>((resolve) => {
@@ -84,8 +91,20 @@ for (const layout of [
           native_open: true,
           embedded_editors: [],
           rendition_formats: ['pdf'],
-          pdf_rendition_artifact_id: pdfId,
+          pdf_rendition_artifact_id: item.saved ? pdfId : '',
           provenance: {},
+        };
+        const pdfManifest = {
+          ...manifest,
+          artifact_id: pdfId,
+          name: `${name}.v1.pdf`,
+          mime_type: 'application/pdf',
+          sha256: hash(pdf),
+          profile: 'pdf',
+          native_open: false,
+          rendition_formats: [],
+          pdf_rendition_artifact_id: '',
+          content_url: `/v1/artifacts/${pdfId}/document/content`,
         };
         const amendRecord = (record: Record<string, unknown>) => ({
           ...record,
@@ -175,20 +194,7 @@ for (const layout of [
             if (holdRefresh) await refreshResponse;
             await route.fulfill({ json: manifest });
           } else if (path === `/v1/artifacts/${pdfId}/document`) {
-            await route.fulfill({
-              json: {
-                ...manifest,
-                artifact_id: pdfId,
-                name: `${name}.v1.pdf`,
-                mime_type: 'application/pdf',
-                sha256: hash(pdf),
-                profile: 'pdf',
-                native_open: false,
-                rendition_formats: [],
-                pdf_rendition_artifact_id: '',
-                content_url: `/v1/artifacts/${pdfId}/document/content`,
-              },
-            });
+            await route.fulfill({ json: pdfManifest });
           } else if (path === `/v1/artifacts/${pdfId}/document/content`) {
             await route.fulfill({ contentType: 'application/pdf', body: pdf });
           } else if (path === `/v1/artifacts/${sourceId}/bytes`) {
@@ -197,6 +203,20 @@ for (const layout of [
             await route.fulfill({ json: { reviews: [] } });
           } else if (path.endsWith('/renditions')) {
             conversions.push(path);
+            if (!item.saved) {
+              expect(route.request().method()).toBe('POST');
+              expect(url.searchParams.get('session_id')).toBe(sessionId);
+              await conversionResponse;
+              manifest.pdf_rendition_artifact_id = pdfId;
+              await route.fulfill({
+                json: {
+                  source_artifact_id: sourceId,
+                  converter: 'libreoffice',
+                  artifact: pdfManifest,
+                },
+              });
+              return;
+            }
             await route.fulfill({
               status: 500,
               json: { detail: 'Saved previews must not reconvert.' },
@@ -221,6 +241,11 @@ for (const layout of [
           fullPage: true,
         });
         await canvas.getByRole('button', { name: `Open ${name}`, exact: true }).click();
+        if (!item.saved) {
+          await expect(canvas.getByText('Rendering PDF preview…', { exact: true })).toBeVisible();
+          await expect(canvas.getByText(/remains canonical/u)).toHaveCount(0);
+          finishConversion();
+        }
         const toolbar = canvas.locator('[data-slot="viewer-toolbar"]');
         await expect(toolbar).toHaveCount(1);
         const previewTab = toolbar.getByRole('tab', { name: 'Preview', exact: true });
@@ -387,7 +412,7 @@ for (const layout of [
         await expect(
           canvas.getByRole('button', { name: 'Refresh document revision', exact: true }),
         ).toBeEnabled();
-        expect(conversions).toEqual([]);
+        expect(conversions).toEqual(item.saved ? [] : [`/v1/artifacts/${sourceId}/renditions`]);
         expect(errors).toEqual([]);
       });
     }

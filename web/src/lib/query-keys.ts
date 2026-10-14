@@ -29,6 +29,7 @@ export type ClioQueryNamespace =
   | 'document-content'
   | 'document-editor-health'
   | 'document-manifest'
+  | 'document-pdf'
   | 'expert-pack'
   | 'expert-packs'
   | 'execution-provenance'
