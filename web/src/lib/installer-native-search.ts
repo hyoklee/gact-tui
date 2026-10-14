@@ -1,4 +1,5 @@
 import { toast } from 'sonner';
+import { vocab } from '@/lib/brand-vocabulary';
 import type { createRepository } from '@/lib/connection';
 import { completeInstallerWebSearch } from '@/tauri/installer-options';
 
@@ -10,7 +11,7 @@ export async function finishInstallerNativeSearch(
   const service = catalog.services.find((candidate) => candidate.id === 'searxng');
   const variant = service?.variants.find((candidate) => candidate.compatible);
   if (!service || !variant) {
-    toast.warning('CLIO Search still needs setup', {
+    toast.warning(`${vocab.product} Search still needs setup`, {
       id: 'installer-web-search-needs-attention',
       description: service?.variants[0]?.reason || 'Open Infrastructure to inspect this computer.',
     });
@@ -38,7 +39,7 @@ export async function finishInstallerNativeSearch(
     await perform('start');
   }
   await completeInstallerWebSearch();
-  toast.success('CLIO Search is ready', {
+  toast.success(`${vocab.product} Search is ready`, {
     id: 'installer-web-search-ready',
     description: 'Native web search is available to your agents. No Docker service is required.',
   });
