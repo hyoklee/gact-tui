@@ -95,7 +95,7 @@ test('a file found from a new conversation retains its unsent draft and route', 
   await page.getByRole('option', { name: 'notes/plant-study.md', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${route}$`, 'u'));
   await expect(page.getByRole('heading', { name: 'Plant study notes', exact: true })).toBeVisible();
-  await expect(composer).toHaveValue('Keep this unsent review draft.');
+  await expect(composer).toHaveText('Keep this unsent review draft.');
   expect(fixture.state.created).toBe(0);
 });
 
