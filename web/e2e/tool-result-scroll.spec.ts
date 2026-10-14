@@ -113,6 +113,9 @@ for (const width of [640, 1003]) {
   test(`todo controls, wrapped titles and change labels align at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1037 });
     await openFixture(page, 'check');
+    await page
+      .getByRole('button', { name: 'Show result for Search EarthScope catalog', exact: true })
+      .click();
     const changes = page.locator('[data-slot="todo-changes"]');
     await expect(changes).toHaveCount(1);
     await expect(changes.getByText('1/2 current', { exact: true })).toBeVisible();
