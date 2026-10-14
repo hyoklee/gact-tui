@@ -13,6 +13,7 @@ const repository = vi.hoisted(() => ({
   infrastructureTargets: vi.fn(),
   switchConnection: vi.fn(),
   setTheme: vi.fn(),
+  credentialsReady: true,
 }));
 
 const artifact = {
@@ -26,7 +27,10 @@ const artifact = {
 
 vi.mock('@/hooks/use-repository', () => ({ useRepository: () => repository }));
 vi.mock('@/providers/connection-provider', () => ({
-  useConnectionSettings: () => ({ settings: { endpoint: 'http://127.0.0.1:8787' } }),
+  useConnectionSettings: () => ({
+    settings: { endpoint: 'http://127.0.0.1:8787' },
+    credentialsReady: repository.credentialsReady,
+  }),
 }));
 vi.mock('@/store/live-store', () => ({
   useLiveStore: (selector: (state: unknown) => unknown) =>
@@ -98,6 +102,7 @@ function renderMenu(
 }
 
 beforeEach(() => {
+  repository.credentialsReady = true;
   repository.agents.mockResolvedValue([
     {
       id: 'reviewer',
@@ -175,6 +180,7 @@ afterEach(() => {
 
 describe('ClioCommandMenu workspace search', () => {
   it('searches and applies a theme without a workspace or navigating away', async () => {
+    repository.credentialsReady = false;
     const user = userEvent.setup();
     renderMenu(vi.fn(), '/settings/general');
     await user.keyboard('{Control>}k{/Control}');
@@ -183,6 +189,26 @@ describe('ClioCommandMenu workspace search', () => {
     expect(repository.setTheme).toHaveBeenCalledWith('dark');
     expect(screen.getByTestId('location')).toHaveTextContent('/settings/general');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+  it('opens before backend startup completes, then searches without losing the draft', async () => {
+    localStorage.clear();
+    repository.credentialsReady = false;
+    const user = userEvent.setup();
+    renderMenu(vi.fn(), '/');
+    await user.keyboard('{Control>}k{/Control}');
+    const input = screen.getByPlaceholderText('Search work, files, artifacts, or actions…');
+    await waitFor(() => expect(input).toHaveFocus());
+    await user.keyboard('revie');
+    expect(screen.getByText('Waiting for the default backend…')).toBeVisible();
+    expect(repository.workspaces).not.toHaveBeenCalled();
+    expect(repository.allSessions).not.toHaveBeenCalled();
+    expect(repository.agents).not.toHaveBeenCalled();
+    expect(repository.infrastructureTargets).not.toHaveBeenCalled();
+    repository.credentialsReady = true;
+    await user.keyboard('wer');
+    expect(await screen.findByRole('option', { name: /Station Reviewer/u })).toBeVisible();
+    expect(input).toHaveValue('reviewer');
+    expect(repository.switchConnection).not.toHaveBeenCalled();
   });
 
   it.each([

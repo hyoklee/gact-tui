@@ -4,6 +4,26 @@ import { installSearchFixture } from './search-fixture.mjs';
 const endpoint = `http://127.0.0.1:${process.env['CLIO_FIXTURE_PORT'] ?? '18799'}`;
 const placeholder = 'Search work, files, artifacts, or actions…';
 
+test('home search uses the default backend without selecting a connection, workspace or conversation', async ({
+  page,
+}) => {
+  const fixture = await installSearchFixture(page, endpoint);
+  await page.goto('/?intent=connect');
+  await page.getByRole('button', { name: 'Search everywhere', exact: true }).click();
+  const input = page.getByPlaceholder(placeholder);
+  await expect(input).toBeFocused();
+  await input.fill('Find the reviewer handoff');
+  await expect(page.getByRole('button', { name: /^Ask .+ Search Tab$/u })).toBeEnabled();
+  await input.press('Tab');
+  const assistant = page.getByRole('textbox', { name: /^Ask .+ Search$/u });
+  await expect(assistant).toBeFocused();
+  await assistant.press('Enter');
+  await expect(page.getByRole('link', { name: 'Read the archived notes' })).toBeVisible();
+  expect(fixture.state.searchRequests).toEqual([{ workspace_id: fixture.workspace.id }]);
+  expect(fixture.state.created).toBe(1);
+  await expect(page).toHaveURL(/\/?\?intent=connect$/u);
+});
+
 test('global search applies themes from Settings and opens settings, hosts and exact agent definitions', async ({
   page,
 }) => {

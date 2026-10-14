@@ -3,7 +3,7 @@ import { queryKeys } from '@/lib/query-keys';
 import type { Artifact, MemorySearchHit } from '@clio/core/v3';
 import { useQuery } from '@tanstack/react-query';
 import { BoxIcon, FileIcon, FolderIcon, MessageSquareTextIcon } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { brand } from '@brand';
 import type { ClioWorkbenchOpenRequest } from '@/components/clio/workbench';
@@ -22,6 +22,7 @@ import { SEARCH_DEBOUNCE_MS } from '@/lib/runtime-limits';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { ClioRelativeTime } from './relative-time';
 import { useLiveStore } from '@/store/live-store';
+import { useCommandMenuVisibility } from '@/store/command-menu-visibility';
 import { ClioSearchAssistant } from './search-assistant';
 import { SearchHighlight } from './search-highlight';
 import { messageSearchHash } from '@/lib/search-matches';
@@ -72,12 +73,25 @@ export function ClioCommandMenu({
   const [aiMode, setAiMode] = useState(false);
   const [query, setQuery] = useState('');
   const [serverQuery, setServerQuery] = useState('');
+  const setVisible = useCommandMenuVisibility((state) => state.setOpen);
+  const changeOpen = useCallback(
+    (value: boolean) => {
+      setVisible(value);
+      setOpen(value);
+      if (!value) {
+        setQuery('');
+        setAiMode(false);
+      }
+    },
+    [setVisible],
+  );
+  useEffect(() => () => setVisible(false), [setVisible]);
   const searchInput = useRef<HTMLInputElement>(null);
   const [recentThreshold] = useState(() => Date.now() - 7 * 24 * 60 * 60 * 1000);
   const navigate = useNavigate();
   const location = useLocation();
   const repository = useRepository();
-  const { settings } = useConnectionSettings();
+  const { settings, credentialsReady = true, credentialError } = useConnectionSettings();
   const workspaceRoute = returnRouteFromState(location.state, settings.endpoint);
   const routeParams = useParams();
   // Make parser results scalar dependencies so React Compiler preserves the result caches.
@@ -85,12 +99,12 @@ export function ClioCommandMenu({
   const sessionId = String(routeParams.sessionId ?? sessionIdFromRoute(workspaceRoute) ?? '');
   const artifacts = useLiveStore((state) => state.entities.artifacts);
   const workspaces = useQuery({
-    enabled: open,
+    enabled: open && credentialsReady,
     queryKey: queryKeys.key('workspaces', settings.endpoint, connectionScope(settings)),
     queryFn: ({ signal }) => repository.workspaces(signal),
   });
   const sessions = useQuery({
-    enabled: open,
+    enabled: open && credentialsReady,
     queryKey: queryKeys.key('sessions', settings.endpoint, 'all', connectionScope(settings)),
     queryFn: ({ signal }) => repository.allSessions(signal),
   });
@@ -113,7 +127,7 @@ export function ClioCommandMenu({
     ),
     queryFn: ({ signal }) =>
       repository.workspaceFiles(workspaceId, signal, { excludeServiceStorage: true }),
-    enabled: open && !aiMode && Boolean(workspaceId),
+    enabled: open && credentialsReady && !aiMode && Boolean(workspaceId),
   });
   const memory = useQuery({
     queryKey: queryKeys.key(
@@ -129,7 +143,7 @@ export function ClioCommandMenu({
         { includeCrossSession: true, limit: COMMAND_MENU_LIMITS.memoryHits },
         signal,
       ),
-    enabled: open && !aiMode && serverQuery.length >= 2,
+    enabled: open && credentialsReady && !aiMode && serverQuery.length >= 2,
   });
 
   // 'command-palette' used to also be reachable via the native View menu
@@ -137,11 +151,11 @@ export function ClioCommandMenu({
   // listener below already toggles the palette directly, so no
   // useMenuAction registration is needed.
   useEffect(() => {
-    const openMenu = () => setOpen(true);
+    const openMenu = () => changeOpen(true);
     const handleKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        setOpen((value) => !value);
+        changeOpen(!open);
       }
     };
     window.addEventListener('clio:open-command-menu', openMenu);
@@ -150,7 +164,7 @@ export function ClioCommandMenu({
       window.removeEventListener('clio:open-command-menu', openMenu);
       window.removeEventListener('keydown', handleKey);
     };
-  }, []);
+  }, [open, changeOpen]);
   useEffect(() => {
     const timer = window.setTimeout(() => setServerQuery(query.trim()), SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
@@ -217,9 +231,7 @@ export function ClioCommandMenu({
   }, [normalizedQuery, recentThreshold, sessionId, sessions.data, workspaceNames]);
 
   const finish = (action: () => void) => {
-    setOpen(false);
-    setAiMode(false);
-    setQuery('');
+    changeOpen(false);
     action();
   };
   const openRoute = (path: string) =>
@@ -287,16 +299,7 @@ export function ClioCommandMenu({
   };
 
   return (
-    <Dialog
-      onOpenChange={(value) => {
-        setOpen(value);
-        if (!value) {
-          setQuery('');
-          setAiMode(false);
-        }
-      }}
-      open={open}
-    >
+    <Dialog onOpenChange={changeOpen} open={open}>
       <DialogContent
         className={`top-[10dvh] max-h-[80dvh] translate-y-0 overflow-hidden p-0 ${aiMode ? 'sm:max-w-3xl' : 'sm:max-w-2xl'}`}
         showCloseButton={false}
@@ -340,7 +343,7 @@ export function ClioCommandMenu({
               trailing={
                 <InputGroupButton
                   className="text-xs text-muted-foreground"
-                  disabled={!searchWorkspaceId}
+                  disabled={!credentialsReady || !searchWorkspaceId}
                   onClick={() => setAiMode(true)}
                 >
                   Ask {vocab.agent} Search{' '}
@@ -352,6 +355,7 @@ export function ClioCommandMenu({
                   event.key === 'Tab' &&
                   !event.shiftKey &&
                   !event.nativeEvent.isComposing &&
+                  credentialsReady &&
                   searchWorkspaceId
                 ) {
                   event.preventDefault();
@@ -359,6 +363,16 @@ export function ClioCommandMenu({
                 }
               }}
             />
+            {!credentialsReady && !credentialError ? (
+              <p role="status" className="px-3 py-2 text-xs text-muted-foreground">
+                Waiting for the default backend…
+              </p>
+            ) : null}
+            {credentialError ? (
+              <p role="alert" className="px-3 py-2 text-xs text-destructive">
+                {credentialError}
+              </p>
+            ) : null}
             <CommandList className="max-h-[68dvh]">
               <CommandEmpty>
                 {memory.isFetching ? 'Searching conversations…' : 'No matching work or action.'}

@@ -163,9 +163,11 @@ describe('AgentSettings', () => {
     repository.tools.mockResolvedValue([]);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
-      <QueryClientProvider client={queryClient}>
-        <AgentSettings />
-      </QueryClientProvider>,
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <AgentSettings />
+        </QueryClientProvider>
+      </MemoryRouter>,
     );
 
     expect(await screen.findByText('Main Agent')).toBeVisible();
@@ -203,9 +205,11 @@ describe('AgentSettings', () => {
     const user = userEvent.setup();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
-      <QueryClientProvider client={queryClient}>
-        <AgentSettings />
-      </QueryClientProvider>,
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <AgentSettings />
+        </QueryClientProvider>
+      </MemoryRouter>,
     );
 
     await user.click(await screen.findByRole('button', { name: 'New agent' }));

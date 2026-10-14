@@ -27,7 +27,7 @@ export function GlobalSearchResults({
   onFinish: () => void;
 }) {
   const repository = useRepository();
-  const { settings } = useConnectionSettings();
+  const { settings, credentialsReady = true } = useConnectionSettings();
   const connections = useKnownConnections();
   const switchConnection = useSwitchConnection();
   const { setTheme, theme } = useTheme();
@@ -36,12 +36,12 @@ export function GlobalSearchResults({
     onSuccess: onFinish,
   });
   const agents = useQuery({
-    enabled: Boolean(query.trim()),
+    enabled: credentialsReady && Boolean(query.trim()),
     queryKey: queryKeys.key('agents', settings.endpoint, connectionScope(settings)),
     queryFn: ({ signal }) => repository.agents(signal),
   });
   const targets = useQuery({
-    enabled: Boolean(query.trim()),
+    enabled: credentialsReady && Boolean(query.trim()),
     queryKey: ['infrastructure-targets', settings.endpoint, connectionScope(settings)],
     queryFn: ({ signal }) => repository.infrastructureTargets(signal),
   });

@@ -55,7 +55,7 @@ export async function installSearchFixture(page, endpoint, theme = 'light') {
       side_session: { read_only: true, ephemeral: true },
     },
   };
-  const state = { submitted: [], deleted: [], created: 0 };
+  const state = { submitted: [], deleted: [], created: 0, searchRequests: [] };
   let answerReady;
   const ready = new Promise((resolve) => {
     answerReady = resolve;
@@ -154,6 +154,7 @@ export async function installSearchFixture(page, endpoint, theme = 'light') {
     if (/\/sessions\/[^/]+\/(interactions|permissions|questions)$/u.test(path))
       return json({ interactions: [], permissions: [], questions: [] });
     if (path === '/v1/search/sessions' && request.method() === 'POST') {
+      state.searchRequests.push(request.postDataJSON());
       state.created += 1;
       return json(searchSession, 201);
     }

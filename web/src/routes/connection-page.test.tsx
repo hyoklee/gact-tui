@@ -1,4 +1,5 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { useCommandMenuVisibility } from '@/store/command-menu-visibility';
 import { brand } from '@brand';
 import { vocab } from '@/lib/brand-vocabulary';
 import userEvent from '@testing-library/user-event';
@@ -63,6 +64,7 @@ import { InfrastructureTargetGoneError } from '@/lib/connection';
 import { rememberWorkspaceRoute } from '@/lib/workspace-route-memory';
 
 beforeEach(() => {
+  useCommandMenuVisibility.getState().setOpen(false);
   localStorage.clear();
   sessionStorage.clear();
   vi.clearAllMocks();
@@ -131,7 +133,70 @@ it('shows managed startup instead of asking desktop users for a connection addre
   expect(screen.getByText('Loading the bundled scientific workspace')).toBeVisible();
   expect(screen.getByRole('list', { name: 'Startup progress' })).toBeVisible();
   expect(screen.getByTestId('desktop-boot-logo')).toHaveClass('object-contain');
+  expect(screen.getByRole('button', { name: 'Search everywhere' })).toBeEnabled();
   expect(screen.queryByLabelText('Connection address')).not.toBeInTheDocument();
+});
+
+it('keeps global search open on first launch and resumes workspace opening after it closes', async () => {
+  mocks.inTauri = true;
+  mocks.managedConnectionReady = true;
+  mocks.managedConnection = { endpoint: 'http://127.0.0.1:8788' };
+  useCommandMenuVisibility.getState().setOpen(true);
+  render(
+    <QueryClientProvider
+      client={
+        new QueryClient({
+          defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+        })
+      }
+    >
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<ConnectionPage />} />
+          <Route path="/workspaces/*" element={<p>Workspace opened</p>} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  expect(screen.getByRole('button', { name: 'Search everywhere' })).toBeEnabled();
+  expect(mocks.resolveConnection).not.toHaveBeenCalled();
+  await act(async () => useCommandMenuVisibility.getState().setOpen(false));
+  await waitFor(() => expect(mocks.resolveConnection).toHaveBeenCalledOnce());
+  expect(await screen.findByText('Workspace opened')).toBeVisible();
+});
+
+it('defers an in-flight startup navigation until global search closes', async () => {
+  mocks.recents = [{ endpoint: 'http://127.0.0.1:8788', label: 'Contained' }];
+  let finishConnection: (value: { endpoint: string }) => void = () => undefined;
+  mocks.resolveConnection.mockReturnValueOnce(
+    new Promise<{ endpoint: string }>((resolve) => {
+      finishConnection = resolve;
+    }),
+  );
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { mutations: { retry: false } } })}
+    >
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<ConnectionPage />} />
+          <Route path="/workspaces/*" element={<p>Workspace opened</p>} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(mocks.resolveConnection).toHaveBeenCalledOnce());
+  await act(async () => {
+    useCommandMenuVisibility.getState().setOpen(true);
+    finishConnection({ endpoint: 'http://127.0.0.1:8788' });
+  });
+  // The landing form returns only after the mutation has finished successfully.
+  expect(await screen.findByRole('button', { name: 'Add a service' })).toBeVisible();
+  expect(mocks.connect).toHaveBeenCalledOnce();
+  expect(screen.queryByText('Workspace opened')).not.toBeInTheDocument();
+  await act(async () => useCommandMenuVisibility.getState().setOpen(false));
+  expect(await screen.findByText('Workspace opened')).toBeVisible();
+  expect(mocks.resolveConnection).toHaveBeenCalledOnce();
 });
 
 it('says up front that the desktop cannot sign in to an already-running agent (#1478)', () => {
