@@ -164,6 +164,10 @@ jobs:
       - name: Real Windows keyring long-credential round trip
         if: runner.os == 'Windows'
         run: cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --lib credentials::tests::windows_long_credential -- --test-threads=1
+      - name: Compile Windows installer provider and native-search hooks
+        if: runner.os == 'Windows'
+        working-directory: desktop
+        run: node scripts/run-tauri-branded.mjs build --debug --bundles nsis --merge-config tests/tauri.installer-compile.conf.json
       - name: Download lifecycle regressions
         run: cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --lib downloads::tests
       - name: Native file associations and confinement
