@@ -643,10 +643,12 @@ test('renders dense flat-NDP semantics with accessible interactions', async ({
     name: 'Jump to user message 1',
   });
   await expect(firstRailLandmark).toBeVisible();
-  await firstRailLandmark.hover();
   const railPreview = page.locator('[data-slot="hover-card-content"]');
-  // Moving across a dense rail can leave the preceding card in its exit phase.
-  // Require that it has closed before asserting the newly hovered preview.
+  // Scrolling across the rail can open another preview. Close it before the
+  // next hover: count=1 alone can match that old card before the new one opens.
+  await page.mouse.move(0, 0);
+  await expect(railPreview).toHaveCount(0);
+  await firstRailLandmark.hover();
   await expect(railPreview).toHaveCount(1);
   const railPreviewTitle = railPreview.locator('p.font-semibold');
   await expect(railPreviewTitle).toHaveText('Sanitized evidence ledger entry 1.');
