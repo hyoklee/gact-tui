@@ -240,7 +240,7 @@ describe('GACT 0.3 reducer', () => {
     expect(state.processed_cursors).toEqual([]);
   });
 
-  it('replaces a live tool call in place without breaking causal order', () => {
+  it('retains a live tool call identity and sequence when its result arrives', () => {
     const message = frame('1', 'message.upserted', {
       id: 'msg_1',
       session_id: 'sess_1',
@@ -250,7 +250,7 @@ describe('GACT 0.3 reducer', () => {
     });
     const call = frame('2', 'message.block.upserted', {
       message_id: 'msg_1',
-      block: { id: 'call_part', type: 'tool', tool_id: 'call_1' },
+      block: { id: 'call_part', type: 'tool', tool_id: 'call_1', sequence: 1 },
     });
     const surface = frame('3', 'message.block.upserted', {
       message_id: 'msg_1',
@@ -258,7 +258,7 @@ describe('GACT 0.3 reducer', () => {
     });
     const result = frame('4', 'message.block.upserted', {
       message_id: 'msg_1',
-      block: { id: 'result_part', type: 'tool', tool_id: 'call_1' },
+      block: { id: 'result_part', type: 'tool', tool_id: 'call_1', sequence: 3 },
     });
 
     const state = [message, call, surface, result].reduce(
@@ -267,8 +267,30 @@ describe('GACT 0.3 reducer', () => {
     );
 
     expect(state.messages.msg_1?.blocks).toEqual([
-      { id: 'result_part', type: 'tool', tool_id: 'call_1' },
+      { id: 'call_part', type: 'tool', tool_id: 'call_1', sequence: 1 },
       { id: 'surface_part', type: 'a2ui', surface_id: 'surface_1' },
+    ]);
+  });
+
+  it('retains a result-only tool block when a duplicate invocation block arrives', () => {
+    const message = frame('1', 'message.upserted', {
+      id: 'msg_1',
+      session_id: 'sess_1',
+      role: 'assistant',
+      created_at: '2026-08-22T12:00:00Z',
+      blocks: [{ id: 'result_part', type: 'tool', tool_id: 'call_1', sequence: 1 }],
+    });
+    const state = reduceTransportFrame(createEntityState(), message);
+    const duplicate = reduceTransportFrame(
+      state,
+      frame('2', 'message.block.upserted', {
+        message_id: 'msg_1',
+        block: { id: 'duplicate_part', type: 'tool', tool_id: 'call_1', sequence: 2 },
+      }),
+    );
+    expect(duplicate.messages.msg_1).toBe(state.messages.msg_1);
+    expect(duplicate.messages.msg_1?.blocks).toEqual([
+      { id: 'result_part', type: 'tool', tool_id: 'call_1', sequence: 1 },
     ]);
   });
 
