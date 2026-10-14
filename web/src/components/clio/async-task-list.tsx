@@ -74,9 +74,10 @@ export function AsyncTaskList({
     try {
       await onCancelTask(selected);
     } catch (reason) {
-      submitting.current.delete(handle);
       setRequested((previous) => new Set([...previous].filter((value) => value !== handle)));
       setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      submitting.current.delete(handle);
     }
   };
   return (
@@ -97,7 +98,7 @@ export function AsyncTaskList({
         const active = !settled.has(status);
         const cancellable = task.supported_actions?.includes('cancel');
         const cancelling =
-          (active || cancellable) && (task.cancel_requested || requested.has(handle));
+          status !== 'task_state_uncertain' && (active || cancellable) && (task.cancel_requested || requested.has(handle));
         const kind = task.task_kind ?? (task.kind === 'agent' ? 'Subagent' : 'MCP');
         return (
           <TaskActivityRow

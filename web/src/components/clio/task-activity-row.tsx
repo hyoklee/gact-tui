@@ -43,13 +43,16 @@ export function TaskActivityRow({
   const running =
     status === 'running' ||
     status === 'working' ||
+    status === 'executing' ||
+    status === 'stopping' ||
+    status === 'cancelling' ||
     status === 'cancellation_requested' ||
     status === 'resume_requested';
   const Icon = held
     ? PauseIcon
     : awaitingAnswer
       ? MessageCircleQuestionIcon
-      : yielded || status === 'queued'
+      : yielded || status === 'queued' || status === 'stopped'
         ? CircleDashedIcon
         : running
           ? LoaderCircleIcon
@@ -58,7 +61,11 @@ export function TaskActivityRow({
             : status === 'cancelled'
               ? BanIcon
               : CircleAlertIcon;
-  const label = awaitingAnswer
+  const label = status === 'task_state_uncertain'
+    ? 'Needs inspection'
+    : status === 'cancelling' || status === 'cancellation_requested'
+      ? 'Cancellation requested'
+      : awaitingAnswer
     ? 'Waiting for your answer'
     : status.replaceAll('_', ' ').replace(/^./u, (letter) => letter.toUpperCase());
   const result = task?.result?.answer || task?.result?.answer_excerpt || subagent?.result;
@@ -117,6 +124,8 @@ export function TaskActivityRow({
               History recording is unconfirmed. Check the task before retrying.
             </p>
           ) : null}
+          {status === 'stopping' ? <p role="status" className="text-xs text-muted-foreground">The agent is stopping. New input stays queued until its current execution exits.</p> : null}
+          {status === 'task_state_uncertain' ? <p role="status" className="text-xs text-muted-foreground">Execution or cleanup could not be confirmed. Inspect the task before retrying.</p> : null}
           {result ? (
             <div
               role="region"

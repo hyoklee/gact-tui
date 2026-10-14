@@ -45,7 +45,7 @@ export const userQuestionSchema = z.object({
   session_id: z.string(),
   prompt: z.string(),
   status: forwardCompatibleEnum(['pending', 'answered', 'cancelled', 'expired']),
-  kind: forwardCompatibleEnum(['freeform', 'choice', 'confirmation']).default('freeform'),
+  kind: forwardCompatibleEnum(['freeform', 'choice', 'confirmation', 'multi_choice']).default('freeform'),
   options: z
     .array(
       z.object({
@@ -104,6 +104,10 @@ export const workspaceSchema = z.object({
 export const runStateSchema = forwardCompatibleEnum([
   'queued',
   'running',
+  'stopping',
+  'stopped',
+  'cancellation_requested',
+  'task_state_uncertain',
   'pause_requested',
   'paused',
   'yielded',
@@ -120,7 +124,10 @@ export const runStateSchema = forwardCompatibleEnum([
 export const operationalRunStateSchema = z
   .string()
   .transform((value): z.infer<typeof runStateSchema> => {
-    if (value === 'working') return 'running';
+    if (value === 'working' || value === 'executing' || value === 'active' || value === 'busy') return 'running';
+    if (value === 'accepted' || value === 'submitting') return 'queued';
+    if (value === 'idle') return 'yielded';
+    if (value === 'cancelling') return 'cancellation_requested';
     if (value === 'input_required') return 'waiting_user';
     return runStateSchema.parse(value);
   });

@@ -2,6 +2,10 @@
 export type RunState =
   | 'queued'
   | 'running'
+  | 'stopping'
+  | 'stopped'
+  | 'cancellation_requested'
+  | 'task_state_uncertain'
   | 'pause_requested'
   | 'paused'
   | 'yielded'
