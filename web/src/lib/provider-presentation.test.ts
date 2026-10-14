@@ -24,6 +24,7 @@ function availableLogoIds(): Set<string> {
 
 describe('providerLogoId', () => {
   it.each([
+    ['amsc_mag', 'amsc'],
     ['bedrock', 'amazon-bedrock'],
     ['azure_openai', 'azure'],
     ['gemini', 'google'],
