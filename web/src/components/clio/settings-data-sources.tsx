@@ -11,15 +11,21 @@ import { SettingsSectionHeading } from './settings-section-heading';
 import { ConnectedAccountActions } from './connected-account-actions';
 import { ConnectedAccountSignIn } from './connected-source-auth';
 import { SourceProviderLogo } from './source-provider-logo';
-import { ObsidianAccountSettings } from './obsidian-account-settings';
-import { ObsidianIntroduction } from './obsidian-introduction';
+import { SourceProviderInfo } from './source-provider-info';
+import { SettingsSourceConnect } from './settings-source-connect';
+import type { ObsidianChoice } from './obsidian-source-form';
 
-/** Global accounts never list, create or change workspace data sources. */
+/** Shared accounts and explicit workspace-scoped source entry points. */
 export function DataSourceSettings() {
   const repository = useRepository();
   const { settings } = useConnectionSettings();
   const scope = connectionScope(settings);
   const client = useQueryClient();
+  const [connection, setConnection] = useState<{
+    scope: string;
+    provider: SourceProvider;
+    choice?: ObsidianChoice;
+  }>();
   const [selection, setSelection] = useState<{ scope: string; provider: SourceProvider }>();
   const login = selection?.scope === scope ? selection.provider : undefined;
   const setLogin = (provider?: SourceProvider) =>
@@ -38,7 +44,7 @@ export function DataSourceSettings() {
     <div className="grid gap-6">
       <SettingsSectionHeading
         title="Data sources"
-        description="Manage connected accounts and optional sync clients on this service. Choose specific folders and vaults from Attach in a workspace."
+        description="Connect data to a workspace or create a new knowledge vault. Sign in to services that require an account."
       />
       {login ? (
         <section
@@ -50,24 +56,16 @@ export function DataSourceSettings() {
             <ArrowLeftIcon aria-hidden="true" /> All accounts
           </Button>
           <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <SourceProviderLogo provider={login.id} />{' '}
-            {login.id === 'obsidian' ? 'Obsidian knowledge source' : `Sign in to ${login.name}`}
+            <SourceProviderLogo provider={login.id} /> Sign in to {login.name}
           </h2>
-          {login.id === 'obsidian' ? (
-            <>
-              <ObsidianIntroduction />
-              <ObsidianAccountSettings />
-            </>
-          ) : (
-            <ConnectedAccountSignIn
-              provider={login.id}
-              appUrl={login.account_url}
-              onComplete={() => {
-                void client.invalidateQueries({ queryKey: ['connected-storage', scope] });
-                setLogin(undefined);
-              }}
-            />
-          )}
+          <ConnectedAccountSignIn
+            provider={login.id}
+            appUrl={login.account_url}
+            onComplete={() => {
+              void client.invalidateQueries({ queryKey: ['connected-storage', scope] });
+              setLogin(undefined);
+            }}
+          />
         </section>
       ) : (
         <section aria-label="Data source accounts" className="divide-y divide-border/60">
@@ -96,10 +94,13 @@ export function DataSourceSettings() {
               <div className="flex min-w-48 items-center gap-3">
                 <SourceProviderLogo provider={row.id} />
                 <div>
-                  <h2 className="text-sm font-medium">{row.name}</h2>
+                  <h2 className="flex items-center gap-2 text-sm font-medium">
+                    {row.name}
+                    <SourceProviderInfo provider={row} />
+                  </h2>
                   <p className="mt-0.5 text-sm text-muted-foreground">
                     {row.id === 'obsidian' ? (
-                      'Create or attach vaults · Sync optional'
+                      'Knowledge graphs from linked notes'
                     ) : row.authenticated ? (
                       <span className="inline-flex items-center gap-1">
                         <CheckIcon aria-hidden="true" className="size-3.5" />
@@ -123,10 +124,9 @@ export function DataSourceSettings() {
                   <Button
                     size="sm"
                     variant="outline"
-                    aria-label="Manage Obsidian"
-                    onClick={() => setLogin(row)}
+                    onClick={() => setConnection({ scope, provider: row, choice: 'new' })}
                   >
-                    Manage
+                    New vault
                   </Button>
                 ) : row.authenticated ? (
                   <ConnectedAccountActions provider={row} />
@@ -141,6 +141,20 @@ export function DataSourceSettings() {
                     Sign in
                   </Button>
                 )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  aria-label={`Connect ${row.name}`}
+                  onClick={() =>
+                    setConnection({
+                      scope,
+                      provider: row,
+                      choice: row.id === 'obsidian' ? 'existing' : undefined,
+                    })
+                  }
+                >
+                  Connect
+                </Button>
               </div>
             </div>
           ))}
@@ -155,6 +169,14 @@ export function DataSourceSettings() {
         Accounts are shared across workspaces on this service. Signing in does not attach data or
         grant an agent access to a dataset. Manage attached sources in the workspace Files view.
       </p>
+      {connection?.scope === scope ? (
+        <SettingsSourceConnect
+          key={`${scope}:${connection.provider.id}:${connection.choice}`}
+          provider={connection.provider}
+          choice={connection.choice}
+          onClose={() => setConnection(undefined)}
+        />
+      ) : null}
     </div>
   );
 }

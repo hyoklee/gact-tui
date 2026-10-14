@@ -15,13 +15,14 @@ import { HostPathPicker } from './host-path-picker';
 import { ObsidianIntroduction } from './obsidian-introduction';
 import { ObsidianAccountSettings } from './obsidian-account-settings';
 
-type Choice = 'new' | 'existing' | 'sync';
+export type ObsidianChoice = 'new' | 'existing' | 'sync';
 
 /** Explicit vault creation and attachment share the same Obsidian knowledge semantics. */
 type ObsidianSourceFormProps = {
   workspaceId: string;
   hostLabel: string;
   browseStartPath?: string;
+  initialChoice?: ObsidianChoice;
   onConnected: (source: ConnectedSourceState) => void;
   onBack: () => void;
 };
@@ -37,23 +38,20 @@ function ObsidianSourceEditor({
   workspaceId,
   hostLabel,
   browseStartPath,
+  initialChoice = 'new',
   onConnected,
   onBack,
-}: {
-  workspaceId: string;
-  hostLabel: string;
-  browseStartPath?: string;
-  onConnected: (source: ConnectedSourceState) => void;
-  onBack: () => void;
-}) {
+}: ObsidianSourceFormProps) {
   const id = useId();
   const repository = useRepository();
   const { settings } = useConnectionSettings();
   const scope = connectionScope(settings);
-  const [choice, setChoice] = useState<Choice>('new');
+  const [choice, setChoice] = useState<ObsidianChoice>(initialChoice);
   const [label, setLabel] = useState('');
   const [root, setRoot] = useState('');
-  const [mode, setMode] = useState<SourceMode>('write_enabled');
+  const [mode, setMode] = useState<SourceMode>(
+    initialChoice === 'new' ? 'write_enabled' : 'read_only',
+  );
   const [vaultId, setVaultId] = useState('');
   const [encryptionPassword, setEncryptionPassword] = useState('');
   const [syncMode, setSyncMode] = useState<'pull-only' | 'bidirectional'>('pull-only');
@@ -110,7 +108,7 @@ function ObsidianSourceEditor({
     onSettled: () => setEncryptionPassword(''),
     onSuccess: (source) => onConnected(source),
   });
-  const choose = (value: Choice) => {
+  const choose = (value: ObsidianChoice) => {
     setChoice(value);
     setRoot('');
     setMode(value === 'new' ? 'write_enabled' : 'read_only');
@@ -131,7 +129,7 @@ function ObsidianSourceEditor({
           className="grid gap-2"
           aria-label="Vault setup"
           value={choice}
-          onValueChange={(value) => choose(value as Choice)}
+          onValueChange={(value) => choose(value as ObsidianChoice)}
         >
           {(
             [
