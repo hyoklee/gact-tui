@@ -24,6 +24,59 @@ test.beforeEach(async ({ page }) => {
   }, endpoint);
 });
 
+for (const width of [1280, 1600]) {
+  test(`HTML uses one preview/source/action toolbar at ${width}px`, async ({ page }, testInfo) => {
+    const name = 'report.html';
+    const html = '<h1>Fixture report</h1><script>window.__htmlPreviewRan = true;</script>';
+    let reads = 0;
+    await page.setViewportSize({ width, height: 900 });
+    await page.route('**/v1/workspaces/ws_flat_ndp/files?*', (route) =>
+      route.fulfill({
+        json: { entries: [{ path: name, type: 'file', size: html.length }], truncated: false },
+      }),
+    );
+    await page.route('**/v1/workspaces/ws_flat_ndp/files/read?*', (route) => {
+      reads += 1;
+      return route.fulfill({ contentType: 'text/html', body: html });
+    });
+    await page.goto('/workspaces/ws_flat_ndp/sessions/sess_flat_ndp');
+    await expect(page.getByRole('log', { name: 'Conversation', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Open workspace canvas', exact: true }).click();
+    await page.getByRole('button', { name: 'Open a canvas tab', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'File explorer', exact: true }).click();
+    await page.getByRole('treeitem', { name, exact: true }).click();
+    const viewer = page
+      .getByRole('complementary', { name: 'Workspace canvas' })
+      .locator('[data-slot="file-viewer"]');
+    await expect(viewer).toHaveCount(1);
+    const toolbar = viewer.locator('[data-slot="viewer-toolbar"]');
+    await expect(toolbar).toHaveCount(1);
+    await expect(toolbar.getByRole('tab', { name: 'Preview', exact: true })).toBeVisible();
+    const source = toolbar.getByRole('tab', { name: 'Source', exact: true });
+    await expect(source).toBeVisible();
+    await expect(viewer.getByText(/Static preview ·/)).toHaveCount(0);
+    const frame = viewer.getByTitle(`HTML preview of ${name}`);
+    await expect(frame).toBeVisible();
+    await expect(frame).toHaveAttribute('sandbox', '');
+    expect(await frame.getAttribute('srcdoc')).not.toContain('__htmlPreviewRan');
+    await expect
+      .poll(async () => {
+        const frameBounds = await frame.boundingBox();
+        const toolbarBounds = await toolbar.boundingBox();
+        return frameBounds!.y - toolbarBounds!.y - toolbarBounds!.height;
+      })
+      .toBeLessThanOrEqual(1);
+    await source.click();
+    await expect(viewer.locator('[data-language="html"]')).toContainText(
+      '__htmlPreviewRan = true;',
+    );
+    await toolbar.getByRole('tab', { name: 'Preview', exact: true }).click();
+    await expect(frame).toBeVisible();
+    expect(reads).toBe(1);
+    await page.screenshot({ path: testInfo.outputPath(`html-toolbar-${width}.png`) });
+  });
+}
+
 test('a narrow image pane keeps every action reachable in one bounded toolbar', async ({
   page,
 }, testInfo) => {
