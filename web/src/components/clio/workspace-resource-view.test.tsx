@@ -103,8 +103,18 @@ describe('WorkspaceResourceView', () => {
     const frame = await screen.findByTitle('HTML preview of report.txt');
     expect(frame).toHaveAttribute('sandbox', '');
     expect(frame.getAttribute('srcdoc')).not.toContain('originalSource');
+    expect(container.querySelectorAll('[data-slot="viewer-toolbar"]')).toHaveLength(1);
+    const toolbar = screen
+      .getByRole('tab', { name: 'Preview' })
+      .closest('[data-slot="viewer-toolbar"]');
+    expect(toolbar).not.toBeNull();
+    expect(toolbar).toContainElement(screen.getByRole('tab', { name: 'Source' }));
+    expect(screen.queryByText(/Static preview ·/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('tab', { name: 'Source' }));
     expect(container.querySelector('[data-language="html"]')).toHaveTextContent('originalSource()');
+    await userEvent.click(screen.getByRole('tab', { name: 'Preview' }));
+    expect(screen.getByTitle('HTML preview of report.txt')).toBeVisible();
+    expect(repository.resourcePreview).toHaveBeenCalledTimes(1);
   });
 
   it('moves between related message resources without opening another canvas tab', async () => {
