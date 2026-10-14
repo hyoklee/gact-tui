@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import galleryLoadProfile from './gallery-load-profile.json';
 import { createGalleryRepository } from './gallery-repository';
+import { createHash } from 'node:crypto';
 
 describe('hurricane gallery data', () => {
   const base = {
@@ -42,5 +43,20 @@ describe('illustrative gallery specimen', () => {
     expect(galleryLoadProfile).toHaveLength(65);
     expect(galleryLoadProfile[32]?.zone).toBe('Waist');
     expect(galleryLoadProfile[0]?.zone).toBe('Ends');
+  });
+});
+
+describe('documentation media gallery', () => {
+  it('keeps the original documentation screenshot and video bytes', async () => {
+    const sources = JSON.parse(await readFile(resolve('tests/fixtures/docs-media/docs-media-sources.json'), 'utf8')) as Array<{ source_path: string; sha256: string }>;
+    for (const source of sources) {
+      const filename = source.source_path.split('/').at(-1)!;
+      const bytes = await readFile(resolve('tests/fixtures/docs-media', filename));
+      expect(createHash('sha256').update(bytes).digest('hex')).toBe(source.sha256);
+    }
+    const repository = createGalleryRepository({} as Parameters<typeof createGalleryRepository>[0]);
+    expect(await repository.resolveA2uiReference('gallery', 'artifact://artifact_guide_export')).toMatchObject({
+      kind: 'artifact', name: 'docs-session-export.mp4', media_type: 'video/mp4', size_bytes: 719141,
+    });
   });
 });
