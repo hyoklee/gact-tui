@@ -7,6 +7,7 @@ import type { LanguageModelPreset } from '@clio/core/v3';
  * is the one display name. Kept equal to the service's canonical labels.
  */
 const providerIdNames: Record<string, string> = {
+  amsc_mag: 'AmSC Model Access Gateway',
   codex: 'OpenAI Codex',
   claude_code: 'Claude Code',
   openai: 'OpenAI',
@@ -24,6 +25,7 @@ const providerIdNames: Record<string, string> = {
 };
 
 const providerSummaries: Record<string, string> = {
+  amsc_mag: 'Use models available through your American Science Cloud project allocation.',
   codex: 'Use models included with your Codex subscription.',
   claude_code: 'Use models included with your Claude subscription.',
   openai: 'Use OpenAI models connected to this agent.',
@@ -72,6 +74,7 @@ export function providerSummary(
  * (see `providerLogoId`'s fallback) — e.g. `mistral` -> `mistral.svg`.
  */
 export const providerLogoIds: Record<string, string> = {
+  amsc_mag: 'amsc',
   aws_bedrock: 'amazon-bedrock',
   azure_openai: 'azure',
   bedrock: 'amazon-bedrock',
