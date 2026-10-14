@@ -133,12 +133,20 @@ fn read_response_body(resp: ureq::Response) -> Result<(String, &'static str), St
         .header("content-type")
         .unwrap_or_default()
         .to_ascii_lowercase();
-    let textual = content_type.starts_with("text/")
-        || content_type.contains("json")
-        || content_type.contains("xml")
-        || content_type.contains("javascript")
-        || content_type.contains("x-www-form-urlencoded")
-        || content_type.contains("svg");
+    let media_type = content_type.split(';').next().unwrap_or_default().trim();
+    // OOXML Office files are ZIP bytes, despite "openxml" in their media type.
+    let textual = media_type.starts_with("text/")
+        || media_type == "application/json"
+        || media_type.ends_with("+json")
+        || media_type == "application/xml"
+        || media_type.ends_with("+xml")
+        || matches!(
+            media_type,
+            "application/javascript"
+                | "application/ecmascript"
+                | "application/x-javascript"
+                | "application/x-www-form-urlencoded"
+        );
     // Read one byte past the ceiling so a body that sits exactly on it still
     // succeeds and the first oversized byte is what fails the read.
     let mut bytes = Vec::new();
