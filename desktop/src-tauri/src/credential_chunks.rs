@@ -1,6 +1,6 @@
 //! Long credentials stay in the OS keyring. Each chunk fits Windows' UTF-16 byte limit.
-//! A new generation is staged before publishing its manifest; a failed save leaves the
-//! previous credential readable. Legacy plain secrets and v1 manifests remain readable.
+//! A new generation is staged before publishing its manifest; failed chunk or manifest
+//! writes leave the previous credential readable. Plain secrets and v1 manifests remain readable.
 
 use std::sync::Mutex;
 

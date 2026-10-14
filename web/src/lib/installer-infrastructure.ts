@@ -232,7 +232,12 @@ function migratePreviouslyUnofferedProviders(options: InstallerOptions): void {
   const inventoryKey = 'clio.installer-provider-inventory.v1';
   if (window.localStorage.getItem(inventoryKey) === revision) return;
   if (window.localStorage.getItem(INSTALLER_REVISION_STORAGE_KEY) === revision) {
-    const selected = new Set(selection.split(',').map((id) => id.trim()));
+    const selected = new Set(
+      selection
+        .split(',')
+        .map((id) => id.trim())
+        .filter((id) => id !== 'argonne_minerva' && id !== 'argonne_tara'),
+    );
     const generatedHidden = [...KNOWN_PROVIDER_IDS]
       .filter((id) => id !== 'amsc_mag' && !selected.has(id))
       .sort();

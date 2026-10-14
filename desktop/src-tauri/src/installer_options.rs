@@ -108,7 +108,12 @@ fn expand_legacy_provider_families(families: &str) -> String {
             "openai" => &["codex", "openai"],
             "anthropic" => &["anthropic", "claude_code"],
             "google" => &["gemini", "vertex_ai"],
-            "argonne" => &["argonne_sophia", "argonne_metis"],
+            "argonne" => &[
+                "argonne_sophia",
+                "argonne_metis",
+                "argonne_minerva",
+                "argonne_tara",
+            ],
             "local" => &["lm_studio", "ollama", "llama_cpp", "vllm"],
             "other" => &["azure_openai", "bedrock", "nvidia_nim", "openrouter"],
             _ => &[],
@@ -142,16 +147,16 @@ fn migrate_pre_v4(value: &Value) -> Option<InstallerOptions> {
         .and_then(Value::as_str)
         .unwrap_or("bundled")
         .to_string();
-    let families = value
+    let providers = value
         .get("provider_families")
         .and_then(Value::as_str)
-        .unwrap_or("openai");
+        .map(expand_legacy_provider_families);
     Some(InstallerOptions {
         schema: CURRENT_SCHEMA,
         web_search,
         llama_cpp,
         clio_kit,
-        provider_ids: Some(expand_legacy_provider_families(families)),
+        provider_ids: providers,
         // Pre-v4 schemas never recorded an install timestamp.
         installed_at: None,
     })
@@ -531,7 +536,7 @@ mod tests {
         assert_eq!(migrated.schema, 4);
         assert_eq!(
             migrated.provider_ids.as_deref(),
-            Some("anthropic,claude_code,argonne_sophia,argonne_metis")
+            Some("anthropic,claude_code,argonne_sophia,argonne_metis,argonne_minerva,argonne_tara")
         );
         assert_eq!(migrated.installed_at, None);
     }
@@ -545,5 +550,15 @@ mod tests {
         let error = read_options(&root).unwrap_err();
         assert!(error.contains("not valid"), "unexpected error: {error}");
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn old_options_without_a_provider_choice_do_not_invent_openai() {
+        let absent = parse_options(r#"{"schema":3,"web_search":"not_requested"}"#).unwrap();
+        assert_eq!(absent.provider_ids, None);
+        let empty =
+            parse_options(r#"{"schema":3,"web_search":"not_requested","provider_families":""}"#)
+                .unwrap();
+        assert_eq!(empty.provider_ids.as_deref(), Some(""));
     }
 }
