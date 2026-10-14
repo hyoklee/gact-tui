@@ -1,4 +1,12 @@
 import { z } from 'zod';
+
+export const obsidianStatusSchema = z.object({
+  installed: z.boolean(),
+  version: z.string(),
+  state: z.enum(['missing', 'installing', 'ready', 'failed']),
+  message: z.string(),
+  authenticated: z.boolean(),
+});
 import { knowledgeSnapshotGeneratedSchema } from '../generated/clio-schemas/knowledge-snapshot.schema.js';
 import { knowledgeGraphSnapshotGeneratedSchema } from '../generated/clio-schemas/knowledge-graph-snapshot.schema.js';
 import { knowledgeNoteGeneratedSchema } from '../generated/clio-schemas/knowledge-note.schema.js';

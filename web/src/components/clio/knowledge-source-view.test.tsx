@@ -41,6 +41,41 @@ vi.mock('./workspace-resource-view', () => ({
 }));
 
 afterEach(cleanup);
+it.each([true, false])(
+  'explains an empty vault according to its actual edit permission (%s)',
+  async (writable) => {
+    repository.connectedSources.mockResolvedValue([
+      {
+        id: 'vault',
+        connection: 'local_vault',
+        capabilities: { note_write: writable },
+        link_access: writable ? 'write_through' : 'read_only',
+      },
+    ]);
+    repository.knowledgeSnapshot.mockResolvedValue({
+      source_id: 'vault',
+      revision: 'empty',
+      total: 0,
+      notes: [],
+      links: [],
+      warnings: [],
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <KnowledgeSourceView workspaceId="w" sourceId="vault" />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText('Your vault is ready')).toBeVisible();
+    expect(
+      await screen.findByText(
+        writable ? /to create notes in this vault/ : /This connection is read only/,
+      ),
+    ).toBeVisible();
+    expect(screen.queryByLabelText('Test graph')).not.toBeInTheDocument();
+  },
+);
+
 beforeEach(() => {
   vi.resetAllMocks();
   repository.connectedSources.mockResolvedValue([

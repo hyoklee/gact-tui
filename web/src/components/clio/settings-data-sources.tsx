@@ -11,6 +11,8 @@ import { SettingsSectionHeading } from './settings-section-heading';
 import { ConnectedAccountActions } from './connected-account-actions';
 import { ConnectedAccountSignIn } from './connected-source-auth';
 import { SourceProviderLogo } from './source-provider-logo';
+import { ObsidianAccountSettings } from './obsidian-account-settings';
+import { ObsidianIntroduction } from './obsidian-introduction';
 
 /** Global accounts never list, create or change workspace data sources. */
 export function DataSourceSettings() {
@@ -29,12 +31,14 @@ export function DataSourceSettings() {
     retry: false,
   });
   const accounts =
-    providers.data?.providers.filter((row) => row.authentication === 'browser') ?? [];
+    providers.data?.providers.filter(
+      (row) => row.authentication === 'browser' || row.id === 'obsidian',
+    ) ?? [];
   return (
     <div className="grid gap-6">
       <SettingsSectionHeading
         title="Data sources"
-        description="Sign in to accounts used by this service. Choose specific folders and datasets from Attach in a workspace."
+        description="Manage connected accounts and optional sync clients on this service. Choose specific folders and vaults from Attach in a workspace."
       />
       {login ? (
         <section
@@ -46,16 +50,24 @@ export function DataSourceSettings() {
             <ArrowLeftIcon aria-hidden="true" /> All accounts
           </Button>
           <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <SourceProviderLogo provider={login.id} /> Sign in to {login.name}
+            <SourceProviderLogo provider={login.id} />{' '}
+            {login.id === 'obsidian' ? 'Obsidian knowledge source' : `Sign in to ${login.name}`}
           </h2>
-          <ConnectedAccountSignIn
-            provider={login.id}
-            appUrl={login.account_url}
-            onComplete={() => {
-              void client.invalidateQueries({ queryKey: ['connected-storage', scope] });
-              setLogin(undefined);
-            }}
-          />
+          {login.id === 'obsidian' ? (
+            <>
+              <ObsidianIntroduction />
+              <ObsidianAccountSettings />
+            </>
+          ) : (
+            <ConnectedAccountSignIn
+              provider={login.id}
+              appUrl={login.account_url}
+              onComplete={() => {
+                void client.invalidateQueries({ queryKey: ['connected-storage', scope] });
+                setLogin(undefined);
+              }}
+            />
+          )}
         </section>
       ) : (
         <section aria-label="Data source accounts" className="divide-y divide-border/60">
@@ -86,7 +98,9 @@ export function DataSourceSettings() {
                 <div>
                   <h2 className="text-sm font-medium">{row.name}</h2>
                   <p className="mt-0.5 text-sm text-muted-foreground">
-                    {row.authenticated ? (
+                    {row.id === 'obsidian' ? (
+                      'Create or attach vaults · Sync optional'
+                    ) : row.authenticated ? (
                       <span className="inline-flex items-center gap-1">
                         <CheckIcon aria-hidden="true" className="size-3.5" />
                         Signed in
@@ -105,7 +119,16 @@ export function DataSourceSettings() {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {row.authenticated ? (
+                {row.id === 'obsidian' ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    aria-label="Manage Obsidian"
+                    onClick={() => setLogin(row)}
+                  >
+                    Manage
+                  </Button>
+                ) : row.authenticated ? (
                   <ConnectedAccountActions provider={row} />
                 ) : (
                   <Button

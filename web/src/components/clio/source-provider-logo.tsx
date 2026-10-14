@@ -3,8 +3,9 @@ import globusLight from '../../../../branding/provider-logos/globus-light.png';
 import driveLogo from '../../../../branding/provider-logos/google-drive.png';
 import githubBlack from '../../../../branding/provider-logos/github-black.svg';
 import githubWhite from '../../../../branding/provider-logos/github-white.svg';
+import obsidianLogo from '../../../../branding/provider-logos/obsidian.svg';
 import type { SourceProviderId } from '@clio/core/v3';
-import { BookOpenIcon, FolderIcon, TerminalIcon } from 'lucide-react';
+import { FolderIcon, TerminalIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /** Original provider artwork; protocol-based sources use the shared system glyphs. */
@@ -56,7 +57,11 @@ export function SourceProviderLogo({
           />
         </>
       ) : provider === 'obsidian' ? (
-        <BookOpenIcon aria-hidden="true" className={detail ? 'size-10' : 'size-5'} />
+        <img
+          alt=""
+          src={obsidianLogo}
+          className={cn('object-contain', detail ? 'size-14' : 'size-7')}
+        />
       ) : provider === 'sftp' ? (
         <TerminalIcon aria-hidden="true" className={detail ? 'size-10' : 'size-5'} />
       ) : (

@@ -1,5 +1,26 @@
-import { memo } from 'react';
+import { memo, type MouseEvent } from 'react';
 import type { KnowledgeGraphLayout } from '@/lib/knowledge-graph-layout';
+
+/** Overlapping hit targets resolve to the closest dot, independently of SVG paint order. */
+function pointerNote(
+  event: MouseEvent<SVGCircleElement>,
+  graph: KnowledgeGraphLayout,
+  fallback: string,
+): string {
+  const matrix = event.currentTarget.getScreenCTM?.();
+  if (!matrix) return fallback;
+  const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+  let closest = fallback;
+  let distance = Infinity;
+  for (const node of graph.nodes) {
+    const candidate = (node.x - point.x) ** 2 + (node.y - point.y) ** 2;
+    if (candidate < distance) {
+      closest = node.id;
+      distance = candidate;
+    }
+  }
+  return closest;
+}
 
 /** Keep network geometry stable during selection and viewport translation. */
 export const KnowledgeGraphGeometry = memo(function KnowledgeGraphGeometry({
@@ -55,6 +76,7 @@ export const KnowledgeGraphGeometry = memo(function KnowledgeGraphGeometry({
             fillOpacity={!active || related.has(node.id) ? (node.degree ? 0.8 : 0.45) : 0.2}
             stroke={selected === node.id ? 'var(--primary)' : 'none'}
             strokeWidth={2 / scale}
+            pointerEvents="none"
           />
           <circle
             data-note={node.id}
@@ -68,8 +90,11 @@ export const KnowledgeGraphGeometry = memo(function KnowledgeGraphGeometry({
             aria-pressed={selected === node.id}
             tabIndex={selected ? (selected === node.id ? 0 : -1) : index ? -1 : 0}
             onPointerDown={(event) => event.stopPropagation()}
-            onClick={() => onSelect(node.id)}
-            onMouseEnter={() => onHover(node.id)}
+            onClick={(event) =>
+              onSelect(event.detail ? pointerNote(event, graph, node.id) : node.id)
+            }
+            onMouseEnter={(event) => onHover(pointerNote(event, graph, node.id))}
+            onMouseMove={(event) => onHover(pointerNote(event, graph, node.id))}
             onMouseLeave={() => onHover('')}
             onFocus={() => onHover(node.id)}
             onBlur={() => onHover('')}

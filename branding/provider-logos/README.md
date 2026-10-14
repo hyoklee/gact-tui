@@ -11,3 +11,7 @@ width of at least 54 px. Brand guidance: https://www.globus.org/legal/logo-usage
 `github-black.svg` and `github-white.svg` are the unaltered Invertocat artwork
 from https://brand.github.com/GitHub_Logos.zip, used to identify the GitHub
 integration. Guidance: https://brand.github.com/foundations/logo.
+
+`obsidian.svg` is the unmodified purple mark from
+https://obsidian.md/images/obsidian-logo-gradient.svg, used to identify Obsidian
+vaults and the official Sync client. Guidance: https://obsidian.md/brand.
