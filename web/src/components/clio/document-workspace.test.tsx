@@ -407,7 +407,7 @@ describe('ClioDocumentWorkspace', () => {
   });
 
   it.each(['ooxml-word', 'ooxml-slides', 'ooxml-sheet'] as const)(
-    'opens the saved PDF for a %s artifact without converting it again',
+    'opens the saved PDF for a %s artifact fitted to the page without converting it again',
     async (profile) => {
       repository.documentManifest.mockImplementation(async (id: string) =>
         id === 'artifact_pdf'
@@ -419,7 +419,7 @@ describe('ClioDocumentWorkspace', () => {
       renderWorkspace();
 
       expect(await screen.findByText('PDF preview')).toBeVisible();
-      expect(screen.getByText('PDF preview')).toHaveAttribute('data-fit', 'width');
+      expect(screen.getByText('PDF preview')).toHaveAttribute('data-fit', 'page');
       await userEvent.click(screen.getByRole('button', { name: 'Document information' }));
       expect(screen.getByText('Saved PDF preview')).toBeVisible();
       expect(screen.queryByText('PDF document')).not.toBeInTheDocument();
