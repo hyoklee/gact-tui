@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 import { displayLineBottoms } from './display-line-geometry';
 import { ResultDialogContent } from './result-dialog-content';
@@ -119,7 +120,10 @@ export function BoundedResult({
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 px-2 font-medium text-primary hover:text-primary/80"
+          className={cn(
+            'h-7 font-medium text-primary hover:text-primary/80',
+            unit === 'items' ? 'border-0 px-0' : 'px-2',
+          )}
           aria-controls={id}
           aria-expanded={expanded}
           disabled={loading}
@@ -140,7 +144,10 @@ export function BoundedResult({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 font-medium text-primary hover:text-primary/80"
+              className={cn(
+                'h-7 font-medium text-primary hover:text-primary/80',
+                unit === 'items' ? 'border-0 px-0' : 'px-2',
+              )}
               aria-expanded={open}
               onClick={() => void expand()}
             >
