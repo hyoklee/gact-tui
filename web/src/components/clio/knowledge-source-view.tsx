@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { useRepository } from '@/hooks/use-repository';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { connectionScope } from '@/lib/connection-scope';
+import { vocab } from '@/lib/brand-vocabulary';
 import { KNOWLEDGE_ATTACH_EVENT, type KnowledgeAttachRequest } from '@/lib/knowledge-navigation';
 import { KnowledgeGraph } from './knowledge-graph';
 import { MarkdownFilePreview } from './markdown-file-preview';
@@ -34,6 +35,11 @@ export function KnowledgeSourceView({
   const [selected, setSelected] = useState('');
   const [offset, setOffset] = useState(0);
   const [attached, setAttached] = useState('');
+  const sources = useQuery({
+    queryKey: ['knowledge-source', scope, workspaceId, sourceId],
+    queryFn: ({ signal }) => repository.connectedSources(workspaceId, signal),
+  });
+  const source = sources.data?.find((row) => row.id === sourceId);
   const snapshot = useQuery({
     queryKey: ['knowledge', scope, workspaceId, sourceId, view, search, focus, offset, attachments],
     queryFn: ({ signal }) =>
@@ -50,12 +56,8 @@ export function KnowledgeSourceView({
             { query: search, focus, offset },
             signal,
           ),
+    refetchInterval: source?.connection === 'headless_sync' ? 5000 : false,
   });
-  const sources = useQuery({
-    queryKey: ['knowledge-source', scope, workspaceId, sourceId],
-    queryFn: ({ signal }) => repository.connectedSources(workspaceId, signal),
-  });
-  const source = sources.data?.find((row) => row.id === sourceId);
   const note = useQuery({
     queryKey: ['knowledge-note', scope, workspaceId, sourceId, selected, snapshot.data?.revision],
     queryFn: ({ signal }) => repository.knowledgeOpen(workspaceId, sourceId, selected, '', signal),
@@ -235,7 +237,17 @@ export function KnowledgeSourceView({
             className={`grid min-h-0 flex-1 grid-cols-1 overflow-auto ${selected ? '@3xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.8fr)]' : ''}`}
           >
             <div className={`min-h-80 min-w-0 ${selected ? 'border-r' : ''}`}>
-              {view === 'graph' ? (
+              {snapshot.data.total === 0 && !search && !focus ? (
+                <div role="status" className="grid gap-2 p-6 text-sm">
+                  <h3 className="font-medium">Your vault is ready</h3>
+                  <p className="text-muted-foreground">There are no notes yet.</p>
+                  <p className="max-w-xl leading-6 text-muted-foreground">
+                    {source?.capabilities?.note_write && source.link_access !== 'read_only'
+                      ? `Ask ${vocab.agent} to create notes in this vault, or add Markdown files to the folder and choose Refresh.`
+                      : 'Add Markdown files to the folder and choose Refresh. This connection is read only.'}
+                  </p>
+                </div>
+              ) : view === 'graph' ? (
                 <KnowledgeGraph snapshot={snapshot.data} selected={selected} onSelect={select} />
               ) : (
                 <ul aria-label="Vault files" className="h-full overflow-auto p-2">

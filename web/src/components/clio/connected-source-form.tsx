@@ -1,4 +1,5 @@
 import { inTauri } from '@/lib/transport/tauri-runtime';
+import { vocab } from '@/lib/brand-vocabulary';
 import type {
   CreateSourceInput,
   SourceProvider,
@@ -14,6 +15,7 @@ import { useRepository } from '@/hooks/use-repository';
 import { HostPathPicker } from './host-path-picker';
 import { InfoTip } from './info-tip';
 import { SourceProviderLogo } from './source-provider-logo';
+import { ObsidianSourceForm } from './obsidian-source-form';
 import { SourceSshTarget } from './source-ssh-target';
 import { GitHubRevisionPicker } from './github-revision-picker';
 
@@ -89,7 +91,15 @@ export function ConnectedSourceForm({
       />
     </Field>
   );
-  return (
+  return provider.id === 'obsidian' && !source ? (
+    <ObsidianSourceForm
+      workspaceId={workspaceId}
+      hostLabel={hostLabel}
+      browseStartPath={browseStartPath}
+      onConnected={onConnected}
+      onBack={onBack}
+    />
+  ) : (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
         <SourceProviderLogo provider={provider.id} />
@@ -129,37 +139,15 @@ export function ConnectedSourceForm({
           )}
           {provider.id === 'obsidian' && (
             <div className="space-y-3 text-sm">
-              <Field>
-                <FieldLabel htmlFor="vault-connection">Vault connection</FieldLabel>
-                <select
-                  id="vault-connection"
-                  className="w-full rounded-md border bg-background p-2"
-                  value={configuration.obsidian_connection ?? 'local_vault'}
-                  onChange={(event) =>
-                    setConfiguration((previous) => ({
-                      ...previous,
-                      obsidian_connection: event.target.value as 'local_vault' | 'headless_sync',
-                    }))
-                  }
-                >
-                  <option value="local_vault">Vault on this host</option>
-                  <option value="headless_sync">Obsidian Headless Sync copy</option>
-                </select>
-              </Field>
               <p className="text-xs text-muted-foreground">
-                Notes, tags, aliases and authored links form a knowledge source. Starts read only.
-                Select the whole vault or a folder inside it. Only that folder is available to
-                knowledge tools. Hidden folders and Obsidian settings are excluded.
+                This vault is a knowledge source. Only its approved folder is available to knowledge
+                tools. Hidden folders and Obsidian settings are excluded.
               </p>
               {configuration.obsidian_connection === 'headless_sync' && (
                 <div className="space-y-2">
                   <p>
-                    Set up a dedicated copy on {hostLabel} with the official client: run{' '}
-                    <code>ob login</code>, then{' '}
-                    <code>ob sync-setup --vault &lt;name&gt; --path &lt;copy&gt;</code> privately in
-                    a terminal. Select that copy below. Requires Obsidian Sync. Use one sync method
-                    per device. You can select a folder inside the copy; the official client still
-                    syncs the enclosing vault, while knowledge access stays in the selected folder.
+                    {vocab.agent} manages this synced copy on {hostLabel}. Manage the official Sync
+                    client and its account in Settings → Data sources → Obsidian.
                   </p>
                   <Field>
                     <FieldLabel htmlFor="vault-sync-mode">Sync direction</FieldLabel>
@@ -227,7 +215,7 @@ export function ConnectedSourceForm({
               )}
             </div>
             <div className="flex gap-2">
-              {provider.id !== 'local' && provider.id !== 'sftp' && (
+              {provider.id !== 'local' && provider.id !== 'sftp' && provider.id !== 'obsidian' && (
                 <Input
                   form={formId}
                   id="source-root"
