@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { brand } from '@brand';
 import { useEffect } from 'react';
-import { Navigate, Route, Routes, useNavigate, useLocation, matchPath } from 'react-router-dom';
+import { Navigate, Route, Routes, useNavigate, useLocation } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Toaster } from '@/components/ui/sonner';
 import { useMenuAction, useNativeMenuBridge } from '@/tauri/menu-actions';
@@ -14,15 +14,11 @@ import { scheduleBackgroundUpdateCheck } from '@/tauri/desktop-updater';
 import { openExternalUrlOrToast } from '@/tauri/external-url';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { useProviderCatalog } from '@/hooks/use-provider-catalog';
-import {
-  ClioSelectionActionToolbar,
-  SelectionActionsProvider,
-} from '@/components/clio/selection-actions';
+import { ClioSelectionActionToolbar } from '@/components/clio/selection-actions';
 import { UpdateRestartOverlay } from '@/components/clio/update-restart-overlay';
 import { UpdateRestartRecovery } from '@/components/clio/update-restart-recovery';
 import { returnRouteFromState } from '@/lib/workspace-route-memory';
 import { SandboxSetupNotification } from '@/components/clio/sandbox-setup-notification';
-import { ClioCommandMenu } from '@/components/clio/command-menu';
 
 const ConnectionPage = lazy(() =>
   import('@/routes/connection-page').then((module) => ({ default: module.ConnectionPage })),
@@ -108,12 +104,9 @@ export default function App() {
   }, []);
 
   const appContent = (
-    <SelectionActionsProvider>
+    <>
       <ProviderCatalogWarmup />
       <SandboxSetupNotification />
-      {!matchPath('/workspaces/:workspaceId/sessions/:sessionId', location.pathname) ? (
-        <ClioCommandMenu />
-      ) : null}
       <UpdateRestartRecovery />
       <Suspense fallback={<RouteFallback />}>
         <Routes>
@@ -132,7 +125,7 @@ export default function App() {
       <UpdateRestartOverlay />
       {/* One toolbar for every selectable surface; actions register per page. */}
       <ClioSelectionActionToolbar />
-    </SelectionActionsProvider>
+    </>
   );
 
   if (!desktopHost) return appContent;
