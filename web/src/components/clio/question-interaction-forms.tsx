@@ -4,8 +4,7 @@ import type {
   PendingInteractionResponse,
 } from '@clio/core/v3';
 import { AlertTriangleIcon, ExternalLinkIcon } from 'lucide-react';
-import { useState, type ChangeEvent, type ReactNode } from 'react';
-import { Frame, FramePanel } from '@/components/reui/frame';
+import { useState, type ChangeEvent } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -19,13 +18,13 @@ import {
   FieldTitle,
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { openExternalUrl } from '@/tauri/external-url';
-import { pendingInteractionDomId } from './interaction-control';
 import { ResponseErrorNotice } from './pending-interaction-notices';
-import { InteractionFrameHeader } from './interaction-frame-header';
+import { QuestionResponseFrame as QuestionFrame } from './question-response-frame';
 
 interface QuestionSurfaceProps {
   interaction: PendingInteraction;
@@ -96,7 +95,7 @@ export function StructuredQuestionResponse(props: QuestionSurfaceProps) {
         ))}
       </FieldGroup>
       <div className="mt-2 flex justify-end">
-        <Button disabled={props.disabled || sending} onClick={() => void submit()}>
+        <Button size="sm" disabled={props.disabled || sending} onClick={() => void submit()}>
           {sending ? 'Sending…' : 'Send response'}
         </Button>
       </div>
@@ -157,6 +156,7 @@ export function UrlConsentResponse(props: QuestionSurfaceProps) {
       <ResponseErrorNotice error={props.responseError} />
       <div className="mt-2 flex flex-wrap justify-end gap-2">
         <Button
+          size="sm"
           disabled={props.disabled || sending}
           onClick={() =>
             void props
@@ -170,39 +170,16 @@ export function UrlConsentResponse(props: QuestionSurfaceProps) {
         >
           Decline
         </Button>
-        <Button disabled={props.disabled || sending || !url} onClick={() => void accept()}>
+        <Button
+          size="sm"
+          disabled={props.disabled || sending || !url}
+          onClick={() => void accept()}
+        >
           <ExternalLinkIcon aria-hidden="true" />
           Open link
         </Button>
       </div>
     </QuestionFrame>
-  );
-}
-
-function QuestionFrame({ children, ...props }: QuestionSurfaceProps & { children: ReactNode }) {
-  const canCancel = (props.interaction.actions ?? []).includes('cancel');
-  return (
-    <Frame
-      className="min-w-0 self-stretch"
-      data-interaction-kind={props.interaction.kind}
-      dense
-      id={pendingInteractionDomId(props.interaction.id)}
-      spacing="xs"
-      tabIndex={-1}
-    >
-      <InteractionFrameHeader
-        disabled={props.disabled}
-        interaction={props.interaction}
-        onCancel={
-          canCancel
-            ? () => void props.onResponse(props.interaction, { action: 'cancel' })
-            : undefined
-        }
-        ownerLabel={props.ownerLabel}
-        showOwner={props.showOwner}
-      />
-      <FramePanel className="min-w-0 overflow-hidden">{children}</FramePanel>
-    </Frame>
   );
 }
 
@@ -232,25 +209,27 @@ function SchemaField({
             const key = String(option);
             const checked = selected.some((item) => Object.is(item, option));
             return (
-              <FieldLabel htmlFor={`${id}-${index}`} key={key}>
-                <Field orientation="horizontal">
-                  <Checkbox
-                    checked={checked}
-                    disabled={disabled}
-                    id={`${id}-${index}`}
-                    onCheckedChange={(next) =>
-                      onChange(
-                        next === true
-                          ? [...selected, option]
-                          : selected.filter((item) => !Object.is(item, option)),
-                      )
-                    }
-                  />
-                  <FieldContent>
-                    <FieldTitle>{field.enum_names?.[index] ?? key}</FieldTitle>
-                  </FieldContent>
-                </Field>
-              </FieldLabel>
+              <Label
+                className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50"
+                htmlFor={`${id}-${index}`}
+                key={key}
+              >
+                <Checkbox
+                  checked={checked}
+                  disabled={disabled}
+                  id={`${id}-${index}`}
+                  onCheckedChange={(next) =>
+                    onChange(
+                      next === true
+                        ? [...selected, option]
+                        : selected.filter((item) => !Object.is(item, option)),
+                    )
+                  }
+                />
+                <FieldContent>
+                  <FieldTitle>{field.enum_names?.[index] ?? key}</FieldTitle>
+                </FieldContent>
+              </Label>
             );
           })}
         </div>
@@ -269,14 +248,16 @@ function SchemaField({
           value={value === undefined ? '' : String(value)}
         >
           {enumValues.map((option, index) => (
-            <FieldLabel htmlFor={`${id}-${index}`} key={String(option)}>
-              <Field orientation="horizontal">
-                <RadioGroupItem id={`${id}-${index}`} value={String(option)} />
-                <FieldContent>
-                  <FieldTitle>{field.enum_names?.[index] ?? String(option)}</FieldTitle>
-                </FieldContent>
-              </Field>
-            </FieldLabel>
+            <Label
+              className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50"
+              htmlFor={`${id}-${index}`}
+              key={String(option)}
+            >
+              <RadioGroupItem id={`${id}-${index}`} value={String(option)} />
+              <FieldContent>
+                <FieldTitle>{field.enum_names?.[index] ?? String(option)}</FieldTitle>
+              </FieldContent>
+            </Label>
           ))}
         </RadioGroup>
         <FieldError>{error}</FieldError>

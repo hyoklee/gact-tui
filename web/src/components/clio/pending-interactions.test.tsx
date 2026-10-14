@@ -413,6 +413,73 @@ describe('ClioPendingInteractions', () => {
     });
   });
 
+  it('lets the plus control choose an option and submit its clarification', async () => {
+    const user = userEvent.setup();
+    const interaction = pending('question', {
+      prompt: 'Choose a comparison.',
+      actions: ['answer'],
+      payload: {
+        question_kind: 'choice',
+        options: [
+          { label: 'Treatment groups', value: 'treatment' },
+          { label: 'Changes over time', value: 'time' },
+        ],
+        allow_freeform: true,
+      },
+    });
+    const onResponse = renderPending([interaction]);
+
+    expect(screen.getByRole('button', { name: 'Add comment on Treatment groups' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Add comment on Changes over time' }));
+    expect(screen.getByRole('radio', { name: 'Changes over time' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Something else' })).not.toBeChecked();
+    await user.type(
+      screen.getByRole('textbox', { name: 'Comment on Changes over time' }),
+      'Use the last week only.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Send response' }));
+    expect(onResponse).toHaveBeenCalledWith(interaction, {
+      action: 'answer',
+      selected_options: ['time'],
+      answer: 'Use the last week only.',
+    });
+  });
+
+  it('opens comments by keyboard and preserves a hidden draft until submission', async () => {
+    const user = userEvent.setup();
+    const interaction = pending('question', {
+      prompt: 'Choose an output.',
+      actions: ['answer'],
+      payload: {
+        question_kind: 'choice',
+        options: [{ label: 'Table', value: 'table' }],
+      },
+    });
+    const onResponse = renderPending([interaction]);
+
+    await user.click(screen.getByRole('radio', { name: 'Table' }));
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Add comment on Table' })).toHaveFocus();
+    await user.keyboard('{Enter}');
+    await user.tab();
+    expect(screen.getByRole('textbox', { name: 'Comment on Table' })).toHaveFocus();
+    await user.keyboard('Include missing measurements.');
+    await user.click(screen.getByRole('button', { name: 'Hide comment on Table' }));
+    expect(screen.queryByRole('textbox', { name: 'Comment on Table' })).not.toBeInTheDocument();
+    expect(onResponse).not.toHaveBeenCalled();
+
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('textbox', { name: 'Comment on Table' })).toHaveValue(
+      'Include missing measurements.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Send response' }));
+    expect(onResponse).toHaveBeenCalledWith(interaction, {
+      action: 'answer',
+      selected_options: ['table'],
+      answer: 'Include missing measurements.',
+    });
+  });
+
   it('reports an unavailable owner honestly instead of inventing a specialist', () => {
     const interaction = pending('question', {
       id: 'question:unlisted-owner',

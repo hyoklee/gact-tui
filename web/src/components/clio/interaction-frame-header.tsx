@@ -10,6 +10,7 @@ import { TechnicalDetails } from './technical-details';
 import { QuestionMarkdown } from './question-markdown';
 
 interface InteractionFrameHeaderProps {
+  className?: string;
   interaction: PendingInteraction;
   ownerLabel?: string;
   showOwner: boolean;
@@ -21,6 +22,7 @@ interface InteractionFrameHeaderProps {
 
 /** Shared compact heading for questions and interactive response surfaces. */
 export function InteractionFrameHeader({
+  className,
   interaction,
   ownerLabel,
   showOwner,
@@ -37,7 +39,9 @@ export function InteractionFrameHeader({
         ? BoxesIcon
         : MessageCircleQuestionIcon;
   return (
-    <FrameHeader className={cn('relative flex-row items-start gap-2', actions ? 'pr-28' : 'pr-10')}>
+    <FrameHeader
+      className={cn('relative flex-row items-start gap-2', actions ? 'pr-28' : 'pr-10', className)}
+    >
       <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-action" />
       <div className="min-w-0 flex-1">
         <FrameTitle
