@@ -19,9 +19,13 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url,
 ).toString();
 
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 4;
+const ZOOM_STEP = 0.15;
+
 export function ClioDocumentPdfViewer({
   bytes,
-  fit = 'width',
+  fit = 'page',
   initialPage,
   name,
   onSelection,
@@ -39,9 +43,14 @@ export function ClioDocumentPdfViewer({
   const [pageCount, setPageCount] = useState(0);
   const [hostWidth, setHostWidth] = useState(640);
   const [scale, setScale] = useState(1);
-  const zoomIn = useCallback(() => setScale((value) => Math.min(1.75, value + 0.15)), []);
-  const zoomOut = useCallback(() => setScale((value) => Math.max(0.7, value - 0.15)), []);
-  const resetZoom = useCallback(() => setScale(1), []);
+  const [fitOverride, setFitOverride] = useState<'page'>();
+  const fitMode = fitOverride ?? fit;
+  const zoomIn = useCallback(() => setScale((value) => Math.min(MAX_ZOOM, value + ZOOM_STEP)), []);
+  const zoomOut = useCallback(() => setScale((value) => Math.max(MIN_ZOOM, value - ZOOM_STEP)), []);
+  const resetZoom = useCallback(() => {
+    setFitOverride('page');
+    setScale(1);
+  }, []);
   const [scroll, setScroll] = useState({ top: 0, viewport: 0 });
   const [measured, setMeasured] = useState<{ geometry: string; height: number }>();
   // pdf.js transfers a typed array it is handed to its worker thread, which
@@ -52,7 +61,10 @@ export function ClioDocumentPdfViewer({
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const update = (width: number) => setHostWidth(Math.max(1, width - 32));
+    // clientWidth excludes the scrollbar. Reserve the scroller's 24px padding
+    // and the page border so a fitted page never creates horizontal overflow.
+    const update = (width: number) =>
+      setHostWidth(Math.max(1, (scrollRef.current?.clientWidth || width) - 26));
     update(host.getBoundingClientRect().width);
     const observer = new ResizeObserver(([entry]) => {
       if (entry) update(entry.contentRect.width);
@@ -64,6 +76,7 @@ export function ClioDocumentPdfViewer({
   const readScroll = useCallback(() => {
     const container = scrollRef.current;
     if (!container) return;
+    if (container.clientWidth > 0) setHostWidth(Math.max(1, container.clientWidth - 26));
     setScroll((current) =>
       current.top === container.scrollTop && current.viewport === container.clientHeight
         ? current
@@ -79,6 +92,22 @@ export function ClioDocumentPdfViewer({
     observer.observe(container);
     return () => observer.disconnect();
   }, [readScroll]);
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const onWheel = (event: WheelEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.deltaY === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.deltaY < 0) zoomIn();
+      else zoomOut();
+    };
+    // React's delegated wheel listener can be passive. Cancel at the PDF
+    // scrollport before the event reaches browser or Desktop window zoom.
+    container.addEventListener('wheel', onWheel, { passive: false });
+    return () => container.removeEventListener('wheel', onWheel);
+  }, [zoomIn, zoomOut]);
 
   // The scroll position alone decides the page window. An initial-page anchor
   // jumps the scroll container once a real rendered page supplies its height.
@@ -106,9 +135,10 @@ export function ClioDocumentPdfViewer({
   // A rendered page is the only honest page height. The estimate stands in
   // until one exists, and a measurement taken at a different width or zoom is
   // discarded rather than trusted at the new geometry.
+  const readingHeight = scroll.viewport > 0 ? Math.max(1, scroll.viewport - 26) : 0;
   const pageWidth =
-    fit === 'page' ? fitPdfPageWidth({ hostWidth, viewportHeight: scroll.viewport }) : hostWidth;
-  const geometry = `${pageWidth}:${scale}`;
+    fitMode === 'page' ? fitPdfPageWidth({ hostWidth, viewportHeight: readingHeight }) : hostWidth;
+  const geometry = `${fitMode}:${hostWidth}:${readingHeight}:${scale}`;
   const measurePage = useCallback(
     (element: HTMLDivElement | null) => {
       if (!element) return;
@@ -163,8 +193,8 @@ export function ClioDocumentPdfViewer({
         onIn={zoomIn}
         onOut={zoomOut}
         onFit={resetZoom}
-        disabledIn={scale >= 1.75}
-        disabledOut={scale <= 0.7}
+        disabledIn={scale >= MAX_ZOOM}
+        disabledOut={scale <= MIN_ZOOM}
         labels={{
           in: 'Zoom in',
           out: 'Zoom out',
@@ -199,22 +229,30 @@ export function ClioDocumentPdfViewer({
             <div
               aria-hidden="true"
               data-pdf-spacer="leading"
-              style={{ height: `${pageWindow.leadingSpacerPx}px` }}
+              style={{
+                height: `${pageWindow.leadingSpacerPx}px`,
+                display: pageWindow.leadingSpacerPx > 0 ? undefined : 'none',
+              }}
             />
             {windowedPages.map((visiblePage) => (
               <PdfPage
                 key={visiblePage}
+                fit={fitMode}
                 onMeasure={visiblePage === pageWindow.first ? measurePage : undefined}
                 onMouseUp={captureSelection}
                 pageNumber={visiblePage}
                 scale={scale}
-                width={pageWidth}
+                width={hostWidth}
+                viewportHeight={readingHeight}
               />
             ))}
             <div
               aria-hidden="true"
               data-pdf-spacer="trailing"
-              style={{ height: `${pageWindow.trailingSpacerPx}px` }}
+              style={{
+                height: `${pageWindow.trailingSpacerPx}px`,
+                display: pageWindow.trailingSpacerPx > 0 ? undefined : 'none',
+              }}
             />
           </div>
         </Document>
@@ -227,20 +265,26 @@ export function ClioDocumentPdfViewer({
 }
 
 function PdfPage({
+  fit,
   onMeasure,
   onMouseUp,
   pageNumber,
   scale,
   width,
+  viewportHeight,
 }: {
+  fit: 'page' | 'width';
   onMeasure?: (element: HTMLDivElement | null) => void;
   onMouseUp: () => void;
   pageNumber: number;
   scale: number;
   width: number;
+  viewportHeight: number;
 }) {
   const pageRef = useRef<HTMLDivElement>(null);
   const [aspectRatio, setAspectRatio] = useState(11 / 8.5);
+  const fittedWidth =
+    fit === 'page' ? fitPdfPageWidth({ hostWidth: width, viewportHeight, aspectRatio }) : width;
 
   return (
     <div
@@ -251,7 +295,7 @@ function PdfPage({
     >
       <Page
         devicePixelRatio={pdfRenderDensity({
-          width: width * scale,
+          width: fittedWidth * scale,
           aspectRatio,
           displayDensity: window.devicePixelRatio,
         })}
@@ -264,7 +308,7 @@ function PdfPage({
         renderAnnotationLayer
         renderTextLayer
         scale={scale}
-        width={width}
+        width={fittedWidth}
       />
     </div>
   );
