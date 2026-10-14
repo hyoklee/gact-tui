@@ -117,6 +117,37 @@ describe('WorkspaceResourceView', () => {
     expect(repository.resourcePreview).toHaveBeenCalledTimes(1);
   });
 
+  it('returns to Preview when an HTML source view changes to a non-HTML resource', async () => {
+    repository.resourcePreview.mockResolvedValueOnce(
+      new TextEncoder().encode('<h1>Uploaded report</h1>'),
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <WorkspaceResourceView
+          resource={{ ...resource, name: 'report.html', detected_mime: 'text/html' }}
+          workspaceId="workspace_1"
+        />
+      </QueryClientProvider>,
+    );
+    await screen.findByTitle('HTML preview of report.html');
+    await userEvent.click(screen.getByRole('tab', { name: 'Source' }));
+    expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <WorkspaceResourceView
+          resource={{ ...resource, id: 'resource_pdf' }}
+          workspaceId="workspace_1"
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('Rendered PDF paper.pdf')).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Preview' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', { name: 'Source' })).not.toBeInTheDocument();
+  });
+
   it('moves between related message resources without opening another canvas tab', async () => {
     const user = userEvent.setup();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });

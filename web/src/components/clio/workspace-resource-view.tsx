@@ -147,6 +147,7 @@ export function WorkspaceResourceView({ resource, workspaceId }: WorkspaceResour
   const html =
     isTextMediaType(resource.detected_mime) && isHtmlFile(resource.name, resource.detected_mime);
   const [activeTab, setActiveTab] = useState('preview');
+  const selectedTab = activeTab === 'source' && !html ? 'preview' : activeTab;
   const preview = useQuery({
     queryKey: queryKeys.workspaceResourcePreview(
       endpoint,
@@ -198,7 +199,7 @@ export function WorkspaceResourceView({ resource, workspaceId }: WorkspaceResour
       <FileViewerShell
         source={{ kind: 'resource', resource, workspaceId }}
         label="Resource views"
-        value={activeTab}
+        value={selectedTab}
         onValueChange={setActiveTab}
         tabs={[
           {

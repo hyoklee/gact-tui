@@ -18,6 +18,8 @@ policy are unchanged.
 
 Existing sanitization and exact-source cases remain, with added assertions that
 workspace/upload view controls share one toolbar and switching tabs reads once.
+Changing from HTML Source to a non-HTML upload falls back to Preview, with a
+rerender regression covering that navigation.
 Hosted narrow/wide workspace browser cases check the content starts immediately
 below that toolbar, both views work and source bytes remain unexecuted.
 
