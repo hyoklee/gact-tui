@@ -10,6 +10,7 @@ export type RunState =
   | 'paused'
   | 'yielded'
   | 'recovery_required'
+  | 'recovering'
   | 'waiting_permission'
   | 'waiting_user'
   | 'completed'

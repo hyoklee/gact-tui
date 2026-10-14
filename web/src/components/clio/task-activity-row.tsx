@@ -44,6 +44,7 @@ export function TaskActivityRow({
     status === 'running' ||
     status === 'working' ||
     status === 'executing' ||
+    status === 'recovering' ||
     status === 'stopping' ||
     status === 'cancelling' ||
     status === 'cancellation_requested' ||
