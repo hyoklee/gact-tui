@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 struct Pending {
     listener: Mutex<Option<TcpListener>>,
@@ -21,6 +21,21 @@ pub struct StorageOAuth(Mutex<HashMap<String, Arc<Pending>>>);
 pub struct BrowserReturn {
     id: String,
     redirect_uri: String,
+}
+
+fn phase_line(pending: &Pending, phase: &'static str) -> String {
+    let port = tauri::Url::parse(&pending.redirect)
+        .ok()
+        .and_then(|url| url.port())
+        .unwrap_or_default();
+    let at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_millis());
+    format!("[storage-oauth] phase={phase} port={port} at_unix_ms={at}")
+}
+
+fn record_phase(pending: &Pending, phase: &'static str) {
+    crate::supervisor_boot_log::boot_log_line(&phase_line(pending, phase));
 }
 
 #[tauri::command]
@@ -55,14 +70,13 @@ pub fn storage_oauth_listen(
     if pending.len() >= 8 {
         return Err("Finish or cancel an existing sign-in".into());
     }
-    pending.insert(
-        id.clone(),
-        Arc::new(Pending {
-            listener: Mutex::new(Some(listener)),
-            cancelled: AtomicBool::new(false),
-            redirect: redirect.clone(),
-        }),
-    );
+    let receiver = Arc::new(Pending {
+        listener: Mutex::new(Some(listener)),
+        cancelled: AtomicBool::new(false),
+        redirect: redirect.clone(),
+    });
+    record_phase(&receiver, "listening");
+    pending.insert(id.clone(), receiver);
     Ok(BrowserReturn {
         id,
         redirect_uri: redirect,
@@ -109,6 +123,7 @@ fn receive(pending: Arc<Pending>, expected_state: String) -> Result<String, Stri
         .take()
         .ok_or("This browser return has already been received")?;
     let deadline = Instant::now() + Duration::from_secs(600);
+    record_phase(&pending, "waiting");
     while Instant::now() < deadline && !pending.cancelled.load(Ordering::Relaxed) {
         match listener.accept() {
             Ok((mut stream, _)) => {
@@ -143,16 +158,26 @@ fn receive(pending: Arc<Pending>, expected_state: String) -> Result<String, Stri
                 let response = format!("HTTP/1.1 {status}\r\nContent-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
                 let _ = stream.write_all(response.as_bytes());
                 if let Some(address) = result {
+                    record_phase(&pending, "return_received");
                     return Ok(address);
                 }
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(100))
             }
-            Err(_) => return Err("Could not receive browser sign-in".into()),
+            Err(_) => {
+                record_phase(&pending, "receive_failed");
+                return Err("Could not receive browser sign-in".into());
+            }
         }
     }
-    Err("Sign-in cancelled or expired. Try again.".into())
+    let reason = if pending.cancelled.load(Ordering::Relaxed) {
+        "cancelled"
+    } else {
+        "expired"
+    };
+    record_phase(&pending, reason);
+    Err(format!("Sign-in {reason}. Start sign-in again from CLIO."))
 }
 
 #[tauri::command]
@@ -193,6 +218,7 @@ pub fn storage_oauth_cancel(
         .map_err(|_| "Sign-in state unavailable")?
         .remove(&id)
     {
+        record_phase(&pending, "cancel_requested");
         pending.cancelled.store(true, Ordering::Relaxed);
     }
     Ok(())
@@ -280,5 +306,18 @@ mod tests {
             "expected"
         )
         .is_none());
+    }
+
+    #[test]
+    fn lifecycle_logs_never_include_return_values() {
+        let mut receiver = pending_receiver();
+        Arc::get_mut(&mut receiver)
+            .unwrap()
+            .redirect
+            .push_str("?state=private-state&code=private-code");
+        let line = phase_line(&receiver, "return_received");
+        assert!(line.starts_with("[storage-oauth] phase=return_received port="));
+        assert!(!line.contains("private"));
+        assert!(!line.contains("clio-storage-return"));
     }
 }
