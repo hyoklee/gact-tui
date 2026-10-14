@@ -1,5 +1,6 @@
 //! Operating-system credential storage for saved agent connections.
 
+use crate::credential_chunks::{self, SecretSlots};
 use keyring::{Entry, Error};
 use std::fs;
 use tauri::{AppHandle, Manager};
@@ -7,9 +8,35 @@ use tauri::{AppHandle, Manager};
 const CREDENTIAL_SERVICE: &str = "ai.iowarp.gact.desktop.connection";
 const PROVIDER_CREDENTIAL_SERVICE: &str = "ai.iowarp.gact.desktop.provider";
 
-fn credential_entry(endpoint: &str) -> Result<Entry, String> {
-    let account = credential_account(endpoint)?;
-    Entry::new(CREDENTIAL_SERVICE, account).map_err(credential_error)
+/// One OS keyring service, exposed as named slots so long secrets can be chunked.
+struct KeyringSlots(&'static str);
+
+impl SecretSlots for KeyringSlots {
+    fn get(&self, account: &str) -> Result<Option<String>, String> {
+        let entry = Entry::new(self.0, account).map_err(credential_error)?;
+        match entry.get_password() {
+            Ok(secret) => Ok(Some(secret)),
+            Err(Error::NoEntry) => Ok(None),
+            Err(error) => Err(credential_error(error)),
+        }
+    }
+
+    fn set(&self, account: &str, secret: &str) -> Result<(), String> {
+        Entry::new(self.0, account)
+            .map_err(credential_error)?
+            .set_password(secret)
+            .map_err(credential_error)
+    }
+
+    fn remove(&self, account: &str) -> Result<(), String> {
+        match Entry::new(self.0, account)
+            .map_err(credential_error)?
+            .delete_credential()
+        {
+            Ok(()) | Err(Error::NoEntry) => Ok(()),
+            Err(error) => Err(credential_error(error)),
+        }
+    }
 }
 
 fn credential_account(endpoint: &str) -> Result<&str, String> {
@@ -52,11 +79,6 @@ fn provider_credential_account(provider_id: &str, api_base: &str) -> Result<Stri
     ))
 }
 
-fn provider_entry(provider_id: &str, api_base: &str) -> Result<Entry, String> {
-    let account = provider_credential_account(provider_id, api_base)?;
-    Entry::new(PROVIDER_CREDENTIAL_SERVICE, &account).map_err(credential_error)
-}
-
 fn ssh_credential_account(credential_id: &str) -> Result<&str, String> {
     let account = credential_id.trim();
     if account.is_empty()
@@ -74,24 +96,19 @@ fn store(endpoint: &str, secret: &str) -> Result<(), String> {
     if secret.is_empty() {
         return Err("An empty access token cannot be stored.".to_string());
     }
-    credential_entry(endpoint)?
-        .set_password(secret)
-        .map_err(credential_error)
+    credential_chunks::save(
+        &KeyringSlots(CREDENTIAL_SERVICE),
+        credential_account(endpoint)?,
+        secret,
+    )
 }
 
 fn read(endpoint: &str) -> Result<Option<String>, String> {
-    match credential_entry(endpoint)?.get_password() {
-        Ok(secret) => Ok(Some(secret)),
-        Err(Error::NoEntry) => Ok(None),
-        Err(error) => Err(credential_error(error)),
-    }
+    credential_chunks::load(&KeyringSlots(CREDENTIAL_SERVICE), credential_account(endpoint)?)
 }
 
 fn delete(endpoint: &str) -> Result<(), String> {
-    match credential_entry(endpoint)?.delete_credential() {
-        Ok(()) | Err(Error::NoEntry) => Ok(()),
-        Err(error) => Err(credential_error(error)),
-    }
+    credential_chunks::delete(&KeyringSlots(CREDENTIAL_SERVICE), credential_account(endpoint)?)
 }
 
 /// Save one connection token in the current user's operating-system credential store.
@@ -129,9 +146,11 @@ pub async fn provider_credential_store(
         return Err("An empty provider API key cannot be stored.".to_string());
     }
     tauri::async_runtime::spawn_blocking(move || {
-        provider_entry(&provider_id, &api_base)?
-            .set_password(&secret)
-            .map_err(credential_error)
+        credential_chunks::save(
+            &KeyringSlots(PROVIDER_CREDENTIAL_SERVICE),
+            &provider_credential_account(&provider_id, &api_base)?,
+            &secret,
+        )
     })
     .await
     .map_err(|error| format!("Secure credential storage task failed: {error}"))?
@@ -144,11 +163,10 @@ pub async fn provider_credential_read(
     api_base: String,
 ) -> Result<Option<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        match provider_entry(&provider_id, &api_base)?.get_password() {
-            Ok(secret) => Ok(Some(secret)),
-            Err(Error::NoEntry) => Ok(None),
-            Err(error) => Err(credential_error(error)),
-        }
+        credential_chunks::load(
+            &KeyringSlots(PROVIDER_CREDENTIAL_SERVICE),
+            &provider_credential_account(&provider_id, &api_base)?,
+        )
     })
     .await
     .map_err(|error| format!("Secure credential storage task failed: {error}"))?
