@@ -265,7 +265,7 @@ export interface UserQuestion {
   session_id: string;
   prompt: string;
   status: WireValue<'pending' | 'answered' | 'cancelled' | 'expired'>;
-  kind: WireValue<'freeform' | 'choice' | 'confirmation'>;
+  kind: WireValue<'freeform' | 'choice' | 'confirmation' | 'multi_choice'>;
   options?: Array<{ label: string; value: string; description?: string }>;
   allow_freeform?: boolean;
   answer?: string;

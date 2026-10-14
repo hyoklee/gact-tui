@@ -8,6 +8,13 @@ import { cn } from '@/lib/utils';
 export type SubAgentState =
   | 'spawning'
   | 'running'
+  | 'stopping'
+  | 'stopped'
+  | 'cancellation_requested'
+  | 'task_state_uncertain'
+  | 'recovering'
+  | 'waiting_permission'
+  | 'waiting_user'
   | 'pause_requested'
   | 'paused'
   | 'yielded'
@@ -39,6 +46,22 @@ const STATE_CONFIG: Record<SubAgentState, { label: string; class: string }> = {
     class: 'border-primary/40 bg-primary/10 text-primary',
   },
   running: { label: 'Running', class: 'border-info/40 bg-info/10 text-info-foreground' },
+  stopping: { label: 'Stopping', class: 'border-warning/40 bg-warning/10 text-warning' },
+  stopped: { label: 'Stopped', class: 'border-border bg-muted text-muted-foreground' },
+  cancellation_requested: {
+    label: 'Cancellation requested',
+    class: 'border-warning/40 bg-warning/10 text-warning',
+  },
+  task_state_uncertain: {
+    label: 'Needs inspection',
+    class: 'border-warning/40 bg-warning/10 text-warning',
+  },
+  recovering: { label: 'Recovering', class: 'border-info/40 bg-info/10 text-info-foreground' },
+  waiting_permission: {
+    label: 'Permission needed',
+    class: 'border-border bg-muted text-muted-foreground',
+  },
+  waiting_user: { label: 'Waiting for you', class: 'border-border bg-muted text-muted-foreground' },
   pause_requested: {
     label: 'Pause requested',
     class: 'border-border bg-muted text-muted-foreground',
@@ -59,7 +82,13 @@ const STATE_CONFIG: Record<SubAgentState, { label: string; class: string }> = {
 const SubAgentDispatch = forwardRef<HTMLElement, SubAgentDispatchProps>(
   ({ className, run, onCancel, ...props }, ref) => {
     const cfg = STATE_CONFIG[run.state];
-    const isLive = run.state === 'spawning' || run.state === 'running';
+    const isLive = [
+      'spawning',
+      'running',
+      'stopping',
+      'cancellation_requested',
+      'recovering',
+    ].includes(run.state);
     return (
       <article
         className={cn(

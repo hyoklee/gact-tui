@@ -223,6 +223,11 @@ function sessionStateLabel(state: Session['state']): string {
     {
       queued: 'Queued',
       running: 'Working now',
+      stopping: 'Stopping the model execution',
+      stopped: 'Model stopped; accepted background work continues',
+      cancellation_requested: 'Cancellation requested; waiting for settlement',
+      task_state_uncertain: 'Inspect work before deciding to retry',
+      recovering: 'Recovering recorded work',
       pause_requested: 'Pause requested',
       paused: 'Paused',
       yielded: 'Assignment waiting for results or messages',
