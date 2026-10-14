@@ -16,8 +16,10 @@ for (const width of [1280, 390]) {
     await expect(saved.locator('.katex')).toHaveCount(8);
     const literal = page.getByRole('region', { name: 'Literal examples', exact: true });
     await expect(literal).toContainText('Cost: $20 and $30');
-    await expect(literal.locator('code').first()).toHaveText(String.raw`\(x^2\)`);
-    await expect(literal.locator('.katex')).toHaveCount(2);
+    await expect(literal.locator('code').first()).toHaveText('x^2');
+    await expect(literal.locator('p code')).toHaveCount(1);
+    await expect(literal.locator('pre code')).toHaveText(String.raw`\[x^2\]`);
+    await expect(literal.locator('.katex')).toHaveCount(3);
     await expect(
       page.getByRole('region', { name: 'Multiline equation' }).locator('.katex-display'),
     ).toHaveCount(1);

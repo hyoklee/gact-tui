@@ -49,10 +49,10 @@ function Review() {
             </button>
           </section>
           <section aria-label="Literal examples" className="border-t pt-4">
-            <h2 className="mb-3 font-medium">Currency and source code stay literal</h2>
+            <h2 className="mb-3 font-medium">Inline formulas, currency and code</h2>
             <MarkdownText mode="static">
               {
-                'Cost: $20 and $30. Inline source: `\\(x^2\\)`.\n\n```tex\n\\[x^2\\]\n```\n\nExisting inline syntax: $$x^2$$.\n\n$$\nE=mc^2\n$$'
+                'Inline formula: \\(x^2\\). Code-style notation: `x^2`. Cost: $20 and $30.\n\nLiteral TeX source for editing:\n\n```tex\n\\[x^2\\]\n```\n\nExisting inline syntax: $$x^2$$.\n\n$$\nE=mc^2\n$$'
               }
             </MarkdownText>
           </section>
