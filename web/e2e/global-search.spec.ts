@@ -1,0 +1,77 @@
+import { expect, test } from '@playwright/test';
+import { installSearchFixture } from './search-fixture.mjs';
+
+const endpoint = `http://127.0.0.1:${process.env['CLIO_FIXTURE_PORT'] ?? '18799'}`;
+const placeholder = 'Search work, files, artifacts, or actions…';
+
+test('global search applies themes from Settings and opens settings, hosts and exact agent definitions', async ({
+  page,
+}) => {
+  await installSearchFixture(page, endpoint);
+  const { agents } = await (await page.request.get(`${endpoint}/v1/agents`)).json();
+  const reviewer = {
+    ...agents[0],
+    id: 'global-reviewer',
+    title: 'Global Search Reviewer',
+    description: 'Review global search evidence.',
+    keywords: ['search-proof'],
+  };
+  await page.route('**/v1/agents', (route) => route.fulfill({ json: { agents: [reviewer] } }));
+  await page.goto('/settings/appearance');
+  await page.getByRole('button', { name: 'Search everywhere', exact: true }).click();
+  const input = page.getByPlaceholder(placeholder);
+  await expect(input).toBeFocused();
+  await page.keyboard.type('dark mode');
+  await page.getByRole('option', { name: 'Switch to dark mode', exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/appearance$/u);
+  await expect(page.locator('html')).toHaveClass(/dark/u);
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('dark');
+  await page.keyboard.press('Control+k');
+  await input.fill('light mode');
+  await page.getByRole('option', { name: 'Switch to light mode', exact: true }).click();
+  await expect(page.locator('html')).toHaveClass(/light/u);
+  await page.keyboard.press('Control+k');
+  await input.fill('drive');
+  await page.getByRole('option', { name: 'Data sources', exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/data-sources$/u);
+  await page.keyboard.press('Control+k');
+  await input.fill('protected execution');
+  await page.getByRole('option', { name: /hosts$/u }).click();
+  await expect(page).toHaveURL(/\/infrastructure\/agent$/u);
+  await page.keyboard.press('Control+k');
+  await input.fill('search-proof');
+  await page.getByRole('option', { name: /Global Search Reviewer/u }).click();
+  await expect(page).toHaveURL(/\/settings\/agents#agent-global-reviewer$/u);
+  await expect(page.locator('[id="agent-global-reviewer"]')).toBeFocused();
+});
+
+test('a file found from Settings opens in the remembered workspace canvas', async ({ page }) => {
+  const fixture = await installSearchFixture(page, endpoint);
+  await page.goto(`/workspaces/${fixture.workspace.id}/sessions/${fixture.session.id}`);
+  await expect(page.getByText('Review the study protocol.', { exact: true })).toBeAttached();
+  await page.goto('/settings/appearance');
+  await page.keyboard.press('Control+k');
+  await page.getByPlaceholder(placeholder).fill('plant-study.md');
+  await page.getByRole('option', { name: 'notes/plant-study.md', exact: true }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/workspaces/${fixture.workspace.id}/sessions/${fixture.session.id}$`, 'u'),
+  );
+  await expect(
+    page.getByRole('region', { name: 'Workspace file preview', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Plant study notes', exact: true })).toBeVisible();
+});
+
+test('the compact Settings menu hands focus to the shared global search', async ({ page }) => {
+  await installSearchFixture(page, endpoint);
+  await page.setViewportSize({ width: 640, height: 800 });
+  await page.goto('/settings/general');
+  await page.getByRole('button', { name: 'Choose settings section' }).click();
+  await page.getByRole('menuitem', { name: 'Search everywhere from settings menu' }).click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(page.getByPlaceholder(placeholder)).toBeFocused();
+  await page.keyboard.type('dark');
+  await expect(
+    page.getByRole('option', { name: 'Switch to dark mode', exact: true }),
+  ).toBeVisible();
+});

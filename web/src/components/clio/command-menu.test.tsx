@@ -9,6 +9,10 @@ const repository = vi.hoisted(() => ({
   allSessions: vi.fn(),
   workspaceFiles: vi.fn(),
   searchMemory: vi.fn(),
+  agents: vi.fn(),
+  infrastructureTargets: vi.fn(),
+  switchConnection: vi.fn(),
+  setTheme: vi.fn(),
 }));
 
 const artifact = {
@@ -29,19 +33,44 @@ vi.mock('@/store/live-store', () => ({
     selector({ entities: { artifacts: { [artifact.id]: artifact } } }),
 }));
 vi.mock('@/tauri/menu-actions', () => ({ useMenuAction: () => undefined }));
+vi.mock('@/hooks/use-known-connections', () => ({
+  useKnownConnections: () => [
+    {
+      endpoint: 'http://remote',
+      label: 'Homelab',
+      location: 'Remote computer',
+      availability: { label: 'Ready' },
+    },
+  ],
+}));
+vi.mock('@/hooks/use-switch-connection', () => ({
+  useSwitchConnection: () => repository.switchConnection,
+}));
+vi.mock('next-themes', () => ({
+  useTheme: () => ({ theme: 'light', setTheme: repository.setTheme }),
+}));
 
 import { ClioCommandMenu } from './command-menu';
 
 function LocationProbe() {
   const location = useLocation();
-  return <output data-testid="location">{`${location.pathname}${location.hash}`}</output>;
+  return (
+    <>
+      <output data-testid="location">{`${location.pathname}${location.search}${location.hash}`}</output>
+      <output data-testid="location-state">{JSON.stringify(location.state)}</output>
+    </>
+  );
 }
 
-function renderMenu(onOpenResource = vi.fn()) {
+function renderMenu(
+  onOpenResource = vi.fn(),
+  entry = '/workspaces/ws_current/sessions/sess_current',
+  canvas = true,
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/workspaces/ws_current/sessions/sess_current']}>
+      <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route
             element={
@@ -52,6 +81,15 @@ function renderMenu(onOpenResource = vi.fn()) {
             }
             path="/workspaces/:workspaceId/sessions/:sessionId"
           />
+          <Route
+            element={
+              <>
+                <ClioCommandMenu onOpenResource={canvas ? onOpenResource : undefined} />
+                <LocationProbe />
+              </>
+            }
+            path="*"
+          />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -60,6 +98,18 @@ function renderMenu(onOpenResource = vi.fn()) {
 }
 
 beforeEach(() => {
+  repository.agents.mockResolvedValue([
+    {
+      id: 'reviewer',
+      title: 'Station Reviewer',
+      description: 'Review station measurements.',
+      specialization: 'Science',
+      keywords: ['evidence'],
+      enabled: true,
+    },
+  ]);
+  repository.infrastructureTargets.mockResolvedValue([{ id: 'delta', label: 'Delta GPU host' }]);
+  repository.switchConnection.mockResolvedValue(undefined);
   repository.workspaces.mockResolvedValue([
     {
       id: 'ws_current',
@@ -124,6 +174,83 @@ afterEach(() => {
 });
 
 describe('ClioCommandMenu workspace search', () => {
+  it('searches and applies a theme without a workspace or navigating away', async () => {
+    const user = userEvent.setup();
+    renderMenu(vi.fn(), '/settings/general');
+    await user.keyboard('{Control>}k{/Control}');
+    await user.keyboard('dark mode');
+    await user.click(await screen.findByRole('option', { name: 'Switch to dark mode' }));
+    expect(repository.setTheme).toHaveBeenCalledWith('dark');
+    expect(screen.getByTestId('location')).toHaveTextContent('/settings/general');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['drive', 'Data sources', '/settings/data-sources'],
+    ['reviewer', /Station Reviewer/u, '/settings/agents#agent-reviewer'],
+    ['delta', /Delta GPU host/u, '/infrastructure/services?target=delta'],
+  ])(
+    'opens a global result for %s while retaining workspace return context',
+    async (query, name, route) => {
+      const user = userEvent.setup();
+      renderMenu();
+      await user.keyboard('{Control>}k{/Control}');
+      await user.keyboard(query);
+      await user.click(await screen.findByRole('option', { name }));
+      expect(screen.getByTestId('location')).toHaveTextContent(route);
+      expect(screen.getByTestId('location-state')).toHaveTextContent(
+        '"from":"/workspaces/ws_current/sessions/sess_current"',
+      );
+      expect(screen.getByTestId('location-state')).toHaveTextContent(
+        '"endpoint":"http://127.0.0.1:8787"',
+      );
+    },
+  );
+
+  it('finds saved connections by name and switches through the shared connection flow', async () => {
+    const user = userEvent.setup();
+    renderMenu();
+    await user.keyboard('{Control>}k{/Control}');
+    await user.keyboard('homelab');
+    await user.click(await screen.findByRole('option', { name: /Homelab/u }));
+    await waitFor(() =>
+      expect(repository.switchConnection).toHaveBeenCalledWith(
+        expect.objectContaining({ endpoint: 'http://remote', label: 'Homelab' }),
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('routes a file found from Settings back into a scoped workspace canvas', async () => {
+    localStorage.setItem(
+      'clio.last-workspace-route:http%3A%2F%2F127.0.0.1%3A8787',
+      '/workspaces/ws_current/sessions/sess_current',
+    );
+    const user = userEvent.setup();
+    renderMenu(vi.fn(), '/settings/general', false);
+    await user.keyboard('{Control>}k{/Control}');
+    await user.keyboard('stations');
+    await user.click(await screen.findByRole('option', { name: /results\/stations.csv/u }));
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/workspaces/ws_current/sessions/sess_current',
+    );
+    expect(screen.getByTestId('location-state')).toHaveTextContent(
+      '"kind":"workspace-file","path":"results/stations.csv"',
+    );
+  });
+  it('keeps global search open with its draft when a connection cannot be reached', async () => {
+    repository.switchConnection.mockRejectedValue(new Error('Transport unavailable'));
+    const user = userEvent.setup();
+    renderMenu();
+    await user.keyboard('{Control>}k{/Control}');
+    await user.keyboard('homelab');
+    await user.click(await screen.findByRole('option', { name: /Homelab/u }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Transport unavailable');
+    expect(screen.getByPlaceholderText('Search work, files, artifacts, or actions…')).toHaveValue(
+      'homelab',
+    );
+    expect(screen.getByRole('dialog')).toBeVisible();
+  });
   it('focuses the search immediately on each open and keeps the assistant shortcut inside its input', async () => {
     const user = userEvent.setup();
     renderMenu();
@@ -205,6 +332,7 @@ describe('ClioCommandMenu workspace search', () => {
     // excludeServiceStorage: true, which excludes only CLIO's own .clio/.clio-*
     // service storage, independent of the Files-view-only dot-files toggle.
     renderMenu();
+    await userEvent.setup().keyboard('{Control>}k{/Control}');
 
     await waitFor(() =>
       expect(repository.workspaceFiles).toHaveBeenCalledWith(

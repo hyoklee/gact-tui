@@ -1,9 +1,8 @@
-import { useState, type ComponentType, type SVGProps } from 'react';
+import { useRef, useState } from 'react';
+import type { ApplicationDestination } from '@/lib/application-destinations';
 import { Link } from 'react-router-dom';
 import { ChevronDownIcon, ChevronLeftIcon, SearchIcon } from 'lucide-react';
-import { CloseIcon } from '@/lib/icon-vocabulary';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,13 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-export interface SettingsDestination {
-  id: string;
-  label: string;
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
-  group?: string;
-  keywords?: string;
-}
+export type SettingsDestination = ApplicationDestination;
 
 /** Searchable, grouped navigation with independent scrolling and a compact mobile menu. */
 export function SettingsNavigation({
@@ -32,57 +25,32 @@ export function SettingsNavigation({
   endpoint: string;
   workspaceRoute: string;
 }) {
-  const [query, setQuery] = useState('');
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const openingSearch = useRef(false);
   const state = { endpoint, from: workspaceRoute };
   const active = sections.find((item) => item.id === section);
-  const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
-  const visible = sections.filter((item) =>
-    terms.every((term) =>
-      `${item.label} ${item.group ?? ''} ${item.keywords ?? ''}`.toLocaleLowerCase().includes(term),
-    ),
-  );
+  const visible = sections;
   const groups = [...new Set(visible.map((item) => item.group ?? 'Settings'))];
   const search = (mobile = false) => (
-    <div className="relative">
-      <SearchIcon
-        aria-hidden="true"
-        className="pointer-events-none absolute left-2.5 top-2.5 size-3.5 text-muted-foreground"
-      />
-      <Input
-        aria-label={mobile ? 'Search settings sections' : 'Search settings'}
-        placeholder="Search settings"
-        className="h-9 pl-8 pr-8 text-sm"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        onKeyDown={
-          mobile
-            ? (event) => {
-                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                  event.preventDefault();
-                  const items = event.currentTarget
-                    .closest('[role="menu"]')
-                    ?.querySelectorAll<HTMLElement>('[role="menuitem"]');
-                  const index = event.key === 'ArrowUp' ? (items?.length ?? 0) - 1 : 0;
-                  items?.[index]?.focus();
-                }
-                if (event.key !== 'Escape') event.stopPropagation();
-              }
-            : undefined
+    <Button
+      type="button"
+      variant="outline"
+      className="h-9 w-full justify-start gap-2 text-xs font-normal text-muted-foreground"
+      aria-label={mobile ? 'Search everywhere from settings menu' : 'Search everywhere'}
+      onClick={() => {
+        if (mobile) {
+          openingSearch.current = true;
+          setMobileOpen(false);
         }
-      />
-      {query ? (
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          className="absolute right-0.5 top-0.5"
-          aria-label="Clear settings search"
-          onClick={() => setQuery('')}
-        >
-          <CloseIcon aria-hidden="true" className="size-3.5" />
-        </Button>
-      ) : null}
-    </div>
+        window.dispatchEvent(new Event('clio:open-command-menu'));
+      }}
+    >
+      <SearchIcon aria-hidden="true" className="size-3.5" />
+      <span>Search everywhere</span>
+      <kbd className="ml-auto text-[10px]">Ctrl K</kbd>
+    </Button>
   );
+
   return (
     <aside className="shrink-0 border-b border-border/60 md:flex md:w-60 md:min-h-0 md:flex-col md:border-b-0 md:border-r">
       <nav
@@ -94,7 +62,7 @@ export function SettingsNavigation({
             <ChevronLeftIcon aria-hidden="true" /> Workspace
           </Link>
         </Button>
-        <DropdownMenu>
+        <DropdownMenu open={mobileOpen} onOpenChange={setMobileOpen}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
@@ -105,8 +73,19 @@ export function SettingsNavigation({
               <ChevronDownIcon aria-hidden="true" className="shrink-0" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="max-h-[70dvh] w-72 overflow-y-auto">
-            <div className="p-2">{search(true)}</div>
+          <DropdownMenuContent
+            onCloseAutoFocus={(event) => {
+              if (openingSearch.current) {
+                event.preventDefault();
+                openingSearch.current = false;
+              }
+            }}
+            align="end"
+            className="max-h-[70dvh] w-72 overflow-y-auto"
+          >
+            <div className="p-2">
+              <DropdownMenuItem asChild>{search(true)}</DropdownMenuItem>
+            </div>
             {groups.map((group) => (
               <div key={group}>
                 <DropdownMenuLabel>{group}</DropdownMenuLabel>

@@ -2,38 +2,21 @@ import { vocab } from '@/lib/brand-vocabulary';
 import { SettingsRow, SettingsChoice } from '@/components/clio/settings-row';
 import { connectionScope } from '@/lib/connection-scope';
 import { inTauri } from '@/lib/transport/tauri-runtime';
-import {
-  SettingsNavigation,
-  type SettingsDestination,
-} from '@/components/clio/settings-navigation';
+import { SettingsNavigation } from '@/components/clio/settings-navigation';
+import { settingsDestinations } from '@/lib/application-destinations';
 import { queryKeys } from '@/lib/query-keys';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
-  BellRingIcon,
-  BotIcon,
-  BoxesIcon,
-  BrainCircuitIcon,
   CableIcon,
-  CalendarClockIcon,
   CheckCircle2Icon,
   CircleAlertIcon,
-  CpuIcon,
-  DatabaseIcon,
-  HeartPulseIcon,
   KeyRoundIcon,
   MonitorCogIcon,
   MoonIcon,
-  PackageIcon,
-  PaletteIcon,
-  PlugZapIcon,
-  ScrollTextIcon,
-  ServerIcon,
-  ShieldCheckIcon,
   SunIcon,
   Volume2Icon,
-  WrenchIcon,
 } from 'lucide-react';
-import { AdjustIcon, DeleteIcon, InfoIcon, MoreIcon, SettingsIcon } from '@/lib/icon-vocabulary';
+import { DeleteIcon, MoreIcon } from '@/lib/icon-vocabulary';
 import { useTheme } from 'next-themes';
 import { useEffect, useRef } from 'react';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
@@ -97,156 +80,6 @@ import {
   sessionIdFromRoute,
   workspaceIdFromRoute,
 } from '@/lib/workspace-route-memory';
-
-const sections: SettingsDestination[] = [
-  {
-    id: 'general',
-    label: 'General',
-    icon: SettingsIcon,
-    group: 'Personal',
-    keywords: 'files activity preview preferences',
-  },
-  {
-    id: 'appearance',
-    label: 'Appearance',
-    icon: PaletteIcon,
-    group: 'Personal',
-    keywords: 'theme dark light width motion preview files font text size scale zoom display',
-  },
-  {
-    id: 'notifications',
-    label: 'Notifications',
-    icon: BellRingIcon,
-    group: 'Personal',
-    keywords: 'sound attention alerts',
-  },
-  {
-    id: 'connections',
-    label: `${vocab.agent} connections`,
-    icon: CableIcon,
-    group: 'Connections',
-    keywords: 'service address endpoint server',
-  },
-  {
-    id: 'providers',
-    label: 'Model providers',
-    icon: ServerIcon,
-    group: 'Connections',
-    keywords: 'api keys sign in local model server',
-  },
-  {
-    id: 'models',
-    label: 'Models',
-    icon: CpuIcon,
-    group: 'Connections',
-    keywords: 'default reasoning response parameters',
-  },
-  {
-    id: 'data-sources',
-    label: 'Data sources',
-    icon: DatabaseIcon,
-    group: 'Connections',
-    keywords: 'accounts sign in github drive globus',
-  },
-  {
-    id: 'relays',
-    label: 'Remote computers',
-    icon: PlugZapIcon,
-    group: 'Connections',
-    keywords: 'relay ssh remote host',
-  },
-  {
-    id: 'session-defaults',
-    label: 'New session defaults',
-    icon: AdjustIcon,
-    group: 'Agent',
-    keywords: 'model reasoning blueprint work mode confirmations',
-  },
-  {
-    id: 'agents',
-    label: 'Agents',
-    icon: BotIcon,
-    group: 'Agent',
-    keywords: 'instructions capabilities routing',
-  },
-  {
-    id: 'fleet',
-    label: 'Fleet',
-    icon: BotIcon,
-    group: 'Agent',
-    keywords: 'judge goals best of n refinement automode permissions model',
-  },
-  {
-    id: 'runtime',
-    label: 'Execution & history',
-    icon: AdjustIcon,
-    group: 'Agent',
-    keywords: 'configuration timeout retries transcript reasoning compaction defaults',
-  },
-  {
-    id: 'blueprints',
-    label: 'Marketplaces & blueprints',
-    icon: BoxesIcon,
-    group: 'Agent',
-    keywords: 'catalog install skills',
-  },
-  {
-    id: 'expert-packs',
-    label: 'Expert packs',
-    icon: PackageIcon,
-    group: 'Agent',
-    keywords: 'specialist agents install',
-  },
-  {
-    id: 'tools',
-    label: 'MCP tools',
-    icon: WrenchIcon,
-    group: 'Agent',
-    keywords: 'services tools connections',
-  },
-  {
-    id: 'prompts',
-    label: 'Prompts & commands',
-    icon: ScrollTextIcon,
-    group: 'Agent',
-    keywords: 'instructions overrides commands',
-  },
-  {
-    id: 'schedules',
-    label: 'Scheduled work',
-    icon: CalendarClockIcon,
-    group: 'Agent',
-    keywords: 'recurring automation repeat',
-  },
-  {
-    id: 'permissions',
-    label: 'Permissions',
-    icon: ShieldCheckIcon,
-    group: 'Access & system',
-    keywords: 'approvals requests access rules policy',
-  },
-  {
-    id: 'memory',
-    label: 'Memory',
-    icon: BrainCircuitIcon,
-    group: 'Access & system',
-    keywords: 'context search recall compaction',
-  },
-  {
-    id: 'system',
-    label: 'System',
-    icon: HeartPulseIcon,
-    group: 'Access & system',
-    keywords: 'health storage metrics hooks',
-  },
-  {
-    id: 'about',
-    label: 'About',
-    icon: InfoIcon,
-    group: 'Access & system',
-    keywords: 'version updates build',
-  },
-];
 
 function ConnectionsSettings() {
   const repository = useRepository();
@@ -671,13 +504,7 @@ export function SettingsPage() {
   const { section = 'general' } = useParams();
   const location = useLocation();
   const { settings } = useConnectionSettings();
-  const destinations = inTauri()
-    ? sections.map((item) =>
-        item.id === 'general'
-          ? { ...item, keywords: `${item.keywords} app updates beta release channel` }
-          : item,
-      )
-    : sections;
+  const destinations = settingsDestinations(inTauri());
   const content = useRef<HTMLElement>(null);
   useEffect(() => {
     content.current?.scrollTo({ left: 0, top: 0 });
