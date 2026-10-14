@@ -113,6 +113,23 @@ mod acceptance {
         Ok(())
     }
 
+    fn wait_for_document(window: &WebviewWindow) -> Result<(), String> {
+        for _ in 0..50 {
+            let result = devtools(
+                window,
+                "Runtime.evaluate",
+                r#"{"expression":"document.readyState === 'complete' && Boolean(document.body)","returnByValue":true}"#,
+            )?;
+            let result: serde_json::Value =
+                serde_json::from_str(&result).map_err(|error| error.to_string())?;
+            if result["result"]["value"].as_bool() == Some(true) {
+                return Ok(());
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        Err("Download proof document did not finish loading".into())
+    }
+
     fn dialog_state(window: &WebviewWindow, close: bool) -> Result<bool, String> {
         let (sender, receiver) = std::sync::mpsc::channel();
         window
@@ -215,12 +232,13 @@ mod acceptance {
                 let handle = app.handle().clone();
                 std::thread::spawn(move || {
                     let result = (|| -> Result<(), String> {
-                        std::thread::sleep(Duration::from_secs(2));
-                        window.eval(r#"const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['activity,hours\nCoding,30'],{type:'text/csv'})); a.download='sample.csv'; document.body.append(a); a.click(); a.remove();"#).map_err(|error| error.to_string())?;
+                        wait_for_document(&window)?;
+                        window.eval(r#"const b=document.createElement('button'); b.style='position:fixed;left:0;top:0;width:160px;height:70px'; b.textContent='Download CSV'; b.onclick=()=>{const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['activity,hours\nCoding,30'],{type:'text/csv'})); a.download='sample.csv'; document.body.append(a); a.click(); a.remove();}; document.body.append(b); window.__clioFrameReady=true;"#).map_err(|error| error.to_string())?;
+                        click_download(&window)?;
                         verify_download(&window, &targets[0], b"activity,hours\nCoding,30")?;
                         dialog_state(&window, true)?;
                         wait_for_dialog(&window, false)?;
-                        window.eval(r#"const f=document.createElement('iframe'); f.style='position:fixed;left:0;top:0;width:400px;height:200px;border:0'; f.srcdoc='<!doctype html><body></body>'; f.onload=()=>{const d=f.contentDocument; const b=d.createElement('button'); b.style='position:absolute;left:0;top:0;width:160px;height:70px'; b.textContent='Download'; b.onclick=()=>{const a=d.createElement('a'); a.href=f.contentWindow.URL.createObjectURL(new Blob(['{"saved":true}'],{type:'application/json'})); a.download='embedded.json'; d.body.append(a); a.click(); a.remove();}; d.body.append(b); window.__clioFrameReady=true;}; document.body.append(f);"#).map_err(|error| error.to_string())?;
+                        window.eval(r#"window.__clioFrameReady=false; document.body.replaceChildren(); const f=document.createElement('iframe'); f.style='position:fixed;left:0;top:0;width:400px;height:200px;border:0'; f.srcdoc='<!doctype html><body></body>'; f.onload=()=>{const d=f.contentDocument; const b=d.createElement('button'); b.style='position:absolute;left:0;top:0;width:160px;height:70px'; b.textContent='Download'; b.onclick=()=>{const a=d.createElement('a'); a.href=f.contentWindow.URL.createObjectURL(new Blob(['{"saved":true}'],{type:'application/json'})); a.download='embedded.json'; d.body.append(a); a.click(); a.remove();}; d.body.append(b); window.__clioFrameReady=true;}; document.body.append(f);"#).map_err(|error| error.to_string())?;
                         click_download(&window)?;
                         verify_download(&window, &targets[1], br#"{"saved":true}"#)?;
                         dialog_state(&window, true)?;
