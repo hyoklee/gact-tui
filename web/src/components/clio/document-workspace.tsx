@@ -431,7 +431,7 @@ export function ClioDocumentWorkspace({
               content={content.data}
               editor={editor}
               fallback={fallbackPreview}
-              fit="width"
+              fit="page"
               manifest={effectiveManifest}
               onPdfSelection={setSelection}
               previewError={

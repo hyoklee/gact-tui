@@ -114,20 +114,25 @@ export function estimatedPdfPageHeight(widthPx: number): number {
 }
 
 /**
- * Width that keeps a complete portrait page inside a bounded reading viewport.
+ * Width that keeps a complete page inside a bounded reading viewport.
  * The returned width is the 100% baseline; viewer zoom is applied afterwards.
  */
 export function fitPdfPageWidth({
   hostWidth,
   viewportHeight,
+  aspectRatio = PDF_PAGE_ESTIMATED_ASPECT_RATIO,
 }: {
   hostWidth: number;
   viewportHeight: number;
+  /** Rotated page height divided by width, as reported by pdf.js. */
+  aspectRatio?: number;
 }): number {
   const availableWidth = Number.isFinite(hostWidth) && hostWidth > 0 ? hostWidth : 1;
   if (!Number.isFinite(viewportHeight) || viewportHeight <= PDF_PAGE_GAP_PX) {
     return availableWidth;
   }
-  const heightBound = (viewportHeight - PDF_PAGE_GAP_PX) / PDF_PAGE_ESTIMATED_ASPECT_RATIO;
+  const ratio =
+    Number.isFinite(aspectRatio) && aspectRatio > 0 ? aspectRatio : PDF_PAGE_ESTIMATED_ASPECT_RATIO;
+  const heightBound = (viewportHeight - PDF_PAGE_GAP_PX) / ratio;
   return Math.min(availableWidth, heightBound);
 }

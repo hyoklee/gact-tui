@@ -123,4 +123,22 @@ describe('fitPdfPageWidth', () => {
   it('keeps a narrower page at its available width', () => {
     expect(fitPdfPageWidth({ hostWidth: 400, viewportHeight: 800 })).toBe(400);
   });
+
+  it.each([9 / 16, 11 / 8.5, 2, 16 / 9])(
+    'fits the actual rotated page aspect ratio %s within both viewport dimensions',
+    (aspectRatio) => {
+      const width = fitPdfPageWidth({ hostWidth: 1_200, viewportHeight: 600, aspectRatio });
+      expect(width).toBeLessThanOrEqual(1_200);
+      expect(width * aspectRatio + 12).toBeLessThanOrEqual(600);
+    },
+  );
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'uses the portrait estimate until a valid page aspect ratio is available: %s',
+    (aspectRatio) => {
+      expect(fitPdfPageWidth({ hostWidth: 1_200, viewportHeight: 600, aspectRatio })).toBe(
+        fitPdfPageWidth({ hostWidth: 1_200, viewportHeight: 600 }),
+      );
+    },
+  );
 });

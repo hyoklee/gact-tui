@@ -315,6 +315,37 @@ for (const layout of [
         await expect(document.getByText(item.text, { exact: true })).toBeVisible();
         await expect(document.locator('.react-pdf__Page__canvas').first()).toBeVisible();
         const pageCanvas = document.locator('.react-pdf__Page__canvas').first();
+        const pdfScroller = document.locator('[data-pdf-scroller]');
+        const fittedPage = document.locator('[data-page]').first();
+        const pageFits = () =>
+          fittedPage.evaluate((element) => {
+            const host = element.closest<HTMLElement>('[data-pdf-scroller]')!;
+            const bounds = element.getBoundingClientRect();
+            return (
+              bounds.width + 24 <= host.clientWidth + 1 &&
+              bounds.height + 24 <= host.clientHeight + 1
+            );
+          });
+        await expect.poll(pageFits).toBe(true);
+        const windowGeometry = await page.evaluate(() => ({
+          width: innerWidth,
+          density: devicePixelRatio,
+        }));
+        await pdfScroller.hover();
+        await page.keyboard.down('Control');
+        await page.mouse.wheel(0, 120);
+        await page.keyboard.up('Control');
+        await expect(canvas.getByRole('button', { name: 'Reset zoom', exact: true })).toHaveText(
+          '85%',
+        );
+        expect(
+          await page.evaluate(() => ({ width: innerWidth, density: devicePixelRatio })),
+        ).toEqual(windowGeometry);
+        await canvas.getByRole('button', { name: 'Reset zoom', exact: true }).click();
+        await expect(canvas.getByRole('button', { name: 'Reset zoom', exact: true })).toHaveText(
+          '100%',
+        );
+        await expect.poll(pageFits).toBe(true);
         await expect
           .poll(async () =>
             pageCanvas.evaluate((canvas) => {

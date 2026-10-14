@@ -6,6 +6,7 @@ import { ViewerToolbarHost } from './viewer-toolbar-context';
 
 const documentPageCount = vi.hoisted(() => ({ value: 3 }));
 const pageRenderReady = vi.hoisted(() => ({ value: true }));
+const pageAspectRatio = vi.hoisted(() => ({ value: 11 / 8.5 }));
 
 vi.mock('react-pdf', async () => {
   const React = await import('react');
@@ -22,24 +23,36 @@ vi.mock('react-pdf', async () => {
       return <div>{children}</div>;
     },
     Page: ({
+      onLoadSuccess,
       onRenderSuccess,
       pageNumber,
+      width,
+      scale,
     }: {
+      onLoadSuccess?: (page: { getViewport: () => { width: number; height: number } }) => void;
       onRenderSuccess?: () => void;
       pageNumber: number;
+      width: number;
+      scale: number;
     }) => {
-      // Fires once per mounted page, keyed on the page identity -- matching
-      // real react-pdf, which re-renders a page's canvas (and re-fires this)
-      // on its OWN geometry changing, never merely because a caller's inline
-      // callback got a fresh reference. Keying on `onRenderSuccess` itself
-      // (an inline arrow recreated every parent render in the real
-      // component) turned a real measurement into an infinite render loop
-      // that only this mock's naive re-firing could produce.
+      React.useEffect(() => {
+        onLoadSuccess?.({
+          getViewport: () => ({ width: 100, height: 100 * pageAspectRatio.value }),
+        });
+        // A loaded page keeps its identity while its canvas resizes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [pageNumber]);
+      // Match react-pdf's geometry changes, without rerunning merely because
+      // the parent's inline render callback has a fresh reference.
       React.useEffect(() => {
         if (pageRenderReady.value) onRenderSuccess?.();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-      }, [pageNumber]);
-      return <div>PDF page {pageNumber}</div>;
+      }, [pageNumber, width, scale]);
+      return (
+        <div data-test-pdf-width={width} data-test-pdf-scale={scale}>
+          PDF page {pageNumber}
+        </div>
+      );
     },
   };
 });
@@ -50,9 +63,80 @@ afterEach(() => {
   document.querySelector('[data-test-toolbar]')?.remove();
   documentPageCount.value = 3;
   pageRenderReady.value = true;
+  pageAspectRatio.value = 11 / 8.5;
 });
 
 describe('ClioDocumentPdfViewer', () => {
+  it.each([9 / 16, 11 / 8.5, 2])(
+    'fits a page of actual aspect ratio %s by default',
+    async (ratio) => {
+      pageAspectRatio.value = ratio;
+      vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1_200);
+      vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600);
+      render(
+        <ClioDocumentPdfViewer
+          bytes={new Uint8Array([37, 80, 68, 70])}
+          name="paper.pdf"
+          onSelection={vi.fn()}
+        />,
+      );
+      const page = await screen.findByText('PDF page 1');
+      const width = Number(page.dataset.testPdfWidth);
+      expect(width).toBeGreaterThan(0);
+      expect(width + 26).toBeLessThanOrEqual(1_200);
+      expect(width * ratio + 26).toBeLessThanOrEqual(600);
+    },
+  );
+
+  it('makes Fit switch an explicit width view to a complete page', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1_200);
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600);
+    render(
+      <ClioDocumentPdfViewer
+        bytes={new Uint8Array([37, 80, 68, 70])}
+        fit="width"
+        name="paper.pdf"
+        onSelection={vi.fn()}
+      />,
+    );
+    const page = await screen.findByText('PDF page 1');
+    expect(Number(page.dataset.testPdfWidth) * pageAspectRatio.value).toBeGreaterThan(600);
+    await userEvent.click(screen.getByRole('button', { name: 'Fit document to view' }));
+    expect(Number(page.dataset.testPdfWidth) * pageAspectRatio.value + 26).toBeLessThanOrEqual(600);
+    expect(screen.getByRole('button', { name: 'Reset zoom' })).toHaveTextContent('100%');
+  });
+
+  it('captures modifier-wheel zoom inside the PDF and leaves ordinary scrolling alone', async () => {
+    render(
+      <ClioDocumentPdfViewer
+        bytes={new Uint8Array([37, 80, 68, 70])}
+        name="paper.pdf"
+        onSelection={vi.fn()}
+      />,
+    );
+    await screen.findByText('PDF page 1');
+    const scroller = document.querySelector<HTMLElement>('[data-pdf-scroller]')!;
+    const appWheel = vi.fn();
+    window.addEventListener('wheel', appWheel);
+    try {
+      expect(fireEvent.wheel(scroller, { ctrlKey: true, deltaY: 120, cancelable: true })).toBe(
+        false,
+      );
+      expect(screen.getByRole('button', { name: 'Reset zoom' })).toHaveTextContent('85%');
+      expect(appWheel).not.toHaveBeenCalled();
+      expect(fireEvent.wheel(scroller, { metaKey: true, deltaY: -120, cancelable: true })).toBe(
+        false,
+      );
+      expect(screen.getByRole('button', { name: 'Reset zoom' })).toHaveTextContent('100%');
+      expect(appWheel).not.toHaveBeenCalled();
+      expect(fireEvent.wheel(scroller, { deltaY: 120, cancelable: true })).toBe(true);
+      expect(appWheel).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('button', { name: 'Reset zoom' })).toHaveTextContent('100%');
+    } finally {
+      window.removeEventListener('wheel', appWheel);
+    }
+  });
+
   it('keeps continuous pages and shares zoom with the host toolbar', async () => {
     const user = userEvent.setup();
     const toolbar = document.createElement('div');
