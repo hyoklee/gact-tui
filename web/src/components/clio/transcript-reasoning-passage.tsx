@@ -53,6 +53,7 @@ export function TranscriptReasoningPassage({
         className="flex min-h-7 w-full min-w-0 items-center gap-2 px-1 py-1 pr-7 text-xs font-normal text-foreground"
       >
         {icon}
+        <span className="shrink-0 text-muted-foreground">Thinking</span>
         <div className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
           <TranscriptReasoning text={text} source={source}>
             {heading}
@@ -76,6 +77,7 @@ export function TranscriptReasoningPassage({
           className="h-auto min-h-7 w-full min-w-0 justify-start gap-2 rounded-sm px-1 py-1 pr-7 text-xs font-normal text-foreground aria-expanded:bg-transparent"
         >
           {icon}
+          <span className="shrink-0 text-muted-foreground">Thinking</span>
           <span className="min-w-0 flex-1 truncate text-left font-normal">{heading}</span>
           <ChevronRightIcon
             aria-hidden="true"

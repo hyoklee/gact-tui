@@ -18,13 +18,13 @@ it.each([
 ])('renders a complete single-line thought as plain text without a disclosure: %s', (text) => {
   const view = render(<TranscriptReasoningPassage text={text} />);
   expect(screen.getByText('Awaiting treatment definitions')).toBeVisible();
-  expect(screen.queryByText('Thinking', { exact: true })).not.toBeInTheDocument();
+  expect(screen.getByText('Thinking', { exact: true })).toBeVisible();
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
   expect(view.container.querySelector('[aria-expanded]')).toBeNull();
   expect(view.container.querySelectorAll('svg')).toHaveLength(1);
 });
 
-it('offers expansion only for additional recorded content without a visible Thinking label', () => {
+it('labels reasoning separately from execution while offering its recorded details', () => {
   render(
     <TranscriptReasoningPassage
       text={'**Reviewing the results**\n\nThe audit is still running.'}
@@ -32,7 +32,7 @@ it('offers expansion only for additional recorded content without a visible Thin
   );
   const trigger = screen.getByRole('button', { name: 'Thinking: Reviewing the results' });
   expect(trigger).toHaveTextContent('Reviewing the results');
-  expect(screen.queryByText('Thinking', { exact: true })).not.toBeInTheDocument();
+  expect(screen.getByText('Thinking', { exact: true })).toBeVisible();
   fireEvent.click(trigger);
   expect(screen.getByRole('region', { name: 'Thinking details' })).toHaveTextContent(
     'The audit is still running.',
