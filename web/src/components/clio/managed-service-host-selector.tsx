@@ -73,32 +73,69 @@ export function ManagedServiceHostSelector({
         ) : null}
       </div>
       {canAdd && onSshHost ? (
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Connect a computer</DialogTitle>
-            <DialogDescription>
-              Choose where to run services. Your {vocab.agent} stays connected.
-            </DialogDescription>
-          </DialogHeader>
-          <SshHostPicker
-            disabled={pending}
-            value={sshHost}
-            onChange={(host, route) => {
-              if (!host || route.emptyRows.length || !onSshHost) return;
-              void onSshHost(host).then(
-                () => setOpen(false),
-                () => undefined,
-              );
-            }}
-          />
-          {pending ? <p role="status">Connecting...</p> : null}
-          {error ? (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          ) : null}
-        </DialogContent>
+        <ComputerConnectionContent
+          sshHost={sshHost}
+          pending={pending}
+          error={error}
+          onConnect={onSshHost}
+          onClose={() => setOpen(false)}
+        />
       ) : null}
     </Dialog>
+  );
+}
+
+/** The same saved-host picker and error recovery for Hosts, Services and Models. */
+export function ComputerConnectionContent({
+  sshHost,
+  pending,
+  error,
+  onConnect,
+  onClose,
+}: {
+  sshHost?: SshHost;
+  pending: boolean;
+  error?: string;
+  onConnect: (host: SshHost) => Promise<unknown>;
+  onClose: () => void;
+}) {
+  const [candidate, setCandidate] = useState(sshHost);
+  const connect = (host: SshHost) => {
+    setCandidate(host);
+    void onConnect(host).then(onClose, () => undefined);
+  };
+  return (
+    <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+      <DialogHeader>
+        <DialogTitle>Connect a computer</DialogTitle>
+        <DialogDescription>
+          Choose where to run services. Your {vocab.agent} stays connected.
+        </DialogDescription>
+      </DialogHeader>
+      <SshHostPicker
+        disabled={pending}
+        value={sshHost}
+        onChange={(host, route) => {
+          if (!host || route.emptyRows.length) return;
+          connect(host);
+        }}
+      />
+      {pending ? <p role="status">Connecting...</p> : null}
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+      <div className="flex gap-2">
+        {error && candidate ? (
+          <Button disabled={pending} onClick={() => connect(candidate)}>
+            Retry connection
+          </Button>
+        ) : null}
+        <Button className="w-fit" variant="ghost" onClick={onClose}>
+          {pending ? 'Close' : 'Cancel'}
+        </Button>
+      </div>
+    </DialogContent>
   );
 }

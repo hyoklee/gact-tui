@@ -10,7 +10,10 @@ import { SshAuthentication } from './managed-service-target';
 import { ManagedServiceHostSelector } from './managed-service-host-selector';
 import { HostStorageSettings } from './host-storage-settings';
 import { ModelAcquisitions } from './model-acquisition';
-import { InfrastructureOverview } from './infrastructure-overview';
+import { InfrastructureOverview, InfrastructureHostInspection } from './infrastructure-overview';
+import { useRegisterInfrastructureTarget } from '@/hooks/use-register-infrastructure-target';
+import { inTauri } from '@/lib/transport/tauri-runtime';
+import type { SshHost } from '@/lib/ssh-hosts';
 
 /** Inventory is independent from deployment forms and survives navigation. */
 export function InfrastructureInventory({
@@ -23,7 +26,7 @@ export function InfrastructureInventory({
   overview?: Omit<ComponentProps<typeof InfrastructureOverview>, 'data' | 'targetId' | 'onTarget'>;
 }) {
   const repository = useRepository();
-  const { settings } = useConnectionSettings();
+  const { settings, isManagedConnection } = useConnectionSettings();
   const [storageOpen, setStorageOpen] = useState(false);
   const inventory = useQuery({
     queryKey: ['infrastructure-inventory', settings.endpoint],
@@ -35,7 +38,21 @@ export function InfrastructureInventory({
     transportStatus,
     connectionError,
     selectTarget: setTargetId,
+    setTargetId: rememberTargetId,
+    setSshHost,
+    setTarget,
+    setTransportStatus,
   } = useInfrastructureTargetSelection(inventory.data?.targets ?? []);
+  const registerTarget = useRegisterInfrastructureTarget();
+  const canConnectComputer = inTauri() && isManagedConnection;
+  const connectComputer = async (host: SshHost) => {
+    const { registered, status } = await registerTarget.mutateAsync(host);
+    setTarget('ssh');
+    setSshHost(host);
+    rememberTargetId(registered.id);
+    setTransportStatus(status);
+    setParams({ target: registered.id }, { replace: true });
+  };
   const [params, setParams] = useSearchParams();
   const requestedTarget = params.get('target');
   useEffect(() => {
@@ -65,6 +82,10 @@ export function InfrastructureInventory({
         <ManagedServiceHostSelector
           targets={data.targets}
           targetId={targetId}
+          canAdd={canConnectComputer}
+          onSshHost={connectComputer}
+          pending={registerTarget.isPending}
+          error={registerTarget.error?.message}
           onSelect={(id) => {
             setTargetId(id);
             setParams({ target: id }, { replace: true });
@@ -105,7 +126,19 @@ export function InfrastructureInventory({
       </div>
     );
   if (section === 'activity') return <InfrastructureActivity data={data} />;
-  if (section === 'hosts') return <InfrastructureHosts data={data}>{children}</InfrastructureHosts>;
+  if (section === 'hosts')
+    return (
+      <InfrastructureHosts
+        data={data}
+        onSelect={setTargetId}
+        onConnectComputer={canConnectComputer ? connectComputer : undefined}
+        pending={registerTarget.isPending}
+        error={registerTarget.error?.message}
+      >
+        {children}
+        <InfrastructureHostInspection targetId="local" />
+      </InfrastructureHosts>
+    );
   return (
     <InfrastructureOverview {...overview} data={data} targetId={targetId} onTarget={setTargetId} />
   );

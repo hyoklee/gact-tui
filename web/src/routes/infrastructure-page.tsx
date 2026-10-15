@@ -36,7 +36,6 @@ import { InfrastructureInventory } from '@/components/clio/infrastructure-invent
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
   DialogContent,
@@ -44,7 +43,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { CatalogToolset } from '@/components/clio/catalog-toolset';
+import { InfrastructureTools } from '@/components/clio/infrastructure-tools';
 import { useRepository } from '@/hooks/use-repository';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { capitalize, vocab } from '@/lib/brand-vocabulary';
@@ -338,43 +337,14 @@ export function InfrastructurePage() {
           ) : null}
 
           {currentSection === 'tools' ? (
-            <div className="mt-6">
-              {sessionId ? (
-                <div className="mb-4 flex flex-wrap items-center gap-2" aria-label="Tool scope">
-                  <span className="mr-1 text-xs text-muted-foreground">Show</span>
-                  <Button
-                    size="sm"
-                    variant={sessionToolScope ? 'secondary' : 'ghost'}
-                    aria-pressed={sessionToolScope}
-                    onClick={() => setToolScope('session')}
-                  >
-                    This session
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={!sessionToolScope ? 'secondary' : 'ghost'}
-                    aria-pressed={!sessionToolScope}
-                    onClick={() => setToolScope('agent')}
-                  >
-                    All agent tools
-                  </Button>
-                </div>
-              ) : null}
-              {toolsPending ? (
-                <div aria-label="Loading tool catalog" className="grid gap-3" role="status">
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-[32rem] w-full" />
-                </div>
-              ) : displayedTools.length ? (
-                <CatalogToolset servers={servers.data ?? []} tools={displayedTools} />
-              ) : (
-                <p className="rounded-xl border p-6 text-sm text-muted-foreground">
-                  {sessionToolScope
-                    ? `This session has not recorded an effective ${vocab.agent} toolset yet.`
-                    : `${vocab.agent} has not reported any tools.`}
-                </p>
-              )}
-            </div>
+            <InfrastructureTools
+              sessionId={sessionId}
+              sessionScoped={sessionToolScope}
+              pending={toolsPending}
+              tools={displayedTools}
+              servers={servers.data ?? []}
+              onScope={setToolScope}
+            />
           ) : null}
 
           {currentSection === 'services' ? (

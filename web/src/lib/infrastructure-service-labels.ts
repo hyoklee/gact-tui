@@ -14,3 +14,21 @@ export function infrastructureServiceName(id: string): string {
   };
   return names[id] ?? id.replaceAll('_', ' ');
 }
+
+/** Human wording for computer transport, separate from service lifecycle. */
+export function computerConnectionLabel(state: string): string {
+  return (
+    (
+      {
+        connected: 'Connected',
+        connecting: 'Connecting',
+        disconnected: 'Disconnected',
+        awaiting_input: 'Sign-in needed',
+        failed: 'Connection failed',
+        state_unknown: 'Not checked',
+        reconnecting: 'Reconnecting',
+        reauthentication_required: 'Sign-in needed',
+      } as Record<string, string>
+    )[state] || 'Not checked'
+  );
+}

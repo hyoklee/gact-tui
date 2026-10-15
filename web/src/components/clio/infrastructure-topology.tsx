@@ -3,7 +3,11 @@ import { ArrowDownIcon, LaptopIcon, ServerIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { vocab } from '@/lib/brand-vocabulary';
-import { infrastructureServiceName } from '@/lib/infrastructure-service-labels';
+import {
+  infrastructureServiceName,
+  computerConnectionLabel,
+} from '@/lib/infrastructure-service-labels';
+import { InfoTip } from './info-tip';
 
 /** Management edges connect real computers, without claiming their services are selected. */
 export function InfrastructureTopology({
@@ -15,9 +19,9 @@ export function InfrastructureTopology({
   agentLabel: string;
   endpoint: string;
 }) {
-  const remote = data.targets.filter((target) => target.kind !== 'local');
+  const remote = data.targets.filter((target) => target.kind === 'ssh');
   const local = data.targets.find((target) => target.kind === 'local');
-  const height = Math.max(180, remote.length * 100);
+  const height = Math.max(160, remote.length * 100);
   const hostServices = (targetId: string) =>
     data.services.filter((row) => row.target_id === targetId);
   const servicesOn = (id: string) => (
@@ -38,11 +42,12 @@ export function InfrastructureTopology({
   );
   return (
     <section aria-label="Connection map" className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold">Your setup</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Select a computer to manage its services.
-        </p>
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-semibold">Your setup</h2>
+        <InfoTip label="About the connection map">
+          Select a computer to manage its services. Lines show management connections, not which
+          services your agent uses.
+        </InfoTip>
       </div>
       <div className="relative overflow-hidden rounded-xl bg-muted/40 p-4">
         <div
@@ -102,7 +107,7 @@ export function InfrastructureTopology({
                 </div>
                 <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                   <span>{host.kind === 'ssh' ? 'SSH' : 'Endpoint'}</span>
-                  <Badge variant="outline">{host.transport_state.replaceAll('_', ' ')}</Badge>
+                  <Badge variant="outline">{computerConnectionLabel(host.transport_state)}</Badge>
                 </div>
                 {servicesOn(host.id)}
               </Link>
@@ -112,10 +117,10 @@ export function InfrastructureTopology({
                 No remote computers added.
                 <br />
                 <Link
-                  to="/infrastructure/services"
+                  to="/infrastructure/agent"
                   className="mt-2 inline-block text-primary underline-offset-4 hover:underline"
                 >
-                  Add a service host
+                  Manage computers
                 </Link>
               </p>
             ) : null}

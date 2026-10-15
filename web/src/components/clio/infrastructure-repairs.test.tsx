@@ -209,6 +209,7 @@ it('shows saved provider servers and preserves actual host facts in the topology
   await userEvent.click(await screen.findByText('Saved model servers · 1'));
   expect(await screen.findByText('My running server')).toBeVisible();
   await userEvent.click(screen.getByText('Computer details'));
+  await userEvent.click(await screen.findByText('Computer identity & paths'));
   expect(await screen.findByText('Computer: WORKSTATION')).toBeVisible();
   expect(screen.getByRole('link', { name: 'Model providers' })).toHaveAttribute(
     'href',

@@ -13,6 +13,8 @@ import { displayHostPath } from '@/lib/host-path-display';
 import { vocab } from '@/lib/brand-vocabulary';
 import { InfrastructureTopology } from './infrastructure-topology';
 import { remoteUrlFromSpec } from './web-search-configuration';
+import { ClioStatus } from './status';
+import { TechnicalDetails } from './technical-details';
 
 /** Read actual capabilities from the same inspection/cache used by Services. */
 export function InfrastructureHostInspection({ targetId }: { targetId: string }) {
@@ -25,7 +27,7 @@ export function InfrastructureHostInspection({ targetId }: { targetId: string })
     staleTime: 30_000,
   });
   return (
-    <section className="border-y py-4" aria-label="Computer capabilities">
+    <section className="py-2" aria-label="Computer capabilities">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">Computer capabilities</h2>
         <Button
@@ -37,14 +39,29 @@ export function InfrastructureHostInspection({ targetId }: { targetId: string })
           {query.isFetching ? 'Inspecting…' : 'Inspect again'}
         </Button>
       </div>
+      {query.error ? (
+        <p role="alert" className="mt-3 text-sm text-destructive">
+          Could not inspect this computer. Check its connection, then try again.
+        </p>
+      ) : null}
+      {query.error ? (
+        <TechnicalDetails className="mt-2 text-xs" title="Inspection details">
+          <pre className="clio-scrollbar max-h-48 overflow-auto whitespace-pre-wrap break-words">
+            {query.error.message}
+          </pre>
+        </TechnicalDetails>
+      ) : null}
       {query.data ? (
         <>
           <ManagedServiceHostFacts facts={query.data.facts} />
-          {query.data.facts.hostname ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Computer: {query.data.facts.hostname}
-            </p>
-          ) : null}
+          <details className="mt-3 text-xs text-muted-foreground">
+            <summary className="cursor-pointer">Computer identity & paths</summary>
+            {query.data.facts.hostname ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Computer: {query.data.facts.hostname}
+              </p>
+            ) : null}
+          </details>
           {query.data.facts.home ? (
             <p className="mt-1 break-all text-xs text-muted-foreground">
               Home: {displayHostPath(query.data.facts.home)}
@@ -53,9 +70,7 @@ export function InfrastructureHostInspection({ targetId }: { targetId: string })
         </>
       ) : (
         <p className="mt-3 text-sm text-muted-foreground" role="status">
-          {query.error
-            ? `Could not inspect this computer: ${query.error.message}`
-            : 'Reading this computer’s capabilities…'}
+          {query.error ? 'Use Inspect again to retry.' : 'Reading this computer’s capabilities…'}
         </p>
       )}
     </section>
@@ -92,6 +107,8 @@ export function InfrastructureOverview({
       detail: settings.label || vocab.agent,
       description: 'Sessions and tools run here.',
       action: 'Inspect agent',
+      status: 'Connected',
+      state: 'healthy' as const,
       to: '/infrastructure/agent',
     },
     {
@@ -102,14 +119,28 @@ export function InfrastructureOverview({
         : 'Providers and model servers',
       description: 'Connect an API or a model server on any host.',
       action: 'Model providers',
+      status: undefined,
+      state: 'unavailable' as const,
       to: '/settings/providers',
     },
     {
       label: 'Relay',
       icon: NetworkIcon,
-      detail: relay?.configured ? relay.host || relay.mcp_url || 'Configured' : 'Not connected',
+      detail: relay?.configured
+        ? relay.host || relay.mcp_url || 'Saved connection'
+        : 'No Relay connected',
       description: 'Execute work on another computer.',
       action: relay?.configured ? 'Manage Relay' : 'Connect Relay',
+      status: relay?.reachable
+        ? 'Connected'
+        : relay?.configured
+          ? 'Needs attention'
+          : 'Not connected',
+      state: relay?.reachable
+        ? ('healthy' as const)
+        : relay?.configured
+          ? ('degraded' as const)
+          : ('unavailable' as const),
       onClick: onManageRelay,
       to: onManageRelay ? undefined : '/infrastructure/services',
     },
@@ -120,9 +151,19 @@ export function InfrastructureOverview({
         ? remoteUrlFromSpec(webSearch?.spec) || 'Connected'
         : webSearch?.configured
           ? 'Needs attention'
-          : 'Built-in search or a connected research service',
-      description: 'Search and read sources for the local agent.',
-      action: 'Research setup',
+          : 'No research service connected',
+      description: 'Add source reading and research tools to your agent.',
+      action: webSearch?.configured ? 'Manage web research' : 'Connect web research',
+      status: webSearchConnected
+        ? 'Connected'
+        : webSearch?.configured
+          ? 'Needs attention'
+          : 'Not connected',
+      state: webSearchConnected
+        ? ('healthy' as const)
+        : webSearch?.configured
+          ? ('degraded' as const)
+          : ('unavailable' as const),
       onClick: onManageWebSearch,
       to: onManageWebSearch ? undefined : '/infrastructure/services',
     },
@@ -139,46 +180,51 @@ export function InfrastructureOverview({
           Each service can use a different host. Your agent connection stays the same.
         </p>
         <div className="mt-3 divide-y border-y">
-          {rows.map(({ label, icon: Icon, detail, description, action, to, onClick }) => (
-            <div
-              key={label}
-              className="grid items-center gap-3 py-3 sm:grid-cols-[9rem_minmax(0,1fr)_auto]"
-            >
-              <div className="flex items-center gap-3 font-medium">
-                <Icon className="size-4 text-primary" />
-                {label}
+          {rows.map(
+            ({ label, icon: Icon, detail, description, action, to, onClick, status, state }) => (
+              <div
+                key={label}
+                className="grid items-center gap-3 py-3 sm:grid-cols-[9rem_minmax(0,1fr)_auto]"
+              >
+                <div className="flex items-center gap-3 font-medium">
+                  <Icon className="size-4 text-primary" />
+                  {label}
+                </div>
+                <div className="min-w-0">
+                  <p className="break-words text-sm" title={detail}>
+                    {detail}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 sm:justify-self-end">
+                  {status ? <ClioStatus label={status} value={state} /> : null}
+                  {to ? (
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="sm"
+                      className="w-fit justify-self-start sm:justify-self-end"
+                    >
+                      <Link to={to}>
+                        {action}
+                        <ArrowRightIcon />
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-fit justify-self-start sm:justify-self-end"
+                      onClick={onClick}
+                    >
+                      {action}
+                      <ArrowRightIcon />
+                    </Button>
+                  )}
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm" title={detail}>
-                  {detail}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-              </div>
-              {to ? (
-                <Button
-                  asChild
-                  variant="ghost"
-                  size="sm"
-                  className="w-fit justify-self-start sm:justify-self-end"
-                >
-                  <Link to={to}>
-                    {action}
-                    <ArrowRightIcon />
-                  </Link>
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-fit justify-self-start sm:justify-self-end"
-                  onClick={onClick}
-                >
-                  {action}
-                  <ArrowRightIcon />
-                </Button>
-              )}
-            </div>
-          ))}
+            ),
+          )}
         </div>
       </section>
       {servers.data?.length ? (
@@ -226,6 +272,9 @@ export function InfrastructureOverview({
         </section>
       </details>
       <div className="flex flex-wrap gap-3">
+        <Button asChild variant="outline">
+          <Link to="/infrastructure/agent">Manage computers</Link>
+        </Button>
         <Button asChild variant="outline">
           <Link to="/infrastructure/models">Download models & manage storage</Link>
         </Button>

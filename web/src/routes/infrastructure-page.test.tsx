@@ -274,10 +274,7 @@ describe('InfrastructurePage', () => {
     renderPage('/workspaces/ws_factorio/sessions/sess_demo', 'tools');
 
     expect(await screen.findByText('4 tools')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Built-in 3' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(screen.getByRole('button', { name: 'All 4' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /Create plan/u })).not.toBeVisible();
     await user.click(screen.getByText('Planning'));
     expect(screen.getByRole('button', { name: /Create plan/u })).toBeVisible();

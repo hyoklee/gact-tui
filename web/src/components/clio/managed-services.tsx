@@ -15,13 +15,13 @@ import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useInfrastructureState } from '@/hooks/use-infrastructure-state';
 import { useInfrastructureTargetSelection } from '@/hooks/use-infrastructure-target-selection';
+import { useRegisterInfrastructureTarget } from '@/hooks/use-register-infrastructure-target';
 import { useManagedOperations } from '@/hooks/use-managed-operations';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useRepository } from '@/hooks/use-repository';
 import { useSavedServers } from '@/hooks/use-saved-servers';
 import { vocab } from '@/lib/brand-vocabulary';
-import type { SshHost } from '@/lib/ssh-hosts';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { AgentServicesOverview } from './agent-services-overview';
 import {
@@ -33,16 +33,12 @@ import { WebSearchServiceConnection } from './web-search-service-connection';
 import { webSearchConnectionMatchesTarget } from './web-search-configuration';
 import { ManagedServiceHostSelector } from './managed-service-host-selector';
 import { ManagedServiceHostFacts } from './managed-service-host-facts';
-import {
-  attachInfrastructureSshTransport,
-  type SshTransportStatus,
-} from '@/tauri/ssh-infrastructure-transport';
+import type { SshTransportStatus } from '@/tauri/ssh-infrastructure-transport';
 import { InspectionProgress, SshAuthentication } from './managed-service-target';
 import {
   configurationForVariant,
   modelRuntimeServer,
   targetLabel,
-  targetMatchesHost,
   waitForOperation,
 } from './managed-service-target-utils';
 import { ManagedServiceInventory } from './managed-service-inventory';
@@ -172,41 +168,14 @@ export function ManagedServices({
     visitedTargetLink.current = linkKey;
     selectTarget(requestedTarget);
   }, [settings.endpoint, requestedTarget, targets.data, selectTarget]);
-  const registerTarget = useMutation({
-    mutationFn: async (host: SshHost) => {
-      const definition = {
-        kind: 'ssh' as const,
-        label: host.label,
-        install_root: host.installRoot,
-        ssh: {
-          profile: host.profile ?? '',
-          host: host.host ?? '',
-          user: host.user ?? '',
-          port: host.port,
-          identity_file: host.identityFile ?? '',
-          jump_hosts: host.jumpHosts ?? [],
-          platform: host.platform ?? 'auto',
-        },
-      };
-      // Right after a reload the targets query may not have answered yet; asking
-      // again here keeps a host from being registered twice (ares, ares-2, ...).
-      const known = targets.data ?? (await repository.infrastructureTargets());
-      const existing = known.find((candidate) => targetMatchesHost(candidate, host));
-      if (existing) return repository.updateInfrastructureTarget(existing.id, definition);
-      return repository.createInfrastructureTarget(definition);
-    },
-    onSuccess: async (registered) => {
-      setTargetId(registered.id);
-      const status = await attachInfrastructureSshTransport(
-        settings.endpoint,
-        settings.token,
-        registered,
-      );
-      setTransportStatus(status);
-      await repository.setInfrastructureTransportState(registered.id, status.state);
-      await targets.refetch();
-    },
-  });
+  const registerTarget = useRegisterInfrastructureTarget();
+  const connectComputer = async (host: NonNullable<typeof sshHost>) => {
+    const { registered, status } = await registerTarget.mutateAsync(host);
+    setTarget('ssh');
+    setSshHost(host);
+    setTargetId(registered.id);
+    setTransportStatus(status);
+  };
   const catalog = useQuery({
     enabled:
       target === 'local' ||
@@ -499,11 +468,7 @@ export function ManagedServices({
               { replace: true },
             );
           }}
-          onSshHost={async (host) => {
-            setTarget('ssh');
-            setSshHost(host);
-            await registerTarget.mutateAsync(host);
-          }}
+          onSshHost={connectComputer}
         />
         <div className="flex items-center gap-2">
           {target === 'ssh' ? (
@@ -524,7 +489,7 @@ export function ManagedServices({
               size="sm"
               variant="outline"
               disabled={registerTarget.isPending}
-              onClick={() => registerTarget.mutate(sshHost)}
+              onClick={() => void connectComputer(sshHost).catch(() => undefined)}
             >
               Reconnect
             </Button>

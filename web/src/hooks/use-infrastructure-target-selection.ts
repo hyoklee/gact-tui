@@ -10,11 +10,13 @@ import { inTauri } from '@/lib/transport/tauri-runtime';
 import { useRepository } from './use-repository';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { useInfrastructureState } from './use-infrastructure-state';
+import { useQueryClient } from '@tanstack/react-query';
 
 /** Services, model files and inspection share one computer within this agent connection. */
 export function useInfrastructureTargetSelection(targets: readonly InfrastructureTarget[]) {
   const { settings, isManagedConnection } = useConnectionSettings();
   const repository = useRepository();
+  const queryClient = useQueryClient();
   const [connectionError, setConnectionError] = useState<string>();
   const attached = useRef('');
   const [targetId, setTargetId] = useInfrastructureState(settings.endpoint, 'target-id', 'local');
@@ -50,6 +52,11 @@ export function useInfrastructureTargetSelection(targets: readonly Infrastructur
           setTransportStatus(status);
         }
         await repository.setInfrastructureTransportState(selected.id, status.state);
+        if (active && status.state === 'connected') {
+          await queryClient.invalidateQueries({
+            queryKey: ['managed-service-catalog', settings.endpoint, selected.id],
+          });
+        }
       })
       .catch((error: unknown) => {
         if (active) setConnectionError(error instanceof Error ? error.message : String(error));
@@ -66,6 +73,7 @@ export function useInfrastructureTargetSelection(targets: readonly Infrastructur
     settings.token,
     targetId,
     setTransportStatus,
+    queryClient,
   ]);
   const sessionId = transportStatus?.session_id;
   useEffect(() => {
@@ -84,6 +92,10 @@ export function useInfrastructureTargetSelection(targets: readonly Infrastructur
           void attachInfrastructureSshTransport(settings.endpoint, settings.token, selected)
             .then((status) => {
               if (active) setTransportStatus(status);
+              if (active && status.state === 'connected')
+                void queryClient.invalidateQueries({
+                  queryKey: ['managed-service-catalog', settings.endpoint, targetId],
+                });
             })
             .catch((error: unknown) => {
               if (active)
@@ -106,6 +118,7 @@ export function useInfrastructureTargetSelection(targets: readonly Infrastructur
     attachment,
     settings.endpoint,
     settings.token,
+    queryClient,
   ]);
   const selectTarget = useCallback(
     (id: string) => {
