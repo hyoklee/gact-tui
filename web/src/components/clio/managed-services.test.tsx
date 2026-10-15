@@ -181,11 +181,10 @@ describe('ManagedServices', () => {
       },
     ]);
     renderServices();
-    await userEvent.click(screen.getByText(/Execution host ·/u));
+    await userEvent.click(screen.getByRole('button', { name: 'Change host' }));
     await userEvent.click(
-      await screen.findByRole('combobox', { name: 'Registered execution host' }),
+      await screen.findByRole('button', { name: 'Manage services on Homelab' }),
     );
-    await userEvent.click(screen.getByRole('option', { name: 'Homelab · Connected' }));
     await waitFor(() =>
       expect(repository.managedServiceCatalog).toHaveBeenCalledWith(
         'homelab',
@@ -559,14 +558,10 @@ describe('ManagedServices', () => {
       connectedAgentLabel: 'Utah CLIO',
       connectedAgentLocation: 'Utah',
     });
-    await userEvent.click(screen.getByText(/Execution host ·/u));
+    await userEvent.click(screen.getByRole('button', { name: 'Change host' }));
 
-    expect(
-      await screen.findByRole('radio', {
-        name: new RegExp(`This ${brand.agentName}’s computer`, 'u'),
-      }),
-    ).toBeVisible();
-    expect(screen.queryByRole('radio', { name: /Another computer/u })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^Manage services on /u })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Add another computer' })).not.toBeInTheDocument();
     expect(screen.queryByText('This connection would not be reachable')).not.toBeInTheDocument();
   });
 
@@ -609,7 +604,7 @@ describe('ManagedServices', () => {
     deployment.managedServiceCatalog.mockReturnValue(new Promise(() => undefined));
     renderServices();
 
-    expect(screen.getByText(/Execution host ·/u)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Change host' })).toBeVisible();
     expect(screen.getByText('Inspecting this computer')).toBeVisible();
   });
 
@@ -635,9 +630,9 @@ describe('ManagedServices', () => {
           }),
     );
     renderServices();
-    await userEvent.click(screen.getByText(/Execution host ·/u));
+    await userEvent.click(screen.getByRole('button', { name: 'Change host' }));
 
-    await user.click(screen.getByRole('radio', { name: /Another computer/u }));
+    await user.click(screen.getByRole('button', { name: 'Add another computer' }));
     await user.click(await screen.findByRole('combobox', { name: 'Saved SSH host' }));
     await user.click(screen.getByRole('option', { name: 'homelab' }));
 
@@ -676,9 +671,9 @@ describe('ManagedServices', () => {
       .mockResolvedValue([registered]);
     repository.updateInfrastructureTarget.mockResolvedValue(registered);
     renderServices();
-    await userEvent.click(screen.getByText(/Execution host ·/u));
+    await userEvent.click(screen.getByRole('button', { name: 'Change host' }));
 
-    await user.click(screen.getByRole('radio', { name: /Another computer/u }));
+    await user.click(screen.getByRole('button', { name: 'Add another computer' }));
     await user.click(await screen.findByRole('combobox', { name: 'Saved SSH host' }));
     await user.click(screen.getByRole('option', { name: 'homelab' }));
 
@@ -694,9 +689,9 @@ describe('ManagedServices', () => {
   it('adds a manual SSH host beside imported profiles and uses it for inspection', async () => {
     const user = userEvent.setup();
     renderServices();
-    await userEvent.click(screen.getByText(/Execution host ·/u));
+    await userEvent.click(screen.getByRole('button', { name: 'Change host' }));
 
-    await user.click(screen.getByRole('radio', { name: /Another computer/u }));
+    await user.click(screen.getByRole('button', { name: 'Add another computer' }));
     await user.click(screen.getByRole('button', { name: 'Add SSH host' }));
     await user.type(screen.getByLabelText('Address'), 'login.example.edu');
     await user.clear(screen.getByLabelText('Port'));
@@ -714,9 +709,10 @@ describe('ManagedServices', () => {
         }),
       ),
     );
-    expect(screen.getByRole('combobox', { name: 'Saved SSH host' })).toHaveTextContent(
-      'Utah cluster',
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Connect a computer' })).not.toBeInTheDocument(),
     );
+    expect(screen.getByRole('heading', { name: 'Utah cluster' })).toBeVisible();
     // The route's own sortable list also renders an assistive-tech live
     // region once it has a destination row, so this scopes past it.
     expect(screen.getByText('Connected', { selector: '[role="status"]' })).toBeVisible();
@@ -736,13 +732,11 @@ describe('ManagedServices', () => {
     runtime.desktop = false;
     connection.isManagedConnection = false;
     renderServices();
-    await userEvent.click(screen.getByText(/Execution host ·/u));
+    await userEvent.click(screen.getByRole('button', { name: 'Change host' }));
 
-    expect(await screen.findByText(/Execution host ·/u)).toBeVisible();
-    expect(
-      screen.getByRole('radio', { name: new RegExp(`This ${brand.agentName}’s computer`, 'u') }),
-    ).toBeVisible();
-    expect(screen.queryByRole('radio', { name: /Another computer/u })).not.toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Choose a service host' })).toBeVisible();
+    expect(await screen.findByRole('button', { name: /^Manage services on /u })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Add another computer' })).not.toBeInTheDocument();
   });
 
   it('opens the installer-requested runtime directly', async () => {
@@ -764,7 +758,7 @@ describe('ManagedServices', () => {
     installerInfra.installerRequestedLlamaCpp.mockResolvedValue(false);
     renderServices();
 
-    await screen.findByText(/Execution host ·/u);
+    await screen.findByRole('button', { name: 'Change host' });
     expect(
       screen.queryByText('Finish setting up your local model runtime'),
     ).not.toBeInTheDocument();
@@ -788,7 +782,7 @@ describe('ManagedServices', () => {
     });
     renderServices();
 
-    await screen.findByText(/Execution host ·/u);
+    await screen.findByRole('button', { name: 'Change host' });
     expect(
       screen.queryByText('Finish setting up your local model runtime'),
     ).not.toBeInTheDocument();

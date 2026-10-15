@@ -22,10 +22,10 @@ import { InfoTip } from './info-tip';
 const groups = [
   { id: 'model_runtime', label: 'Inference' },
   { id: 'monitoring', label: 'Monitoring and provenance' },
-  { id: 'supporting', label: 'Supporting services' },
+  { id: 'scientific_service', label: 'Web research' },
+  { id: 'remote_access', label: 'Remote execution' },
 ] as const;
-const groupFor = (service: ManagedServiceDefinition) =>
-  ['model_runtime', 'monitoring'].includes(service.category) ? service.category : 'supporting';
+const groupFor = (service: ManagedServiceDefinition) => service.category;
 
 /** Installed inventory first; deployment is a separate choose/configure flow. */
 export function ManagedServiceInventory({
@@ -79,7 +79,7 @@ export function ManagedServiceInventory({
     <section aria-label={`Services on ${hostLabel}`} className="space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold">Installed on {hostLabel}</h2>
+          <h2 className="text-lg font-semibold">Installed services</h2>
           <InfoTip label="About service management">
             Manage resources already installed on the selected host. Deploy new installs an owned
             runtime. Connect existing attaches a service that you manage elsewhere.
@@ -140,7 +140,7 @@ export function ManagedServiceInventory({
                   <ManagedServiceLogo service={service} />
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{service.label}</p>
-                    <p className="truncate text-xs text-muted-foreground">{hostLabel}</p>
+                    <p className="truncate text-xs text-muted-foreground">{service.description}</p>
                     <VerificationState service={service} />
                   </div>
                   <ManagedServiceState service={service} />

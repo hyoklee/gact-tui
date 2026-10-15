@@ -93,13 +93,14 @@ export function InfrastructurePage() {
     refetchInterval: INFRASTRUCTURE_POLL_MS,
   });
   const relay = useQuery({
-    enabled: currentSection === 'services',
+    enabled: currentSection === 'services' || currentSection === 'overview',
     queryKey: queryKeys.key('relay-status', settings.endpoint),
     queryFn: ({ signal }) => repository.relayStatus(signal),
     refetchInterval: INFRASTRUCTURE_POLL_MS,
   });
   const servers = useQuery({
-    enabled: currentSection === 'tools' || currentSection === 'services',
+    enabled:
+      currentSection === 'tools' || currentSection === 'services' || currentSection === 'overview',
     queryKey: queryKeys.key(
       'mcp-servers',
       settings.endpoint,
@@ -129,7 +130,7 @@ export function InfrastructurePage() {
     refetchInterval: INFRASTRUCTURE_POLL_MS,
   });
   const webSearchConfiguration = useQuery({
-    enabled: currentSection === 'services',
+    enabled: currentSection === 'services' || currentSection === 'overview',
     queryKey: queryKeys.key('mcp-configuration', settings.endpoint, 'web'),
     queryFn: ({ signal }) => repository.mcpConfiguration('web', signal),
     refetchInterval: INFRASTRUCTURE_POLL_MS,
@@ -322,7 +323,16 @@ export function InfrastructurePage() {
           {currentSection === 'overview' ||
           currentSection === 'models' ||
           currentSection === 'activity' ? (
-            <InfrastructureInventory section={currentSection} />
+            <InfrastructureInventory
+              section={currentSection}
+              overview={{
+                relay: relay.data,
+                webSearch: webSearchConfiguration.data,
+                webSearchConnected: webSearchReady,
+                onManageRelay: () => setRelayOpen(true),
+                onManageWebSearch: () => setWebSearchOpen(true),
+              }}
+            />
           ) : null}
 
           {currentSection === 'tools' ? (

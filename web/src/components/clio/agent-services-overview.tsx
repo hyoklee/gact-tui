@@ -39,7 +39,7 @@ export function AgentServicesOverview({
           service runs.
         </InfoTip>
       </header>
-      <div className="divide-y border-t">
+      <div className="divide-y">
         {webSearch?.configured || webSearchConnected ? (
           <ServiceConnectionRow
             action={

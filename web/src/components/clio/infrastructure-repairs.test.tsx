@@ -204,16 +204,21 @@ it('shows saved provider servers and preserves actual host facts in the topology
       onTarget={vi.fn()}
     />,
   );
+  expect(screen.getByRole('img', { name: /Connections from this client/u })).toBeInTheDocument();
+  expect(repository.managedServiceCatalog).not.toHaveBeenCalled();
+  await userEvent.click(await screen.findByText('Saved model servers · 1'));
   expect(await screen.findByText('My running server')).toBeVisible();
+  await userEvent.click(screen.getByText('Computer details'));
   expect(await screen.findByText('Computer: WORKSTATION')).toBeVisible();
-  expect(screen.getByRole('link', { name: 'Provider setup' })).toHaveAttribute(
+  expect(screen.getByRole('link', { name: 'Model providers' })).toHaveAttribute(
     'href',
     '/settings/providers',
   );
-  expect(within(screen.getByLabelText('Connection map')).getByRole('link')).toHaveAttribute(
-    'href',
-    '/infrastructure/agent',
-  );
+  expect(
+    within(screen.getByLabelText('Connection map')).getByRole('link', {
+      name: /Inspect connected/u,
+    }),
+  ).toHaveAttribute('href', '/infrastructure/agent');
 });
 
 it('keeps the tool-list action outside the selected tool contract', async () => {

@@ -3,7 +3,7 @@ import { useInfrastructureState } from '@/hooks/use-infrastructure-state';
 import { Link } from 'react-router-dom';
 import { ServerIcon } from 'lucide-react';
 import { vocab } from '@/lib/brand-vocabulary';
-import type { ReactNode } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { useRepository } from '@/hooks/use-repository';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { Button } from '@/components/ui/button';
@@ -23,9 +23,11 @@ import { InfrastructureOverview } from './infrastructure-overview';
 export function InfrastructureInventory({
   section,
   children,
+  overview,
 }: {
   section: 'overview' | 'models' | 'activity' | 'hosts';
   children?: ReactNode;
+  overview?: Omit<ComponentProps<typeof InfrastructureOverview>, 'data' | 'targetId' | 'onTarget'>;
 }) {
   const repository = useRepository();
   const { settings } = useConnectionSettings();
@@ -178,5 +180,7 @@ export function InfrastructureInventory({
           ))}
       </div>
     );
-  return <InfrastructureOverview data={data} targetId={targetId} onTarget={setTargetId} />;
+  return (
+    <InfrastructureOverview {...overview} data={data} targetId={targetId} onTarget={setTargetId} />
+  );
 }

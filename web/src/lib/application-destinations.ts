@@ -205,7 +205,7 @@ export const INFRASTRUCTURE_SECTIONS = [
     id: 'overview',
     label: 'Overview',
     icon: LayoutDashboardIcon,
-    description: 'Your connected hosts, services, and current work.',
+    description: 'See how your agent, computers, and services fit together.',
   },
   {
     id: 'agent',
@@ -217,7 +217,7 @@ export const INFRASTRUCTURE_SECTIONS = [
     id: 'services',
     label: 'Services',
     icon: CableIcon,
-    description: `Install, connect, operate, and verify the services that give ${vocab.agent} more capabilities.`,
+    description: `Manage inference, web research, and remote execution on the host you choose.`,
   },
   {
     id: 'models',
