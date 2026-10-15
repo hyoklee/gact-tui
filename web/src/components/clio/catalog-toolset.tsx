@@ -74,7 +74,7 @@ export function CatalogToolset({
         </p>
       </div>
       <div className="border-y bg-card lg:grid lg:h-[min(42rem,calc(100dvh-16rem))] lg:min-h-[22rem] lg:grid-cols-[minmax(13rem,17rem)_minmax(0,1fr)]">
-        <aside className="hidden min-h-0 border-r lg:flex">
+        <aside className="hidden min-h-0 min-w-0 overflow-hidden border-r lg:flex">
           <ToolBrowser
             bundles={bundles}
             catalog={catalog}
@@ -141,7 +141,7 @@ function ToolBrowser({
     .filter((bundle) => catalog === 'all' || bundle.id === catalog)
     .flatMap((bundle) => bundle.domains);
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="space-y-3 border-b p-3">
         <label className="relative block">
           <SearchIcon
@@ -222,7 +222,7 @@ function SourceButton({
   return (
     <button
       aria-pressed={active}
-      className={`flex items-center justify-between rounded-md px-2.5 py-1.5 text-sm transition-colors ${
+      className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
         active
           ? 'bg-background font-medium shadow-sm'
           : 'text-muted-foreground hover:text-foreground'

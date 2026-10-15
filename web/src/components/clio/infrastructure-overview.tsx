@@ -61,12 +61,12 @@ export function InfrastructureHostInspection({ targetId }: { targetId: string })
                 Computer: {query.data.facts.hostname}
               </p>
             ) : null}
+            {query.data.facts.home ? (
+              <p className="mt-1 break-all text-xs text-muted-foreground">
+                Home: {displayHostPath(query.data.facts.home)}
+              </p>
+            ) : null}
           </details>
-          {query.data.facts.home ? (
-            <p className="mt-1 break-all text-xs text-muted-foreground">
-              Home: {displayHostPath(query.data.facts.home)}
-            </p>
-          ) : null}
         </>
       ) : (
         <p className="mt-3 text-sm text-muted-foreground" role="status">

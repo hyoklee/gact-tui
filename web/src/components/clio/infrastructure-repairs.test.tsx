@@ -147,6 +147,7 @@ it('groups each health row once and updates the counts from the live sandbox sta
   expect(screen.getByText('Warnings (1)')).toBeVisible();
   expect(screen.getAllByText('sandbox')).toHaveLength(1);
   expect(screen.getByLabelText('Ready and working (2)')).not.toHaveAttribute('open');
+  expect(screen.queryByLabelText('Errors (0)')).not.toBeInTheDocument();
 });
 
 it('shows the sandbox setup result instead of silently discarding it', async () => {
@@ -209,7 +210,9 @@ it('shows saved provider servers and preserves actual host facts in the topology
   await userEvent.click(await screen.findByText('Saved model servers · 1'));
   expect(await screen.findByText('My running server')).toBeVisible();
   await userEvent.click(screen.getByText('Computer details'));
+  expect(await screen.findByText('Home: C:\\Users\\Alice')).not.toBeVisible();
   await userEvent.click(await screen.findByText('Computer identity & paths'));
+  expect(screen.getByText('Home: C:\\Users\\Alice')).toBeVisible();
   expect(await screen.findByText('Computer: WORKSTATION')).toBeVisible();
   expect(screen.getByRole('link', { name: 'Model providers' })).toHaveAttribute(
     'href',
