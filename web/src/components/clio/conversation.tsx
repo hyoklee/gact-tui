@@ -53,6 +53,7 @@ interface ActiveMcpApp {
 
 import { ConversationMessageRow } from './conversation-message-row';
 import { placeDeliveredFeedback } from './conversation-feedback';
+import { canGroupUserMessages } from './conversation-user-group';
 import { placeHarnessInjections } from './conversation-injection-placement';
 import {
   foldSubagentReturns,
@@ -627,6 +628,15 @@ function ConversationBody({
                   injectionsGrouped={injectionPlacement.grouped.has(message.id)}
                   responseContinued={responseContinuity.continued.has(message.id)}
                   responseContinuation={responseContinuity.continuations.has(message.id)}
+                  userContinuation={
+                    canGroupUserMessages(messages[index - 1], message) &&
+                    !modelBoundaries.has(message.id)
+                  }
+                  userContinued={Boolean(
+                    messages[index + 1] &&
+                      canGroupUserMessages(message, messages[index + 1]) &&
+                      !modelBoundaries.has(messages[index + 1].id),
+                  )}
                   turnPresentation={activityPlacement.get(message.id)}
                   active={
                     (preparation?.sessionState === 'running' ||

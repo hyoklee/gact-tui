@@ -30,7 +30,19 @@ const human: Message = {
 };
 
 function Review() {
-  const [phase, setPhase] = useState<'thinking' | 'steered' | 'resumed'>('thinking');
+  const [phase, setPhase] = useState<'thinking' | 'pending' | 'steered' | 'resumed'>('thinking');
+  const [cancelled, setCancelled] = useState<string[]>([]);
+  const [startedAt] = useState(() => new Date(Date.now() - 8000).toISOString());
+  const humans = [
+    human,
+    ...['Keep it fast.', 'Use the existing file.'].map((text, index) => ({
+      ...human,
+      id: `human-${index + 2}`,
+      blocks: [{ id: `human-text-${index + 2}`, type: 'text' as const, text }],
+    })),
+  ]
+    .filter((row) => !cancelled.includes(row.id))
+    .map((row) => (phase === 'pending' ? { ...row, metadata: undefined } : row));
   const assistant: Message = {
     id: 'assistant',
     session_id: sessionId,
@@ -43,18 +55,23 @@ function Review() {
         type: 'reasoning',
         text: 'Writing shader noise functions...\n\nStill writing shader code. I am considering how to inspect the result.',
         streaming: phase === 'thinking',
+        started_at: phase === 'thinking' ? startedAt : created_at,
+        duration_ms: phase === 'thinking' ? undefined : 12400,
+        completed_at: phase === 'thinking' ? undefined : '2026-10-15T18:00:12.400Z',
       },
       ...(phase === 'thinking'
         ? []
-        : [
-            {
-              id: 'corrected',
-              type: 'text' as const,
-              channel: 'next_thought' as const,
-              text: 'I will inspect the saved file. The browser proposal was superseded before execution.',
-            },
-            { id: 'inspect-part', type: 'tool' as const, tool_id: 'inspect' },
-          ]),
+        : phase === 'pending'
+          ? [{ id: 'inspect-part', type: 'tool' as const, tool_id: 'inspect' }]
+          : [
+              {
+                id: 'corrected',
+                type: 'text' as const,
+                channel: 'next_thought' as const,
+                text: 'I will use your updated instructions for the next step.',
+              },
+              { id: 'inspect-part', type: 'tool' as const, tool_id: 'inspect' },
+            ]),
     ],
   };
   const resumed: Message = {
@@ -86,7 +103,9 @@ function Review() {
       id: 'inspect',
       session_id: sessionId,
       name: 'fs_read_file',
-      state: 'succeeded',
+      state: phase === 'pending' ? 'running' : 'succeeded',
+      started_at: startedAt,
+      duration_ms: phase === 'pending' ? undefined : 33900,
       input: { path: 'plasma.html' },
       output: 'HTML with an embedded script.',
       presentation: { action: 'Read', summary: 'plasma.html', blocks: [] },
@@ -112,6 +131,16 @@ function Review() {
           <Button size="sm" variant="outline" onClick={() => setPhase('thinking')}>
             Thinking only
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setCancelled([]);
+              setPhase('pending');
+            }}
+          >
+            Three steers during tool
+          </Button>
           <Button size="sm" variant="outline" onClick={() => setPhase('steered')}>
             Deliver steer
           </Button>
@@ -126,9 +155,18 @@ function Review() {
               phase === 'thinking'
                 ? [assistant]
                 : phase === 'steered'
-                  ? [assistant, human]
-                  : [assistant, human, resumed]
+                  ? [assistant, ...humans]
+                  : phase === 'pending'
+                    ? [assistant, ...humans]
+                    : [assistant, ...humans, resumed]
             }
+            pendingMessageIds={new Set(phase === 'pending' ? humans.map((row) => row.id) : [])}
+            cancellablePendingMessageIds={
+              new Set(phase === 'pending' ? humans.map((row) => row.id) : [])
+            }
+            onCancelPendingSteer={async (id) => {
+              setCancelled((rows) => [...rows, id]);
+            }}
             tools={phase === 'thinking' ? {} : tools}
             tasks={{}}
             subagents={{}}

@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils';
 import { GroundedMessageResponse } from './grounded-message-response';
 import { useTranscriptDisclosure } from './transcript-disclosure-context';
 import { TranscriptReasoning, type ThoughtSource } from './transcript-reasoning';
+import { useReasoningDuration } from './use-reasoning-duration';
+import { formatDuration } from '@/lib/format';
 
 /** Show recorded reasoning plainly; disclose only passages with additional content. */
 export function TranscriptReasoningPassage({
@@ -12,12 +14,27 @@ export function TranscriptReasoningPassage({
   text,
   streaming = false,
   source,
+  startedAt,
+  durationMs,
 }: {
   id?: string;
   text: string;
   streaming?: boolean;
   source?: ThoughtSource;
+  startedAt?: string;
+  durationMs?: number;
 }) {
+  const duration = useReasoningDuration(startedAt, durationMs, streaming);
+  const timing =
+    duration !== undefined ? (
+      <span
+        className="shrink-0 text-muted-foreground"
+        title="Elapsed time for this reasoning passage observed by CLIO, separate from tool execution."
+        aria-label={`Reasoning phase: ${formatDuration(duration, 'tenths')}`}
+      >
+        {formatDuration(duration, 'tenths')}
+      </span>
+    ) : null;
   const key = source
     ? `thinking:${source.sessionId}:${source.messageId}:${source.partId}:${source.field}`
     : id
@@ -54,6 +71,7 @@ export function TranscriptReasoningPassage({
       >
         {icon}
         <span className="shrink-0 text-muted-foreground">Thinking</span>
+        {timing}
         <div className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
           <TranscriptReasoning text={text} source={source}>
             {heading}
@@ -78,6 +96,7 @@ export function TranscriptReasoningPassage({
         >
           {icon}
           <span className="shrink-0 text-muted-foreground">Thinking</span>
+          {timing}
           <span className="min-w-0 flex-1 truncate text-left font-normal">{heading}</span>
           <ChevronRightIcon
             aria-hidden="true"
