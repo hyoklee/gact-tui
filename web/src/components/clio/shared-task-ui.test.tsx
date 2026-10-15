@@ -141,8 +141,6 @@ it('keeps advertised subtree cancellation available after the subagent itself co
   render(
     <RunActions
       onCancel={cancel}
-      onDetach={vi.fn()}
-      onDismiss={vi.fn()}
       pending={false}
       row={{
         handleId: 'task_completed_parent',
@@ -156,7 +154,6 @@ it('keeps advertised subtree cancellation available after the subagent itself co
         workspaceLabel: 'Owned',
         workspaceLabelFields: { name: 'Owned', qualifiers: [] },
         updatedAt: '2026-10-08T10:00:00Z',
-        detached: false,
         taskKind: 'Subagent',
         assignment: 'Own descendant work',
         cancellable: true,
