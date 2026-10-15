@@ -70,7 +70,7 @@ function renderCard(installed = false, variant = 'native-windows-cpu') {
 }
 
 describe('llama.cpp runtime installation', () => {
-  it('installs without asking for a GGUF or server access settings', async () => {
+  it('installs without requiring a GGUF or changing the access defaults', async () => {
     const { user, action } = renderCard();
     expect(screen.queryByRole('textbox', { name: 'llama.cpp GGUF model path' })).toBeNull();
     expect(
