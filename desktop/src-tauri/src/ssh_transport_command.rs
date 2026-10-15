@@ -113,8 +113,12 @@ pub fn remote_shell_command(platform: &str, ready_marker: &str) -> String {
             "powershell -NoLogo -NoProfile -Command \"$env:NO_PROXY = '127.0.0.1,localhost,::1,' + $env:NO_PROXY; Write-Output '{ready_marker}'; while (($line = [Console]::In.ReadLine()) -ne $null) {{ Invoke-Expression $line }}\""
         )
     } else {
+        // An exec'd "sh -s" sees the SSH PTY and starts interactively on macOS,
+        // where readline changes the terminal discipline after our stty setup.
+        // Source the stream inside an explicitly noninteractive interpreter;
+        // announce readiness only from that final interpreter.
         format!(
-            "sh -lc \"stty -echo; no_proxy=127.0.0.1,localhost,::1,\\$no_proxy; NO_PROXY=127.0.0.1,localhost,::1,\\$NO_PROXY; export no_proxy NO_PROXY; printf '{ready_marker}\\n'; exec sh -s\""
+            r#"sh -lc "stty -echo; no_proxy=127.0.0.1,localhost,::1,\$no_proxy; NO_PROXY=127.0.0.1,localhost,::1,\$NO_PROXY; export no_proxy NO_PROXY; exec sh -c 'printf \"{ready_marker}\\n\"; . /dev/stdin'""#
         )
     }
 }
@@ -279,7 +283,9 @@ mod tests {
         assert!(posix.contains("NO_PROXY=127.0.0.1,localhost,::1,\\$NO_PROXY"));
         assert!(posix.contains("export no_proxy NO_PROXY"));
         assert!(posix.find("NO_PROXY").unwrap() < posix.find("READY").unwrap());
-        assert!(posix.ends_with("exec sh -s\""));
+        assert!(posix.contains(r#"exec sh -c 'printf \"READY\\n\""#));
+        assert!(posix.ends_with(r#"; . /dev/stdin'""#));
+        assert!(!posix.contains("exec sh -s"));
         let windows = remote_shell_command("windows", "READY");
         assert!(windows.contains("$env:NO_PROXY = '127.0.0.1,localhost,::1,'"));
     }
