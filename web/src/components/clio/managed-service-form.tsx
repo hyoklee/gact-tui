@@ -15,6 +15,7 @@ import { ManagedServiceContextControl } from './managed-service-context';
 import { ServerParametersForm } from './managed-service-parameters';
 import { MonitoringImageStorage } from './monitoring-image-storage';
 import { SearchEnginePicker } from './search-engine-picker';
+import { ServiceInstallationMethod } from './service-installation-method';
 
 /** Shared definition-driven setup and reconfiguration form. Paths belong to the named host. */
 export function ManagedServiceForm({
@@ -28,6 +29,7 @@ export function ManagedServiceForm({
   storageOnly = false,
   installationOnly = false,
   showIntroduction = true,
+  showMethod = true,
 }: {
   service: ManagedServiceDefinition;
   configuration: Record<string, string>;
@@ -40,6 +42,7 @@ export function ManagedServiceForm({
   /** Package/image preparation does not need a model, listening port or server flags. */
   installationOnly?: boolean;
   showIntroduction?: boolean;
+  showMethod?: boolean;
 }) {
   const fields = service.configuration_fields.filter(
     (field) =>
@@ -121,7 +124,9 @@ export function ManagedServiceForm({
     </Field>
   );
   const storage =
-    service.category === 'monitoring' || variant.startsWith('native-cuda') ? (
+    service.category === 'monitoring' ||
+    variant.startsWith('native-cuda') ||
+    variant.startsWith('native-xpu') ? (
       <Field>
         <div className="flex items-center gap-2">
           <FieldLabel>Service data</FieldLabel>
@@ -161,6 +166,9 @@ export function ManagedServiceForm({
           {showIntroduction ? (
             <p className="text-sm text-muted-foreground">{service.description}</p>
           ) : null}
+          {showMethod ? (
+            <ServiceInstallationMethod service={service} variant={variant} onVariant={onVariant} />
+          ) : null}
           {showIntroduction && service.category === 'model_runtime' ? (
             <p className="text-xs text-muted-foreground">
               {installationOnly
@@ -185,33 +193,6 @@ export function ManagedServiceForm({
           <details className="border-t pt-4">
             <summary className="cursor-pointer text-sm font-medium">Advanced settings</summary>
             <div className="mt-4 space-y-5">
-              <Field>
-                <FieldLabel>Installation method</FieldLabel>
-                <Select
-                  onValueChange={onVariant}
-                  value={variant}
-                  disabled={service.state === 'running' || service.state === 'stopped'}
-                >
-                  <SelectTrigger aria-label={`${service.label} version`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {service.variants.map((item) => (
-                      <SelectItem key={item.id} value={item.id} disabled={!item.compatible}>
-                        {item.label} · {item.version}
-                        {item.compatible ? '' : ' (unavailable)'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {service.variants
-                  .filter((item) => !item.compatible)
-                  .map((item) => (
-                    <p key={item.id} className="text-xs text-muted-foreground">
-                      {item.label}: {item.reason}
-                    </p>
-                  ))}
-              </Field>
               {service.id === 'searxng' ? (
                 <SearchEnginePicker
                   value={configuration.engines || ''}

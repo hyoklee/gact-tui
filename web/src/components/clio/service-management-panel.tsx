@@ -23,6 +23,7 @@ import { InstallExpectation } from './install-expectation';
 import { ServiceAccessLine } from './managed-service-access';
 import { EffectiveParameters, OwnedResources } from './managed-service-parameters';
 import { ManagedServiceForm } from './managed-service-form';
+import { ServiceInstallationMethod } from './service-installation-method';
 import { ManagedServiceReceipt } from './managed-service-receipt';
 import { OperationProgress } from './operation-progress';
 import {
@@ -105,7 +106,7 @@ export function ManagedServiceCard({
   };
   const installing = activeAction === 'install' || activeAction === 'reinstall';
   const expectation = { thing: service.label, lastSeconds: lastInstallSeconds };
-  const native = variant.startsWith('native-cuda');
+  const native = variant.startsWith('native-cuda') || variant.startsWith('native-xpu');
   const monitoring = service.category === 'monitoring';
   const llama = service.id === 'llama_cpp' || service.id.startsWith('llama_cpp@');
   const retainsData = native || monitoring;
@@ -208,6 +209,7 @@ export function ManagedServiceCard({
       hostLabel={hostLabel}
       installationOnly={llama && editing}
       showIntroduction={!llama || editing}
+      showMethod={!editing}
     />
   );
   return (
@@ -234,13 +236,7 @@ export function ManagedServiceCard({
       </header>
       {editing ? (
         <>
-          {!compatible ? (
-            <p role="status" className="text-sm text-destructive">
-              Not available on this target.{' '}
-              {service.variants.find((row) => row.id === variant)?.reason ||
-                service.variants[0]?.reason}
-            </p>
-          ) : null}
+          <ServiceInstallationMethod service={service} variant={variant} onVariant={onVariant} />
           {compatible ? form : null}
           {compatible && modelProblem && !llama ? (
             <p className="text-sm text-muted-foreground">{modelProblem}</p>
