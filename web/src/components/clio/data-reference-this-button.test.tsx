@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -34,6 +34,36 @@ function Page({
 }
 
 describe('DataReferenceThisButton', () => {
+  it('references selected text with its surface context and clears the browser selection afterwards', async () => {
+    render(
+      <SelectionActionsProvider>
+        <section className="group">
+          <p>First step then final step</p>
+          <Page
+            buildReference={() => ({
+              title: 'Flowchart',
+              summary: 'whole diagram',
+              markdown: 'Artifact: artifact://flow',
+            })}
+          />
+        </section>
+      </SelectionActionsProvider>,
+    );
+    const text = screen.getByText('First step then final step').firstChild!;
+    const range = document.createRange();
+    range.setStart(text, 16);
+    range.setEnd(text, 26);
+    window.getSelection()!.addRange(range);
+    fireEvent(document, new Event('selectionchange'));
+    await userEvent.click(screen.getByRole('button', { name: 'Reference selected text' }));
+    expect(window.getSelection()!.isCollapsed).toBe(true);
+    expect(screen.getByRole('list', { name: 'Attached selections' })).toHaveTextContent(
+      'Selected text: final step',
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Show the full .* reference/u }));
+    expect(await screen.findByText('Artifact: artifact://flow')).toBeVisible();
+    expect(screen.getByRole('blockquote')).toHaveTextContent('final step');
+  });
   it('attaches the built reference to the composer and focuses it, via the shared selection-action registry', async () => {
     const user = userEvent.setup();
     const buildReference = vi.fn(() => ({

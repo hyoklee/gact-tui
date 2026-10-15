@@ -15,6 +15,9 @@ import {
 import { RetryIcon } from '@/lib/icon-vocabulary';
 import {
   type CSSProperties,
+  type ReactNode,
+  useCallback,
+  useContext,
   type PointerEvent as ReactPointerEvent,
   useLayoutEffect,
   useRef,
@@ -38,6 +41,7 @@ import { ClioA2UISurface, type A2UILocalActionHandler } from './a2ui-surface';
 import { pendingInteractionDomId, respondFromControl } from './interaction-control';
 import { InteractionFrameHeader } from './interaction-frame-header';
 import { ResponseErrorNotice } from './pending-interaction-notices';
+import { SurfaceReferenceContext } from './surface-reference-context';
 
 type InteractionResponseHandler = (
   interaction: PendingInteraction,
@@ -45,6 +49,9 @@ type InteractionResponseHandler = (
 ) => Promise<void>;
 
 interface PendingA2UIResponseProps {
+  /** Native questions reuse this persistent resizable viewport for their visual and answer controls. */
+  renderBody?: (viewport: 'inline' | 'fullscreen') => ReactNode;
+  showFullPrompt?: boolean;
   actionLifecycle?: A2UIActionLifecycle;
   disabled?: boolean;
   interaction: PendingInteraction;
@@ -59,6 +66,8 @@ interface PendingA2UIResponseProps {
 
 /** Presents a pending interactive surface as the tray's only bordered box — no nested chrome of its own. */
 export function PendingA2UIResponse({
+  renderBody,
+  showFullPrompt,
   actionLifecycle,
   disabled,
   interaction,
@@ -72,6 +81,12 @@ export function PendingA2UIResponse({
 }: PendingA2UIResponseProps) {
   const conversationWidth = useConversationWidth();
   const [fullscreen, setFullscreen] = useState(false);
+  const pendingReference = useRef<(() => void) | undefined>(undefined);
+  const enclosingReference = useContext(SurfaceReferenceContext);
+  const referenceAndClose = useCallback((reference: () => void) => {
+    pendingReference.current = reference;
+    setFullscreen(false);
+  }, []);
   // The surface id is this card's identity across renders and across visits —
   // the interaction id changes with the response cycle, so it is a fallback
   // only, never the first choice. Namespaced by the owning session: a bare
@@ -174,7 +189,7 @@ export function PendingA2UIResponse({
     </>
   );
   return (
-    <>
+    <SurfaceReferenceContext.Provider value={fullscreen ? referenceAndClose : enclosingReference}>
       <Frame
         className="min-w-0 self-stretch rounded-none bg-transparent p-0"
         data-interaction-kind={interaction.kind}
@@ -196,11 +211,12 @@ export function PendingA2UIResponse({
           }
           ownerLabel={ownerLabel}
           showOwner={showOwner}
+          showFullPrompt={showFullPrompt}
         />
         <div className="relative min-w-0" data-slot="a2ui-response-viewport-wrapper">
           <div
             className={cn(
-              'min-h-60 min-w-0 overflow-auto overscroll-contain',
+              'min-h-24 min-w-0 max-h-[calc(100dvh-17rem)] overflow-auto overscroll-contain',
               // 0.7, not 0.5/0.6, is this repo's WCAG AA contrast floor for a
               // dimmed-but-readable disabled surface (see reui/sortable.tsx).
               disabled && 'pointer-events-none opacity-70',
@@ -253,6 +269,13 @@ export function PendingA2UIResponse({
             conversationWidth === 'wide' ? 'sm:max-w-6xl' : 'sm:max-w-4xl',
           )}
           showCloseButton={false}
+          onCloseAutoFocus={(event) => {
+            const reference = pendingReference.current;
+            if (!reference) return;
+            pendingReference.current = undefined;
+            event.preventDefault();
+            reference();
+          }}
         >
           <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
             <DialogTitle className="min-w-0 truncate text-sm">
@@ -270,18 +293,22 @@ export function PendingA2UIResponse({
         </DialogContent>
       </Dialog>
       {createPortal(
-        <A2UISurfaceBody
-          actionLifecycle={actionLifecycle}
-          interaction={interaction}
-          onLocalAction={onLocalAction}
-          onRefetchSurface={onRefetchSurface}
-          onResponse={onResponse}
-          rawSurface={rawSurface}
-          viewport={fullscreen ? 'fullscreen' : 'inline'}
-        />,
+        renderBody ? (
+          renderBody(fullscreen ? 'fullscreen' : 'inline')
+        ) : (
+          <A2UISurfaceBody
+            actionLifecycle={actionLifecycle}
+            interaction={interaction}
+            onLocalAction={onLocalAction}
+            onRefetchSurface={onRefetchSurface}
+            onResponse={onResponse}
+            rawSurface={rawSurface}
+            viewport={fullscreen ? 'fullscreen' : 'inline'}
+          />
+        ),
         host,
       )}
-    </>
+    </SurfaceReferenceContext.Provider>
   );
 }
 

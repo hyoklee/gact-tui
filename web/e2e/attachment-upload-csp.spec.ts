@@ -231,7 +231,9 @@ test('a sent image leaves the composer and opens in the common file viewer', asy
       response.request().method() === 'POST' &&
       new URL(response.url()).pathname === '/v1/sessions/sess_flat_ndp/messages',
   );
+  await page.keyboard.down('Control');
   await composer.getByRole('button', { name: 'Steer current work', exact: true }).click();
+  await page.keyboard.up('Control');
   expect((await accepted).ok()).toBe(true);
   await expect(
     composer.getByRole('button', { name: 'Open sent-figure.png', exact: true }),

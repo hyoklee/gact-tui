@@ -1,11 +1,12 @@
 import { ChartLineIcon } from 'lucide-react';
-import { useContext } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { SelectionActionsContext } from '@/lib/selection-actions-context';
 import type { DataSurfaceZoneSelection } from '@/lib/selection-actions';
 import type { DataZoneReference } from './data-zone-reference';
 import { SurfaceReferenceContext } from './surface-reference-context';
+import { referenceSelectedText, surfaceTextSelection } from '@/lib/surface-text-selection';
 
 /**
  * "Reference this" (#1533 item 5): attaches a chart/map/table zone to the
@@ -33,16 +34,33 @@ export function DataReferenceThisButton({
 }) {
   const registry = useContext(SelectionActionsContext);
   const referenceAndClose = useContext(SurfaceReferenceContext);
+  const button = useRef<HTMLButtonElement>(null);
+  const [selectedText, setSelectedText] = useState('');
+  const selectionRoot = () =>
+    button.current?.closest('[data-a2ui-component-id]') ??
+    button.current?.closest('[data-slot="dialog-content"]') ??
+    button.current?.closest('.group') ??
+    null;
+  useEffect(() => {
+    const update = () => setSelectedText(surfaceTextSelection(selectionRoot()));
+    document.addEventListener('selectionchange', update);
+    return () => document.removeEventListener('selectionchange', update);
+  }, []);
   if (!registry) return null;
   return (
     <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            aria-label="Reference this"
+            aria-label={selectedText ? 'Reference selected text' : 'Reference this'}
+            ref={button}
             disabled={disabled}
+            onMouseDown={(event) => event.preventDefault()}
             onClick={() => {
-              const reference = buildReference();
+              const reference = referenceSelectedText(
+                buildReference(),
+                surfaceTextSelection(selectionRoot()),
+              );
               const target: DataSurfaceZoneSelection = {
                 kind: 'data-surface-zone',
                 markdown: reference.markdown,
@@ -53,6 +71,8 @@ export function DataReferenceThisButton({
               if (actions.length === 0) return;
               const runReference = () => {
                 for (const action of actions) action.run(target);
+                window.getSelection()?.removeAllRanges();
+                setSelectedText('');
                 onReferenced?.();
               };
               if (referenceAndClose) referenceAndClose(runReference);
@@ -64,7 +84,11 @@ export function DataReferenceThisButton({
             <ChartLineIcon aria-hidden="true" className="size-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Reference this data in your message</TooltipContent>
+        <TooltipContent side="bottom">
+          {selectedText
+            ? 'Reference selected text in your message'
+            : 'Reference this data in your message'}
+        </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

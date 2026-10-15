@@ -4,6 +4,8 @@ import { useRepository } from '@/hooks/use-repository';
 import { ClioA2UISurface } from './a2ui-surface';
 import { useQuestionAnswer } from './question-answer-context';
 import { Button } from '@/components/ui/button';
+import { useContext } from 'react';
+import { ResponseViewportContext } from './response-viewport-context';
 
 export function QuestionSurface({ interaction }: { interaction: PendingInteraction }) {
   const state = useQuestionAnswer();
@@ -26,12 +28,14 @@ export function QuestionSurface({ interaction }: { interaction: PendingInteracti
 }
 
 function RenderedQuestionSurface({ surface }: { surface: A2UISurface }) {
+  const viewport = useContext(ResponseViewportContext);
   const repository = useRepository();
   const queries = useQueryClient();
   return (
     <div className="mb-3 min-w-0 overflow-auto" data-slot="question-a2ui">
       <ClioA2UISurface
         surface={surface}
+        viewport={viewport}
         onRemoteAction={async (message) => {
           await repository.a2uiAction(surface.session_id, message, {
             run_id: surface.run_id,
