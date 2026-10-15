@@ -15,6 +15,13 @@ import {
 } from '@/lib/runtime-limits';
 import { formatBytes } from '@/lib/format';
 import { inTauri } from '@/lib/transport/tauri-runtime';
+import { displayReleaseVersion, releaseTag } from '@/lib/release-version';
+import { hasManagedRuntime, restartClio, updateManagedClio } from './managed-backend';
+import {
+  clearPendingUpdateMarker,
+  useUpdateFlowStore,
+  writePendingUpdateMarker,
+} from '@/store/update-flow-store';
 
 /**
  * Stable id for the background "an update is available" toast, shared with
@@ -229,6 +236,7 @@ export async function checkForDesktopUpdate(): Promise<DesktopUpdateInfo | null>
 /** Install the update returned by the most recent check and relaunch into it. */
 export async function installDesktopUpdate(
   onProgress: (progress: DesktopUpdateProgress) => void,
+  options: { runtimeAlreadyUpdated?: boolean } = {},
 ): Promise<void> {
   if (installingUpdate) throw new Error('An app update is already being installed.');
   if (!availableUpdate) throw new Error('Check for an available update before installing.');
@@ -238,26 +246,51 @@ export async function installDesktopUpdate(
   installingUpdate = update;
   checkGeneration += 1;
   publishUpdateSnapshot({ ...updateSnapshot });
+  let runtimeUpdateStarted = false;
   try {
+    if (!options.runtimeAlreadyUpdated && (await hasManagedRuntime())) {
+      const version = displayReleaseVersion(update.version);
+      useUpdateFlowStore.getState().start('both', version);
+      useUpdateFlowStore.getState().setStep('installing');
+      writePendingUpdateMarker({ action: 'both', version, startedAt: Date.now() });
+      runtimeUpdateStarted = true;
+      await updateManagedClio(releaseTag(update.version), {
+        restartApp: false,
+        onProgress: (line) => useUpdateFlowStore.getState().appendLine(line),
+      });
+      useUpdateFlowStore.getState().setStep('downloading');
+    }
     let downloadedBytes = 0;
     let totalBytes: number | undefined;
     await update.downloadAndInstall((event: DownloadEvent) => {
+      const publishProgress = (progress: DesktopUpdateProgress) => {
+        if (runtimeUpdateStarted) useUpdateFlowStore.getState().setProgress(progress);
+        onProgress(progress);
+      };
       if (event.event === 'Started') {
         totalBytes = event.data.contentLength;
-        onProgress({ downloadedBytes, totalBytes, finished: false });
+        publishProgress({ downloadedBytes, totalBytes, finished: false });
         return;
       }
       if (event.event === 'Progress') {
         downloadedBytes += event.data.chunkLength;
-        onProgress({ downloadedBytes, totalBytes, finished: false });
+        publishProgress({ downloadedBytes, totalBytes, finished: false });
         return;
       }
-      onProgress({ downloadedBytes, totalBytes, finished: true });
+      publishProgress({ downloadedBytes, totalBytes, finished: true });
     });
     await update.close();
     if (availableUpdate === update) availableUpdate = null;
+    if (runtimeUpdateStarted) useUpdateFlowStore.getState().setStep('restarting');
     const { relaunch } = await import('@tauri-apps/plugin-process');
     await relaunch();
+  } catch (error) {
+    if (runtimeUpdateStarted) {
+      clearPendingUpdateMarker();
+      useUpdateFlowStore.getState().fail(describeUpdateError(error));
+      await restartClio().catch(() => undefined);
+    }
+    throw error;
   } finally {
     installingUpdate = null;
     publishUpdateSnapshot({ ...updateSnapshot });

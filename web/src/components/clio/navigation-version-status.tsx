@@ -105,7 +105,9 @@ async function runUpdate(
       writePendingUpdateMarker({ action, version: desktopTargetVersion, startedAt: Date.now() });
     }
     flow.setStep('downloading');
-    await installDesktopUpdate((progress) => useUpdateFlowStore.getState().setProgress(progress));
+    await installDesktopUpdate((progress) => useUpdateFlowStore.getState().setProgress(progress), {
+      runtimeAlreadyUpdated: action === 'both' && Boolean(latestClioVersion),
+    });
     flow.setStep('restarting');
   } catch (error) {
     clearPendingUpdateMarker();
