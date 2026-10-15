@@ -61,6 +61,9 @@ export default defineConfig({
                   runtimeLimitsReview: fileURLToPath(
                     new URL('./tests/review/runtime-limits.html', import.meta.url),
                   ),
+                  folderAccessReview: fileURLToPath(
+                    new URL('./tests/review/folder-access.html', import.meta.url),
+                  ),
                   standardMathReview: fileURLToPath(
                     new URL('./tests/review/standard-math.html', import.meta.url),
                   ),

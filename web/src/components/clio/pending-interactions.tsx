@@ -37,6 +37,7 @@ import {
 } from './pending-interaction-notices';
 import { PlanExitResponse } from './plan-exit-interaction';
 import { TechnicalDetails } from './technical-details';
+import { PermissionOperationDetails } from './permission-operation-details';
 
 export interface ClioPendingInteractionsProps {
   interactions: readonly PendingInteraction[];
@@ -146,7 +147,9 @@ export function ClioPendingInteractions({
               'min-h-0 w-full shrink [&_[data-orientation=vertical]]:w-1.5 [&_[data-slot=scroll-area-scrollbar]]:opacity-50',
               // Reserve room for the composer rather than allowing a tall
               // visual to push its controls beyond the conversation viewport.
-              hasInteractiveSurface ? 'max-h-[calc(100dvh-12rem)]' : 'max-h-[min(22rem,40dvh)]',
+              hasInteractiveSurface || pending.some((item) => item.payload?.access)
+                ? 'max-h-[calc(100dvh-12rem)]'
+                : 'max-h-[min(22rem,40dvh)]',
             )}
             scrollHideDelay={500}
             type="hover"
@@ -312,6 +315,7 @@ function PermissionResponse({
           <span className="block text-sm text-muted-foreground">{interaction.prompt}</span>
         ) : null}
         <ResponseErrorNotice error={responseError} />
+        <PermissionOperationDetails interaction={interaction} />
         {toolName || toolCall?.input !== undefined ? (
           <TechnicalDetails
             className="mt-2 text-xs text-muted-foreground"
@@ -331,7 +335,12 @@ function PermissionResponse({
         ) : null}
       </ConfirmationTitle>
       <ConfirmationRequest>
-        <ConfirmationActions className="col-span-2 mt-1 flex-wrap">
+        <ConfirmationActions
+          className={cn(
+            'col-span-2 mt-1 flex-wrap',
+            interaction.payload?.access && 'sticky bottom-0 border-t bg-background py-2',
+          )}
+        >
           {show('deny') ? (
             <ConfirmationAction
               disabled={disabled}
