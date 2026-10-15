@@ -41,6 +41,7 @@ export function ManagedServiceInventory({
   onConnectExisting,
   operations,
   loading,
+  unavailable = false,
 }: {
   endpoint: string;
   targetId: string;
@@ -54,6 +55,7 @@ export function ManagedServiceInventory({
   onConnectExisting?: () => void;
   operations: Record<string, string>;
   loading: boolean;
+  unavailable?: boolean;
 }) {
   const dialog = useRef<HTMLDivElement>(null);
   const [collapsed, setCollapsed] = useInfrastructureState<Record<string, boolean>>(
@@ -77,7 +79,7 @@ export function ManagedServiceInventory({
     <section aria-label={`Services on ${hostLabel}`} className="space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold">Services</h2>
+          <h2 className="text-lg font-semibold">Installed on {hostLabel}</h2>
           <InfoTip label="About service management">
             Manage resources already installed on the selected host. Deploy new installs an owned
             runtime. Connect existing attaches a service that you manage elsewhere.
@@ -89,7 +91,7 @@ export function ManagedServiceInventory({
             Connect existing service…
           </Button>
           <Button
-            disabled={loading || !services.length}
+            disabled={loading || unavailable || !services.length}
             onClick={() => {
               onSelected('');
               onDeploying(true);
@@ -100,8 +102,8 @@ export function ManagedServiceInventory({
           </Button>
         </div>
       </header>
-      {!inventory.length && !loading ? (
-        <div className="flex items-center gap-4 rounded-xl border border-dashed p-6">
+      {!inventory.length && !loading && !unavailable ? (
+        <div className="flex items-center gap-4 border-y py-6">
           <ServerIcon className="size-7 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <p className="font-medium">No managed services on {hostLabel}</p>
@@ -121,9 +123,9 @@ export function ManagedServiceInventory({
             onOpenChange={(open) =>
               setCollapsed((previous) => ({ ...previous, [group.id]: !open }))
             }
-            className="rounded-xl border"
+            className="border-y"
           >
-            <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 p-4 text-left">
+            <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 py-3 text-left">
               <h3 className="text-sm font-semibold">
                 {group.label} <span className="ml-2 text-muted-foreground">{rows.length}</span>
               </h3>
@@ -134,7 +136,7 @@ export function ManagedServiceInventory({
             </CollapsibleTrigger>
             <CollapsibleContent className="divide-y border-t">
               {rows.map((service) => (
-                <div key={service.id} className="flex flex-wrap items-center gap-3 p-4">
+                <div key={service.id} className="flex flex-wrap items-center gap-3 py-4">
                   <ManagedServiceLogo service={service} />
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{service.label}</p>

@@ -7,6 +7,7 @@ import { filterTokenSuggestions, type ModelFilterToken } from '@/lib/model-filte
 import { isRangeModifier, isRangeToken } from '@/lib/model-range-tokens';
 import { ModelPickerFacetPanel } from './model-picker-facet-panel';
 import { ModelPickerFacetSliders } from './model-picker-facet-sliders';
+import { Input } from '@/components/ui/input';
 
 interface ModelPickerSearchProps {
   query: string;
@@ -25,7 +26,12 @@ interface ModelPickerSearchProps {
   facetsOpen: boolean;
   onFacetsOpenChange: (open: boolean) => void;
   /** The highest input price the listed models state (the Cost slider's top). */
-  maxInputPrice: number;
+  maxInputPrice?: number;
+  /** Downloads share the picker search without claiming serving capabilities or prices. */
+  label?: string;
+  inputId?: string;
+  /** Repository searches run remotely on submission rather than filtering a loaded catalog. */
+  onSearch?: () => void;
 }
 
 /** The word being typed: the text after the last space. */
@@ -53,6 +59,9 @@ export function ModelPickerSearch({
   facetsOpen,
   onFacetsOpenChange,
   maxInputPrice,
+  label = 'Search providers and models',
+  inputId,
+  onSearch,
 }: ModelPickerSearchProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const suggestions = filterTokenSuggestions(lastWord(query), availableTokens, tokens).slice(0, 8);
@@ -85,6 +94,12 @@ export function ModelPickerSearch({
   }, [facetsOpen, onFacetsOpenChange]);
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter' && onSearch) {
+      event.preventDefault();
+      onFacetsOpenChange(false);
+      onSearch();
+      return;
+    }
     // Alt+ArrowDown (the combobox key for "show the choices") opens the panel
     // from the keyboard, as a press on the field does with a pointer. Focus
     // alone never opens it: the dialog focuses the field as it opens, and the
@@ -95,7 +110,10 @@ export function ModelPickerSearch({
       return;
     }
     // Moving through the results (or picking one) is done with the list in view.
-    if (facetsOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter')) {
+    if (
+      facetsOpen &&
+      (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter')
+    ) {
       onFacetsOpenChange(false);
     }
     if (event.key === 'Backspace' && !query && tokens.length) {
@@ -117,7 +135,11 @@ export function ModelPickerSearch({
   }
 
   return (
-    <div className="relative flex w-full min-w-0 flex-col gap-1.5" data-slot="model-picker-search" ref={rootRef}>
+    <div
+      className="relative flex w-full min-w-0 flex-col gap-1.5"
+      data-slot="model-picker-search"
+      ref={rootRef}
+    >
       <div className="flex w-full min-w-0 items-center gap-1">
         {tokens.length ? (
           <div className="flex shrink-0 flex-wrap items-center gap-1" data-slot="filter-tokens">
@@ -144,12 +166,24 @@ export function ModelPickerSearch({
           </div>
         ) : null}
         <div className="min-w-0 flex-1">
-          <CascaderInput
-            aria-label="Search providers and models"
-            onKeyDown={handleKeyDown}
-            onPointerDown={() => onFacetsOpenChange(true)}
-            placeholder="Search providers and models"
-          />
+          {onSearch ? (
+            <Input
+              id={inputId}
+              aria-label={label}
+              placeholder={label}
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              onKeyDown={handleKeyDown}
+              onPointerDown={() => onFacetsOpenChange(facetTabs.some((tab) => tab.chipCount > 0))}
+            />
+          ) : (
+            <CascaderInput
+              aria-label={label}
+              onKeyDown={handleKeyDown}
+              onPointerDown={() => onFacetsOpenChange(true)}
+              placeholder={label}
+            />
+          )}
         </div>
         <span
           aria-label={`${shown} of ${total} models match`}
@@ -160,7 +194,10 @@ export function ModelPickerSearch({
         </span>
       </div>
       {suggestions.length ? (
-        <div className="flex flex-wrap items-center gap-1 px-1 pb-1" data-slot="filter-token-suggestions">
+        <div
+          className="flex flex-wrap items-center gap-1 px-1 pb-1"
+          data-slot="filter-token-suggestions"
+        >
           {suggestions.map((token) => (
             <Badge asChild key={token} radius="full" size="lg" variant="outline">
               <button
@@ -174,17 +211,21 @@ export function ModelPickerSearch({
           ))}
         </div>
       ) : null}
-      {facetsOpen ? <ModelPickerFacetPanel
+      {facetsOpen ? (
+        <ModelPickerFacetPanel
           onToggleChip={toggleChip}
           sliders={
-            <ModelPickerFacetSliders
-              maxInputPrice={maxInputPrice}
-              onTokensChange={onTokensChange}
-              tokens={tokens}
-            />
+            maxInputPrice === undefined ? undefined : (
+              <ModelPickerFacetSliders
+                maxInputPrice={maxInputPrice}
+                onTokensChange={onTokensChange}
+                tokens={tokens}
+              />
+            )
           }
           tabs={facetTabs}
-        /> : null}
+        />
+      ) : null}
     </div>
   );
 }

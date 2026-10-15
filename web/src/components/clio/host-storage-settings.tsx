@@ -8,7 +8,6 @@ import { useRepository } from '@/hooks/use-repository';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { InfoTip } from './info-tip';
 import { HostPathPicker } from './host-path-picker';
-import { GlobusReceivingStorage } from './globus-receiving-storage';
 import { displayHostPath } from '@/lib/host-path-display';
 
 const labels: Record<keyof HostStorageLocations, string> = {
@@ -43,7 +42,6 @@ export function HostStorageSettings({ targetId }: { targetId: string }) {
   return (
     <div className="space-y-4" key={`${settings.endpoint}:${targetId}`}>
       <StorageForm data={query.data} />
-      {targetId === 'local' && <GlobusReceivingStorage hostLabel={query.data.host_label} />}
     </div>
   );
 }
@@ -107,10 +105,7 @@ function StorageForm({ data }: { data: Settings }) {
     </Field>
   );
   return (
-    <section
-      className="space-y-4 rounded-lg border p-4"
-      aria-label={`Storage on ${data.host_label}`}
-    >
+    <section className="space-y-4 border-t pt-5" aria-label={`Storage on ${data.host_label}`}>
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="font-medium">Storage locations</h3>
         <InfoTip label="About storage locations">

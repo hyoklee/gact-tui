@@ -1,7 +1,7 @@
 import { vocab } from '@/lib/brand-vocabulary';
 import type { ModelAcquisition, ModelDownloadInput } from '@clio/core/v3';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { DownloadIcon, PackageCheckIcon, SearchIcon } from 'lucide-react';
+import { DownloadIcon, PackageCheckIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useRepository } from '@/hooks/use-repository';
 import { useInfrastructureState } from '@/hooks/use-infrastructure-state';
@@ -20,6 +20,7 @@ import {
 import { InfoTip } from './info-tip';
 import { HostPathPicker } from './host-path-picker';
 import { InstallExpectation } from './install-expectation';
+import { ModelDownloadSearch } from './model-download-search';
 
 const initial: ModelDownloadInput = { repository: '', revision: 'main', destination: '' };
 const size = (bytes: number) =>
@@ -96,8 +97,8 @@ export function ModelAcquisitions({
   const error = inventory.error ?? acquire.error ?? action.error;
   const unavailable = inventory.data?.unavailable_reason;
   return (
-    <section className="rounded-lg border" aria-label={`Models on ${hostLabel}`}>
-      <div className="flex flex-wrap items-center gap-3 border-b p-4">
+    <section className="border-t" aria-label={`Models on ${hostLabel}`}>
+      <div className="flex flex-wrap items-center gap-3 border-b py-4">
         <PackageCheckIcon className="size-5 text-primary" aria-hidden="true" />
         <h3 className="font-medium">Models</h3>
         <InfoTip label="About model downloads">
@@ -171,74 +172,22 @@ export function ModelAcquisitions({
               acquire.mutate();
             }}
           >
-            <Field>
-              <FieldLabel htmlFor="model-search">Find on Hugging Face</FieldLabel>
-              <div className="flex gap-2">
-                <Input
-                  id="model-search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      setSubmittedSearch(search.trim());
-                    }
-                  }}
-                  placeholder="Model name or organization"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  aria-label="Search models"
-                  disabled={!search.trim() || found.isFetching}
-                  onClick={() => setSubmittedSearch(search.trim())}
-                >
-                  <SearchIcon />
-                </Button>
-              </div>
-            </Field>
-            {found.isFetching ? (
-              <p role="status" className="text-sm text-muted-foreground">
-                Searching models…
-              </p>
-            ) : null}
-            {found.error ? (
-              <p role="alert" className="text-sm text-destructive">
-                {found.error.message}
-              </p>
-            ) : null}
-            {found.data ? (
-              <div
-                className="max-h-44 overflow-y-auto rounded border"
-                aria-label="Model search results"
-              >
-                {!found.data.models.length ? (
-                  <p className="p-3 text-sm text-muted-foreground">
-                    No matching repositories. Enter an exact repository below.
-                  </p>
-                ) : (
-                  found.data.models.map((model) => (
-                    <button
-                      key={model.repository}
-                      type="button"
-                      className="flex w-full items-start justify-between gap-3 border-b p-3 text-left text-sm last:border-0 hover:bg-muted focus-visible:outline-ring"
-                      onClick={() =>
-                        setDraft((old) => ({
-                          ...old,
-                          repository: model.repository,
-                          revision: model.revision || 'main',
-                        }))
-                      }
-                    >
-                      <span className="min-w-0 break-all font-medium">{model.repository}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {model.gated ? 'Requires access' : model.task?.replaceAll('-', ' ')}
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
-            ) : null}
+            <ModelDownloadSearch
+              query={search}
+              onQuery={setSearch}
+              onSearch={() => setSubmittedSearch(search.trim())}
+              models={found.data?.models}
+              searching={found.isFetching}
+              error={found.error}
+              selected={draft.repository}
+              onSelect={(model) =>
+                setDraft((old) => ({
+                  ...old,
+                  repository: model.repository,
+                  revision: model.revision || 'main',
+                }))
+              }
+            />
             <Field>
               <FieldLabel htmlFor="model-repository">Repository</FieldLabel>
               <Input

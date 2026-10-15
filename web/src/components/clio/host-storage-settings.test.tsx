@@ -15,6 +15,7 @@ vi.mock('@/providers/connection-provider', () => ({
   useConnectionSettings: () => ({ settings: { endpoint: 'https://clio' } }),
 }));
 import { HostStorageSettings } from './host-storage-settings';
+import { GlobusReceivingStorage } from './globus-receiving-storage';
 
 const requested = { root: '/data/old', models: '', service_data: '', captures: '', temporary: '' };
 const defaults = {
@@ -61,7 +62,7 @@ describe('host storage settings', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <HostStorageSettings targetId="local" />
+        <GlobusReceivingStorage hostLabel="local" />
       </QueryClientProvider>,
     );
     await screen.findByText('No receiving collection found on this host');
@@ -85,6 +86,9 @@ describe('host storage settings', () => {
       </QueryClientProvider>
     );
     const rendered = render(view('homelab'));
+    expect(
+      screen.queryByRole('region', { name: 'Globus receiving storage' }),
+    ).not.toBeInTheDocument();
     const user = userEvent.setup();
     const root = await screen.findByLabelText('Storage root');
     await user.click(screen.getByText('Override individual folders'));

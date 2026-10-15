@@ -1,6 +1,6 @@
 import type { InfrastructureInventory } from '@clio/core/v3';
 import { useQuery } from '@tanstack/react-query';
-import { LaptopIcon, ServerIcon, ArrowDownIcon } from 'lucide-react';
+import { ServerIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useRepository } from '@/hooks/use-repository';
 import { useSavedServers } from '@/hooks/use-saved-servers';
@@ -29,7 +29,7 @@ export function InfrastructureHostInspection({ targetId }: { targetId: string })
     staleTime: 30_000,
   });
   return (
-    <section className="rounded-xl border p-4" aria-label="Computer capabilities">
+    <section className="border-y py-4" aria-label="Computer capabilities">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">Computer capabilities</h2>
         <Button
@@ -79,58 +79,28 @@ export function InfrastructureOverview({
   const { settings } = useConnectionSettings();
   const { servers } = useSavedServers();
   const remote = data.targets.filter((target) => target.kind !== 'local');
-  const height = Math.max(220, remote.length * 90);
   return (
     <div className="mt-6 space-y-6">
-      <section className="rounded-xl border bg-card p-4 sm:p-6" aria-label="Connection map">
-        <h2 className="font-semibold">Connection map</h2>
+      <section className="space-y-3" aria-label="Connection map">
+        <h2 className="font-semibold">Connected {vocab.agent}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          This client connects to {vocab.agent}. {vocab.agent} manages the computers and services
-          shown here.
+          Manage services on this host and its connected computers.
         </p>
-        <div
-          className="relative mt-6 grid items-center gap-4 sm:grid-cols-3 sm:gap-10"
-          style={{ minHeight: height }}
-        >
-          <svg
-            className="pointer-events-none absolute inset-0 hidden h-full w-full text-primary/40 sm:block"
-            viewBox={`0 0 800 ${height}`}
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          >
-            <path d={`M150 ${height / 2} H400`} fill="none" stroke="currentColor" strokeWidth="2" />
-            {remote.map((host, index) => (
-              <path
-                key={host.id}
-                d={`M450 ${height / 2} H555 V${((index + 0.5) * height) / remote.length} H720`}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeDasharray={host.transport_state === 'connected' ? undefined : '5 5'}
-              />
-            ))}
-          </svg>
-          <div className="relative rounded-xl border bg-background p-4 text-center">
-            <LaptopIcon className="mx-auto mb-2 size-5 text-muted-foreground" />
-            <p className="font-medium">This client</p>
-            <p className="mt-1 text-xs text-muted-foreground">Desktop or browser</p>
-          </div>
-          <ArrowDownIcon className="mx-auto size-4 text-primary/60 sm:hidden" aria-hidden="true" />
-          <Link
-            to="/infrastructure/agent"
-            className="relative rounded-xl border border-primary/40 bg-background p-4 text-center hover:bg-muted"
-          >
-            <ServerIcon className="mx-auto mb-2 size-5 text-primary" />
-            <p className="font-medium">Connected {vocab.agent}</p>
-            <p className="mt-2 break-all text-xs text-muted-foreground">{settings.endpoint}</p>
+        <div className="divide-y border-y">
+          <Link to="/infrastructure/agent" className="flex items-center gap-3 py-3 hover:bg-muted">
+            <ServerIcon className="size-5 shrink-0 text-primary" />
+            <span className="font-medium">{settings.label || vocab.agent}</span>
+            <span className="ml-auto break-all text-xs text-muted-foreground">
+              {settings.endpoint}
+            </span>
           </Link>
-          <div className="relative grid gap-3">
+          <div className="divide-y">
             {remote.length ? (
               remote.map((host) => (
                 <Link
                   key={host.id}
                   to={`/infrastructure/services?target=${encodeURIComponent(host.id)}`}
-                  className="rounded-xl border bg-background p-4 hover:bg-muted"
+                  className="flex items-center justify-between gap-3 py-3 hover:bg-muted"
                 >
                   <p className="font-medium">{host.label}</p>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -140,9 +110,7 @@ export function InfrastructureOverview({
                 </Link>
               ))
             ) : (
-              <p className="rounded-xl border border-dashed bg-background p-4 text-sm text-muted-foreground">
-                No other computers connected.
-              </p>
+              <p className="py-3 text-sm text-muted-foreground">No other computers connected.</p>
             )}
           </div>
         </div>
@@ -167,8 +135,8 @@ export function InfrastructureOverview({
         </div>
         <InfrastructureHostInspection targetId={targetId} />
       </section>
-      <section className="rounded-xl border" aria-label="Connected services">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
+      <section className="border-y" aria-label="Connected services">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b py-4">
           <h2 className="font-semibold">Services and model servers</h2>
           <Button asChild variant="outline" size="sm">
             <Link to="/settings/providers">Provider setup</Link>

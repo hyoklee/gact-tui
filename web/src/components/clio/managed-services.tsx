@@ -197,6 +197,10 @@ export function ManagedServices({
   ]);
   const visitedTargetLink = useRef('');
   const canManageSshTargets = desktop && isManagedConnection;
+  const executionHostLabel =
+    target === 'local' && !desktop
+      ? `the connected ${vocab.agent} host`
+      : targetLabel(target, sshHost);
   // The NSIS installer's Infrastructure page records a llama.cpp request as a
   // PREFERENCE only — it never installs a runtime itself. When set, this
   // finishes that intent by pointing the user at the model-runtime controls
@@ -410,7 +414,7 @@ export function ManagedServices({
     return (
       <ManagedServiceCard
         setup={setup}
-        hostLabel={targetLabel(target, sshHost)}
+        hostLabel={executionHostLabel}
         targetId={targetId}
         tab={tabs[service.id] ?? 'status'}
         onTab={(value) => setTabs((current) => ({ ...current, [service.id]: value }))}
@@ -498,7 +502,7 @@ export function ManagedServices({
                     onSelect: () =>
                       savedServers.save.mutate({
                         address: agentConnectionUrl,
-                        label: `${service.label} (${targetLabel(target, sshHost)})`,
+                        label: `${service.label} (${executionHostLabel})`,
                         presetId: service.id,
                       }),
                   }
@@ -551,12 +555,12 @@ export function ManagedServices({
         onManageRelay={onManageRelay}
       />
       <details
-        className="rounded-xl border p-4"
+        className="border-y py-4"
         open={hostDetailsOpen}
         onToggle={(event) => setHostDetailsOpen(event.currentTarget.open)}
       >
         <summary className="cursor-pointer text-sm font-medium">
-          Execution host · {targetLabel(target, sshHost)}{' '}
+          Execution host · {executionHostLabel}{' '}
           <span className="ml-2 text-xs font-normal text-muted-foreground">Change or inspect</span>
         </summary>
         <div className="mt-4 space-y-4">
@@ -619,7 +623,7 @@ export function ManagedServices({
                 description={
                   canManageSshTargets
                     ? 'Install and run services on this computer'
-                    : `Install and run services beside this ${vocab.agent}`
+                    : `Manage services on the connected ${vocab.agent} host, not your browser’s computer`
                 }
                 icon={LaptopIcon}
                 label={canManageSshTargets ? 'This computer' : `This ${vocab.agent}’s computer`}
@@ -711,9 +715,14 @@ export function ManagedServices({
       {catalog.isPending && catalog.fetchStatus === 'fetching' ? (
         <InspectionProgress host={sshHost} target={target} />
       ) : null}
+      {target === 'ssh' && !catalog.data && catalog.fetchStatus === 'idle' && !catalog.error ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          Connect {executionHostLabel} through Desktop to inspect and manage its services.
+        </p>
+      ) : null}
       {catalog.error ? (
         <Alert variant="destructive">
-          <AlertTitle>Could not inspect {targetLabel(target, sshHost)}</AlertTitle>
+          <AlertTitle>Could not inspect {executionHostLabel}</AlertTitle>
           <AlertDescription className="space-y-3">
             <p>{catalog.error.message}</p>
             <RefreshButton
@@ -747,7 +756,7 @@ export function ManagedServices({
       <ManagedServiceInventory
         endpoint={settings.endpoint}
         targetId={targetId}
-        hostLabel={targetLabel(target, sshHost)}
+        hostLabel={executionHostLabel}
         services={services.filter((row) => row.category !== 'remote_access' || target === 'ssh')}
         selected={selectedProvider}
         onSelected={setSelectedProvider}
@@ -760,6 +769,7 @@ export function ManagedServices({
           ...operationIds,
         }}
         loading={catalog.isFetching}
+        unavailable={!catalog.data || Boolean(catalog.error)}
       />
     </section>
   );

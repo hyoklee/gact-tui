@@ -728,6 +728,8 @@ describe('ManagedServices', () => {
 
     expect(await screen.findByText('Could not inspect this computer')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeVisible();
+    expect(screen.queryByText(/No managed services on/u)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Deploy new' })).toBeDisabled();
   });
 
   it('keeps same-host CLIO lifecycle controls available in browser mode', async () => {

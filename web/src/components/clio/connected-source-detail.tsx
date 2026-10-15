@@ -28,6 +28,7 @@ import { useSourceFileReference } from './use-source-file-reference';
 import type { SourceDownloadSelection } from './source-download-selection';
 import { SourceOperationStatus } from './source-operation-status';
 import { useStorageAttachment } from './use-storage-attachment';
+import { GlobusReceivingStorageControl } from './globus-receiving-storage';
 
 /** Management of one source keeps refresh, reviewed writeback and disconnect explicit. */
 export function ConnectedSourceDetail({
@@ -343,6 +344,9 @@ export function ConnectedSourceDetail({
           <FolderIcon aria-hidden="true" /> Add {folder ? 'this folder' : 'source'} to message
         </Button>
       )}
+      {source.provider === 'globus' ? (
+        <GlobusReceivingStorageControl hostLabel={hostLabel} />
+      ) : null}
       {!source.connected ? (
         <div className="flex items-center justify-between rounded-md border p-3 text-sm">
           <span>Disconnected. Copies retained.</span>

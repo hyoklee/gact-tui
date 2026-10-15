@@ -18,6 +18,7 @@ import { SourceProviderLogo } from './source-provider-logo';
 import { ObsidianSourceForm, type ObsidianChoice } from './obsidian-source-form';
 import { SourceSshTarget } from './source-ssh-target';
 import { GitHubRevisionPicker } from './github-revision-picker';
+import { GlobusReceivingStorageControl } from './globus-receiving-storage';
 
 /** Node capabilities determine which real access modes can be offered. */
 export function ConnectedSourceForm({
@@ -303,6 +304,7 @@ export function ConnectedSourceForm({
           {connect.error.message}
         </p>
       )}
+      {provider.id === 'globus' ? <GlobusReceivingStorageControl hostLabel={hostLabel} /> : null}
       <form
         id={formId}
         className="flex justify-between gap-2"

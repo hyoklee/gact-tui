@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/select';
 import { HostStorageSettings } from './host-storage-settings';
 import { ModelAcquisitions } from './model-acquisition';
-import { InfrastructureOverview, InfrastructureHostInspection } from './infrastructure-overview';
+import { InfrastructureOverview } from './infrastructure-overview';
 
 /** Inventory is independent from deployment forms and survives navigation. */
 export function InfrastructureInventory({
@@ -69,7 +69,6 @@ export function InfrastructureInventory({
               ))}
           </SelectContent>
         </Select>
-        <InfrastructureHostInspection targetId={targetId} />
         <ModelAcquisitions
           key={`models:${targetId}`}
           targetId={targetId}
@@ -80,7 +79,7 @@ export function InfrastructureInventory({
     );
   if (section === 'activity')
     return (
-      <div className="mt-6 divide-y rounded-lg border">
+      <div className="mt-6 divide-y border-y">
         {!data.operations.length && !data.model_acquisitions.length ? (
           <p className="p-6 text-sm text-muted-foreground">No infrastructure operations yet.</p>
         ) : null}
@@ -111,7 +110,13 @@ export function InfrastructureInventory({
           <details className="p-4" key={operation.id}>
             <summary className="flex cursor-pointer flex-wrap items-center gap-3">
               <span className="font-medium">
-                {operation.action} · {operation.service_id}
+                {operation.action
+                  .replaceAll('_', ' ')
+                  .replace(/^./u, (value) => value.toUpperCase())}{' '}
+                ·{' '}
+                {operation.service_id === 'searxng'
+                  ? 'SearXNG'
+                  : operation.service_id.replaceAll('_', ' ')}
               </span>
               <span className="text-sm text-muted-foreground">
                 {data.targets.find((host) => host.id === operation.target_id)?.label ??
@@ -137,26 +142,26 @@ export function InfrastructureInventory({
   if (section === 'hosts')
     return (
       <div className="mt-6 space-y-4">
-        <details open className="rounded-xl border">
-          <summary className="cursor-pointer p-4 font-medium">
+        <details open className="border-t">
+          <summary className="cursor-pointer py-4 font-medium">
             {data.targets.find((host) => host.kind === 'local')?.label ||
               `This ${vocab.agent}'s computer`}
             <span className="ml-3 text-xs font-normal text-muted-foreground">
               Connected {vocab.agent}
             </span>
           </summary>
-          <div className="space-y-4 border-t p-4">{children}</div>
+          <div className="space-y-4">{children}</div>
         </details>
         {data.targets
           .filter((host) => host.kind !== 'local')
           .map((host) => (
-            <details className="rounded-xl border" key={host.id}>
-              <summary className="flex cursor-pointer items-center gap-3 p-4">
+            <details className="border-t" key={host.id}>
+              <summary className="flex cursor-pointer items-center gap-3 py-4">
                 <ServerIcon className="size-4 shrink-0" />
                 <span className="min-w-0 flex-1 font-medium">{host.label}</span>
                 <Badge variant="outline">{host.transport_state.replaceAll('_', ' ')}</Badge>
               </summary>
-              <div className="space-y-3 border-t p-4">
+              <div className="space-y-3 pb-4">
                 <p className="break-all text-sm text-muted-foreground">
                   {host.ssh?.host || 'External endpoint'}
                 </p>

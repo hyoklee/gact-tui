@@ -26,7 +26,7 @@ export function InfrastructureFoundationGroups({
   );
   const groups = foundationGroups(rows);
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
       {(['errors', 'warnings', 'ready'] as const).map((kind) => {
         const label =
           kind === 'ready' ? 'Ready and working' : kind === 'errors' ? 'Errors' : 'Warnings';
@@ -34,13 +34,13 @@ export function InfrastructureFoundationGroups({
           <details
             key={kind}
             open={kind !== 'ready' && groups[kind].length > 0}
-            className="rounded-lg border"
+            className="border-t"
             aria-label={`${label} (${groups[kind].length})`}
           >
-            <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+            <summary className="cursor-pointer py-3 text-sm font-medium">
               {label} ({groups[kind].length})
             </summary>
-            <div className="divide-y border-t px-4">
+            <div className="divide-y">
               {groups[kind].map(renderRow)}
               {!groups[kind].length && (
                 <p className="py-3 text-sm text-muted-foreground">None reported.</p>
