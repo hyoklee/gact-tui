@@ -1,6 +1,40 @@
 import { expect, test } from '@playwright/test';
 
 for (const width of [1280, 390]) {
+  test(`workspace folder paths are directly editable at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/tests/review/folder-access.html?view=workspace');
+    const primary = page.getByRole('textbox', { name: 'Primary folder path' });
+    const additional = page.getByRole('textbox', { name: 'Additional folder path' });
+    await expect(primary).toBeInViewport();
+    await expect(additional).toBeInViewport();
+    await expect(page.getByRole('button', { name: 'Enter a path instead' })).toHaveCount(0);
+    await expect(page.getByRole('textbox')).toHaveCount(3);
+    await primary.fill('C:\\Research workspace');
+    await additional.fill('D:\\Final_thesis');
+    await page.getByRole('button', { name: 'Browse', exact: true }).first().click();
+    await page
+      .getByRole('dialog', { name: 'Choose a folder' })
+      .getByText('Research', { exact: true })
+      .click();
+    await page.getByRole('button', { name: 'Use this folder' }).click();
+    await expect(primary).toHaveValue('C:\\Users\\Alice\\Documents\\Research');
+    await primary.fill('C:\\Research workspace');
+    const save = page.getByRole('button', { name: 'Save workspace' });
+    await expect(save).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({
+      path: testInfo.outputPath(`editable-folder-paths-${width}.png`),
+      fullPage: true,
+    });
+    await save.click();
+    await expect(page.getByRole('status')).toHaveText(
+      'Saved primary: C:\\Research workspace; permitted: D:\\Final_thesis',
+    );
+  });
+
   test(`folder permission is readable and actionable at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 844 });
     await page.goto('/tests/review/folder-access.html');

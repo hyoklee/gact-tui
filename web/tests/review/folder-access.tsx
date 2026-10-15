@@ -4,6 +4,44 @@ import { ThemeProvider } from 'next-themes';
 import type { PendingInteraction } from '@clio/core/v3';
 import '../../src/index.css';
 import { ClioPendingInteractions } from '../../src/components/clio/pending-interactions';
+import { WorkspaceEditorDialog } from '../../src/components/clio/workspace-editor-dialog';
+
+function WorkspaceEditorReview() {
+  const [outcome, setOutcome] = useState('');
+  return (
+    <main className="p-6">
+      <p>UI review with simulated workspace folders. No files are changed.</p>
+      {outcome ? (
+        <p role="status">{outcome}</p>
+      ) : (
+        <WorkspaceEditorDialog
+          workspace={{
+            id: 'review',
+            name: 'Research',
+            display_name: 'Research',
+            path: 'C:\\Users\\Alice\\Documents\\Research',
+            connection_id: 'local',
+            pinned: false,
+            source_folders: [
+              { name: 'Research', path: 'C:\\Users\\Alice\\Documents\\Research', primary: true },
+              { name: 'Sources', path: 'D:\\Sources', primary: false },
+            ],
+          }}
+          actions={{
+            updateWorkspace: async (_id, input) => {
+              setOutcome(`Saved primary: ${input.root_path}`);
+            },
+            grantWorkspaceFolder: async (_id, path) => {
+              setOutcome((current) => `${current}; permitted: ${path}`);
+            },
+            revokeWorkspaceFolder: async () => {},
+          }}
+          onClose={() => {}}
+        />
+      )}
+    </main>
+  );
+}
 
 const source = 'C:\\Users\\Alice\\Downloads\\measurements.csv';
 const destination = 'D:\\Research\\Results\\measurements.csv';
@@ -75,6 +113,10 @@ function Review() {
 
 createRoot(document.getElementById('root')!).render(
   <ThemeProvider attribute="class" forcedTheme="light" enableSystem={false}>
-    <Review />
+    {new URLSearchParams(location.search).get('view') === 'workspace' ? (
+      <WorkspaceEditorReview />
+    ) : (
+      <Review />
+    )}
   </ThemeProvider>,
 );

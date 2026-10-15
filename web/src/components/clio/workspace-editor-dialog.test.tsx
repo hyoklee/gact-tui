@@ -71,7 +71,6 @@ it('merges incoming grants with a draft addition and an explicit draft removal',
     <WorkspaceEditorDialog actions={handlers} workspace={saved} onClose={vi.fn()} />,
   );
   await user.click(screen.getByRole('button', { name: 'Remove folder Old' }));
-  await user.click(screen.getAllByRole('button', { name: 'Enter a path instead' })[1]!);
   await user.type(screen.getByRole('textbox', { name: 'Additional folder path' }), 'C:\\Draft');
   await user.click(screen.getByRole('button', { name: 'Add permitted folder' }));
   view.rerender(
@@ -121,13 +120,14 @@ it('reflects an externally revoked folder without granting it again on Save', as
   expect(handlers.grantWorkspaceFolder).not.toHaveBeenCalled();
 });
 
-it('saves a typed additional folder without requiring Add first', async () => {
+it('saves a pasted additional path directly without a manual-entry toggle or Add', async () => {
   const user = userEvent.setup();
   const handlers = actions();
   const onClose = vi.fn();
   render(<WorkspaceEditorDialog actions={handlers} workspace={workspace} onClose={onClose} />);
-  await user.click(screen.getAllByRole('button', { name: 'Enter a path instead' })[1]!);
-  await user.type(screen.getByRole('textbox', { name: 'Additional folder path' }), 'C:\\Shared');
+  expect(screen.queryByRole('button', { name: 'Enter a path instead' })).toBeNull();
+  await user.click(screen.getByRole('textbox', { name: 'Additional folder path' }));
+  await user.paste('C:\\Shared');
   await user.click(screen.getByRole('button', { name: 'Save workspace' }));
   await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
   expect(handlers.grantWorkspaceFolder).toHaveBeenCalledTimes(1);
@@ -139,7 +139,6 @@ it('saves the primary path and name together on the same workspace', async () =>
   const user = userEvent.setup();
   const handlers = actions();
   render(<WorkspaceEditorDialog actions={handlers} workspace={workspace} onClose={vi.fn()} />);
-  await user.click(screen.getAllByRole('button', { name: 'Enter a path instead' })[0]!);
   const primary = screen.getByRole('textbox', { name: 'Primary folder path' });
   await user.clear(primary);
   await user.type(primary, 'C:\\Research');
@@ -159,7 +158,6 @@ it('keeps edits and the failure visible when the primary change is rejected', as
   vi.mocked(handlers.updateWorkspace).mockRejectedValue(new Error('Finish running conversations'));
   const onClose = vi.fn();
   render(<WorkspaceEditorDialog actions={handlers} workspace={workspace} onClose={onClose} />);
-  await user.click(screen.getAllByRole('button', { name: 'Enter a path instead' })[0]!);
   const primary = screen.getByRole('textbox', { name: 'Primary folder path' });
   await user.clear(primary);
   await user.type(primary, 'C:\\Research');
@@ -191,13 +189,11 @@ it('does not duplicate a folder after Add and refuses a blank primary path', asy
   const user = userEvent.setup();
   const handlers = actions();
   render(<WorkspaceEditorDialog actions={handlers} workspace={workspace} onClose={vi.fn()} />);
-  await user.click(screen.getAllByRole('button', { name: 'Enter a path instead' })[1]!);
   await user.type(screen.getByRole('textbox', { name: 'Additional folder path' }), 'C:\\Shared');
   await user.click(screen.getByRole('button', { name: 'Add permitted folder' }));
   await user.type(screen.getByRole('textbox', { name: 'Additional folder path' }), 'C:\\Shared');
   await user.click(screen.getByRole('button', { name: 'Save workspace' }));
   expect(handlers.grantWorkspaceFolder).toHaveBeenCalledTimes(1);
-  await user.click(screen.getAllByRole('button', { name: 'Enter a path instead' })[0]!);
   await user.clear(screen.getByRole('textbox', { name: 'Primary folder path' }));
   expect(screen.getByRole('button', { name: 'Save workspace' })).toBeDisabled();
 });
