@@ -58,6 +58,9 @@ export default defineConfig({
                   modelWaitReview: fileURLToPath(
                     new URL('./tests/review/model-wait.html', import.meta.url),
                   ),
+                  runtimeLimitsReview: fileURLToPath(
+                    new URL('./tests/review/runtime-limits.html', import.meta.url),
+                  ),
                   standardMathReview: fileURLToPath(
                     new URL('./tests/review/standard-math.html', import.meta.url),
                   ),
