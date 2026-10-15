@@ -11,6 +11,7 @@ import { ClioConversation } from '../../src/components/clio/conversation';
 import { TranscriptDisclosures } from '../../src/components/clio/transcript-disclosures';
 import { ClioMotionProvider } from '../../src/components/clio/motion';
 import { Button } from '../../src/components/ui/button';
+import { ClioComposer } from '../../src/components/clio/composer';
 
 function Review() {
   const [phase, setPhase] = useState<
@@ -100,6 +101,25 @@ function Review() {
             }}
           />
         </main>
+        <div className="mx-auto w-full max-w-4xl shrink-0 px-3 pb-3">
+          <ClioComposer
+            attachments={false}
+            state="completed"
+            provider="amsc_mag"
+            model="inkling-small-xhigh@cborg"
+            modelOptions={[
+              {
+                providerId: 'amsc_mag',
+                providerName: 'AmSC Model Access Gateway',
+                id: 'inkling-small-xhigh@cborg',
+                label: 'inkling-small-xhigh@cborg',
+                available: true,
+                reasoning: { levels: ['low', 'medium', 'high'], default: 'high' },
+              },
+            ]}
+            onSubmit={async () => undefined}
+          />
+        </div>
       </div>
     </TranscriptDisclosures>
   );
