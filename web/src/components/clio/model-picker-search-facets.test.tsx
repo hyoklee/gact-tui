@@ -64,6 +64,7 @@ async function openPicker(options: ClioModelOption[] = catalog) {
     />,
   );
   await user.click(screen.getByRole('button', { name: 'Change model' }));
+  await screen.findByRole('combobox', { name: 'Search providers and models' });
   return user;
 }
 
