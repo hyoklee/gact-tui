@@ -29,7 +29,7 @@ export function TranscriptReasoningPassage({
     duration !== undefined ? (
       <span
         className="shrink-0 text-muted-foreground"
-        title="Elapsed time for this reasoning passage observed by CLIO, separate from tool execution."
+        title="Time this thinking passage was open in the conversation. Tool execution has its own timer."
         aria-label={`Reasoning phase: ${formatDuration(duration, 'tenths')}`}
       >
         {formatDuration(duration, 'tenths')}
