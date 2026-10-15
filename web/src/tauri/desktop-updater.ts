@@ -19,6 +19,7 @@ import { displayReleaseVersion, releaseTag } from '@/lib/release-version';
 import { hasManagedRuntime, restartClio, updateManagedClio } from './managed-backend';
 import {
   clearPendingUpdateMarker,
+  isUpdateInFlight,
   useUpdateFlowStore,
   writePendingUpdateMarker,
 } from '@/store/update-flow-store';
@@ -236,9 +237,12 @@ export async function checkForDesktopUpdate(): Promise<DesktopUpdateInfo | null>
 /** Install the update returned by the most recent check and relaunch into it. */
 export async function installDesktopUpdate(
   onProgress: (progress: DesktopUpdateProgress) => void,
-  options: { runtimeAlreadyUpdated?: boolean } = {},
+  options: { runtimeAlreadyUpdated?: boolean; flowAlreadyStarted?: boolean } = {},
 ): Promise<void> {
   if (installingUpdate) throw new Error('An app update is already being installed.');
+  if (!options.flowAlreadyStarted && isUpdateInFlight(useUpdateFlowStore.getState().step)) {
+    throw new Error('A CLIO update is already in progress.');
+  }
   if (!availableUpdate) throw new Error('Check for an available update before installing.');
   if (availableChannel !== getUpdateChannel())
     throw new Error('The update channel changed. Check for updates again.');

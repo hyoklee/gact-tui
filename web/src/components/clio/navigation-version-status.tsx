@@ -107,6 +107,7 @@ async function runUpdate(
     flow.setStep('downloading');
     await installDesktopUpdate((progress) => useUpdateFlowStore.getState().setProgress(progress), {
       runtimeAlreadyUpdated: action === 'both' && Boolean(latestClioVersion),
+      flowAlreadyStarted: true,
     });
     flow.setStep('restarting');
   } catch (error) {

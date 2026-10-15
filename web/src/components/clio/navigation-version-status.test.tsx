@@ -189,6 +189,7 @@ describe('SystemVersionStatus', () => {
     expect(desktop.install).toHaveBeenCalledOnce();
     expect(desktop.install).toHaveBeenCalledWith(expect.any(Function), {
       runtimeAlreadyUpdated: true,
+      flowAlreadyStarted: true,
     });
   });
 

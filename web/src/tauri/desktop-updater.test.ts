@@ -184,6 +184,15 @@ describe('desktop updater bridge', () => {
 });
 
 describe('Desktop-owned runtime updates (#1777)', () => {
+  it('blocks a stale Desktop notification while an agent update owns the runtime', async () => {
+    await checkForDesktopUpdate();
+    useUpdateFlowStore.getState().start('agent', '0.9.5-beta.7.1');
+    await expect(installDesktopUpdate(() => undefined)).rejects.toThrow('already in progress');
+    expect(runtimeMocks.has).not.toHaveBeenCalled();
+    expect(runtimeMocks.update).not.toHaveBeenCalled();
+    expect(mocks.update.downloadAndInstall).not.toHaveBeenCalled();
+  });
+
   it('awaits the matching backend update before installing and restarts only once', async () => {
     runtimeMocks.has.mockResolvedValue(true);
     mocks.update.version = '0.9.5-7+1';
