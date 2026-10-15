@@ -115,12 +115,8 @@ export function ClioPendingInteractions({
     <Queue
       aria-label="Agent needs your response"
       aria-live="polite"
-      // No background of its own: this panel floats over the conversation
-      // stacked directly on the composer, and the two read as one surface only
-      // while it keeps the Queue's translucent bg-card/70 (dark: /60) — the
-      // exact tone the composer gives its input group. An opaque fill here also
-      // cancels the backdrop blur that makes the float legible.
-      className="relative z-10 mx-auto -mb-px min-h-0 w-[calc(100%_-_1.5rem)] max-w-[54.5rem] shrink rounded-b-none border-b-0 py-0.5"
+      // Match the queue and composer, including the rounded outer boundary.
+      className="relative z-10 mx-auto -mb-px min-h-0 w-[calc(100%_-_1.5rem)] max-w-[54.5rem] shrink overflow-hidden rounded-b-none border-b-0 border-composer-border bg-composer py-0.5 shadow-none backdrop-blur-none dark:bg-composer dark:shadow-none"
       role="region"
     >
       {/* Open by default: the agent is blocked until one of these controls is used,
