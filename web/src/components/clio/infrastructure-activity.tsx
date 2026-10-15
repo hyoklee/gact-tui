@@ -102,18 +102,21 @@ export function InfrastructureActivity({ data }: { data: InfrastructureInventory
         {rows.length ? (
           rows.map((row) => (
             <details className="group py-3" key={`${row.target}:${row.id}`}>
-              <summary className="grid cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 sm:flex sm:flex-wrap">
+              <summary className="grid cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto_1rem] items-center gap-x-3 gap-y-2 sm:flex sm:flex-wrap">
                 <span className="min-w-0 break-words font-medium text-sm sm:flex-1">
                   {row.title.charAt(0).toLocaleUpperCase() + row.title.slice(1)}
                 </span>
                 <span className="col-start-1 row-start-2 text-xs text-muted-foreground">
                   {hosts.get(row.target) || row.target}
                 </span>
-                <Badge variant={row.state === 'failed' ? 'destructive' : 'outline'}>
+                <Badge
+                  className="col-start-2 row-start-1"
+                  variant={row.state === 'failed' ? 'destructive' : 'outline'}
+                >
                   {stateLabels[row.state] || row.state}
                 </Badge>
                 <time
-                  className="text-xs text-muted-foreground"
+                  className="col-start-2 row-start-2 text-xs text-muted-foreground"
                   dateTime={new Date(row.time).toISOString()}
                   title={new Date(row.time).toLocaleString()}
                 >
@@ -126,15 +129,15 @@ export function InfrastructureActivity({ data }: { data: InfrastructureInventory
                 </time>
                 <ChevronDownIcon
                   aria-hidden="true"
-                  className="hidden size-4 text-muted-foreground group-open:rotate-180 sm:block"
+                  className="col-start-3 row-start-1 size-4 text-muted-foreground group-open:rotate-180"
                 />
                 {row.model && activeStates.has(row.state) ? (
-                  <div className="col-span-2 mt-2 w-full sm:basis-full">
+                  <div className="col-span-3 mt-2 w-full sm:basis-full">
                     <ModelDownloadProgress model={row.model} />
                   </div>
                 ) : null}
                 {!row.model && activeStates.has(row.state) && row.detail ? (
-                  <p className="col-span-2 w-full text-xs text-muted-foreground sm:basis-full">
+                  <p className="col-span-3 w-full text-xs text-muted-foreground sm:basis-full">
                     {activitySummary(row.detail)}
                   </p>
                 ) : null}
