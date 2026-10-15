@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { vocab } from '@/lib/brand-vocabulary';
 import { ClioPathPicker } from './path-picker';
 
 export interface WorkspaceEditorActions {
@@ -118,8 +119,8 @@ export function WorkspaceEditorDialog({
             />
             <FieldDescription>
               Choose the new location if you moved this folder. Your conversations stay in this
-              workspace. CLIO does not move your files. Finish running conversations before changing
-              it.
+              workspace. {vocab.product} does not move your files. Finish running conversations
+              before changing it.
             </FieldDescription>
           </Field>
           <Field className="min-w-0">
@@ -169,9 +170,9 @@ export function WorkspaceEditorDialog({
               </div>
             </div>
             <FieldDescription>
-              CLIO can read and write in these folders too. Save includes the folder entered above.
-              Removing a folder withdraws its additional access grant; it does not delete files.
-              Running tools pick up access changes after they finish.
+              {vocab.product} can read and write in these folders too. Save includes the folder
+              entered above. Removing a folder withdraws its additional access grant; it does not
+              delete files. Running tools pick up access changes after they finish.
             </FieldDescription>
           </Field>
           {error ? (
@@ -215,18 +216,16 @@ function FolderRow({
           {path}
         </p>
       </div>
-      {
-        <Button
-          aria-label={`Remove folder ${name}`}
-          disabled={!onRemove}
-          onClick={onRemove}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <DeleteIcon aria-hidden="true" />
-        </Button>
-      }
+      <Button
+        aria-label={`Remove folder ${name}`}
+        disabled={!onRemove}
+        onClick={onRemove}
+        size="icon-xs"
+        type="button"
+        variant="ghost"
+      >
+        <DeleteIcon aria-hidden="true" />
+      </Button>
     </div>
   );
 }
