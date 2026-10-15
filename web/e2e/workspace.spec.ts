@@ -513,9 +513,8 @@ test('renders dense flat-NDP semantics with accessible interactions', async ({
       const composerSurface = await composerStack
         .locator('[data-slot="input-group"]')
         .evaluate((element) => getComputedStyle(element).backgroundColor);
-      // The composer has its own opaque, more visible surface. The attention
-      // tray retains its shared card surface above it.
-      return composerSurface !== responseSurface && composerSurface !== 'rgba(0, 0, 0, 0)';
+      // The user's question, queue and composer share one opaque surface tone.
+      return composerSurface === responseSurface && composerSurface !== 'rgba(0, 0, 0, 0)';
     })
     .toBe(true);
   const expandedConversationBounds = await conversation.boundingBox();

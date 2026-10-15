@@ -2,7 +2,8 @@ import type { A2UISurface, PendingInteraction } from '@clio/core/v3';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { maxViewportHeight } from './a2ui-response-viewport-resize';
 import { CLIO_A2UI_CATALOG_ID } from '@/test-fixtures/a2ui/v0_9_1/fixtures';
 import { ClioPendingInteractions } from './pending-interactions';
 
@@ -39,10 +40,14 @@ const repository = vi.hoisted(() => ({
 
 vi.mock('@/hooks/use-repository', () => ({ useRepository: () => repository }));
 
+beforeEach(() => {
+  vi.stubGlobal('innerHeight', 1000);
+});
 afterEach(() => {
   cleanup();
   repository.a2uiAction.mockClear();
   window.sessionStorage.clear();
+  vi.unstubAllGlobals();
 });
 
 function pendingA2UI(): PendingInteraction {
@@ -227,7 +232,7 @@ describe('PendingA2UIResponse', () => {
     expect(viewport).toHaveStyle({ height: '520px' });
     resize.focus();
     await user.keyboard('{Enter}');
-    const maxHeight = Math.floor(window.innerHeight * 0.85);
+    const maxHeight = maxViewportHeight(window.innerHeight);
     expect(viewport).toHaveStyle({ height: `${maxHeight}px` });
   });
 

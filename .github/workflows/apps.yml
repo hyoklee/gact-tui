@@ -163,6 +163,8 @@ jobs:
         run: cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --lib credential_chunks::tests
       - name: Installer option and migration regressions
         run: cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --lib installer_options::tests
+      - name: SSH command framing and real POSIX PTY large-input regressions
+        run: cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --lib ssh_transport_command::tests
       - name: Real Windows keyring long-credential round trip
         if: runner.os == 'Windows'
         run: cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --lib credentials::tests::windows_long_credential -- --test-threads=1

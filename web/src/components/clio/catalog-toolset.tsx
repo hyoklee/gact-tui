@@ -46,12 +46,13 @@ export function CatalogToolset({
   tools: ToolCatalogItem[];
 }) {
   const [query, setQuery] = useState('');
-  const [catalog, setCatalog] = useState<'builtin' | 'mcp'>('builtin');
+  const [catalog, setCatalog] = useState<'all' | 'builtin' | 'mcp'>('all');
   const [browserOpen, setBrowserOpen] = useState(false);
   const bundles = useMemo(() => toolBundles(tools, servers, query), [query, servers, tools]);
-  const [selectedKey, setSelectedKey] = useState(() => toolKey(tools[0]));
-  const activeBundle = bundles.find((bundle) => bundle.id === catalog);
-  const visibleTools = activeBundle?.domains.flatMap((domain) => domain.tools) ?? [];
+  const [selectedKey, setSelectedKey] = useState('');
+  const visibleTools = bundles
+    .filter((bundle) => catalog === 'all' || bundle.id === catalog)
+    .flatMap((bundle) => bundle.domains.flatMap((domain) => domain.tools));
   const selected = visibleTools.find((tool) => toolKey(tool) === selectedKey) ?? visibleTools[0];
   const selectTool = (tool: ToolCatalogItem) => {
     setSelectedKey(toolKey(tool));
@@ -64,19 +65,16 @@ export function CatalogToolset({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 xl:hidden">
-        <Button
-          className="bg-blue-600 text-white hover:bg-blue-500"
-          onClick={() => setBrowserOpen(true)}
-        >
+      <div className="flex flex-wrap items-center gap-3 lg:hidden">
+        <Button onClick={() => setBrowserOpen(true)}>
           <ListFilterIcon aria-hidden="true" /> View tool list
         </Button>
         <p className="text-sm text-muted-foreground">
           Choose from {tools.length} available tool{tools.length === 1 ? '' : 's'}.
         </p>
       </div>
-      <div className="border-y bg-card xl:grid xl:min-h-[38rem] xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)]">
-        <aside className="hidden border-r xl:block">
+      <div className="border-y bg-card lg:grid lg:h-[min(42rem,calc(100dvh-16rem))] lg:min-h-[22rem] lg:grid-cols-[minmax(13rem,17rem)_minmax(0,1fr)]">
+        <aside className="hidden min-h-0 min-w-0 overflow-hidden border-r lg:flex">
           <ToolBrowser
             bundles={bundles}
             catalog={catalog}
@@ -87,9 +85,9 @@ export function CatalogToolset({
             selected={selected}
           />
         </aside>
-        <div className="min-w-0">
+        <div className="clio-scrollbar min-h-0 min-w-0 lg:overflow-y-auto">
           {selected ? (
-            <ToolContract tool={selected} />
+            <ToolContract key={toolKey(selected)} tool={selected} />
           ) : (
             <p className="p-8 text-sm text-muted-foreground">No tools match “{query}”.</p>
           )}
@@ -126,8 +124,8 @@ function ToolBrowser({
   selected,
 }: {
   bundles: ToolBundle[];
-  catalog: 'builtin' | 'mcp';
-  onCatalog: (catalog: 'builtin' | 'mcp') => void;
+  catalog: 'all' | 'builtin' | 'mcp';
+  onCatalog: (catalog: 'all' | 'builtin' | 'mcp') => void;
   onQuery: (query: string) => void;
   onSelect: (tool: ToolCatalogItem) => void;
   query: string;
@@ -139,9 +137,11 @@ function ToolBrowser({
       bundle.domains.reduce((count, domain) => count + domain.tools.length, 0),
     ]),
   );
-  const active = bundles.find((bundle) => bundle.id === catalog);
+  const domains = bundles
+    .filter((bundle) => catalog === 'all' || bundle.id === catalog)
+    .flatMap((bundle) => bundle.domains);
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="space-y-3 border-b p-3">
         <label className="relative block">
           <SearchIcon
@@ -156,7 +156,13 @@ function ToolBrowser({
             value={query}
           />
         </label>
-        <div aria-label="Tool source" className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+        <div aria-label="Tool source" className="flex flex-wrap gap-1 rounded-lg bg-muted p-1">
+          <SourceButton
+            active={catalog === 'all'}
+            count={(counts.builtin ?? 0) + (counts.mcp ?? 0)}
+            label="All"
+            onClick={() => onCatalog('all')}
+          />
           <SourceButton
             active={catalog === 'builtin'}
             count={counts.builtin ?? 0}
@@ -172,17 +178,30 @@ function ToolBrowser({
         </div>
       </div>
       <div className="clio-scrollbar min-h-0 flex-1 overflow-y-auto">
-        {active?.domains.map((domain, index) => (
+        {domains.map((domain, index) => (
           <ToolDomainGroup
             defaultOpen={Boolean(query) || index === 0 || domain.tools.includes(selected!)}
             domain={domain}
-            key={domain.id}
+            key={`${catalog}:${domain.id}:${Boolean(query)}`}
             onSelect={onSelect}
             selected={selected}
           />
         ))}
-        {!active?.domains.length ? (
-          <p className="p-5 text-sm text-muted-foreground">No tools match “{query}”.</p>
+        {!domains.length ? (
+          <div className="p-5 text-sm text-muted-foreground">
+            <p>No tools match “{query}”.</p>
+            <Button
+              className="mt-2"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                onQuery('');
+                onCatalog('all');
+              }}
+            >
+              Clear filters
+            </Button>
+          </div>
         ) : null}
       </div>
     </div>
@@ -203,7 +222,7 @@ function SourceButton({
   return (
     <button
       aria-pressed={active}
-      className={`flex items-center justify-between rounded-md px-2.5 py-1.5 text-sm transition-colors ${
+      className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
         active
           ? 'bg-background font-medium shadow-sm'
           : 'text-muted-foreground hover:text-foreground'
@@ -312,6 +331,8 @@ function McpProvenance({ server }: { server: McpServerDefinition }) {
 
 function ToolContract({ tool }: { tool: ToolCatalogItem }) {
   const title = tool.title?.trim() || humanize(tool.name);
+  const [expanded, setExpanded] = useState(false);
+  const description = tool.description?.trim() || 'This provider did not supply a description.';
   return (
     <article className="p-5 sm:p-7 [&>section]:-mx-5 [&>section]:px-5 sm:[&>section]:-mx-7 sm:[&>section]:px-7">
       <div className="-mx-5 flex flex-wrap items-start justify-between gap-3 border-b px-5 pb-5 sm:-mx-7 sm:px-7">
@@ -325,9 +346,22 @@ function ToolContract({ tool }: { tool: ToolCatalogItem }) {
 
       <section className="border-b py-5">
         <h3 className="text-sm font-semibold">Description</h3>
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-          {tool.description?.trim() || 'This provider did not supply a description.'}
+        <p
+          className={`mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground ${description.length > 420 && !expanded ? 'line-clamp-4' : ''}`}
+        >
+          {description}
         </p>
+        {description.length > 420 ? (
+          <Button
+            className="mt-2"
+            size="sm"
+            variant="ghost"
+            aria-expanded={expanded}
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? 'Show less' : 'Read full description'}
+          </Button>
+        ) : null}
       </section>
 
       <SchemaSection

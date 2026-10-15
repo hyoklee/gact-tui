@@ -204,6 +204,7 @@ export function RelaySettings() {
 
 export function RelayConnectionDialog({
   error,
+  onBack,
   onOpenChange,
   onSubmit,
   open,
@@ -211,6 +212,7 @@ export function RelayConnectionDialog({
   value,
 }: {
   error?: string;
+  onBack?: () => void;
   onOpenChange: (open: boolean) => void;
   onSubmit: (input: RelayConnectionInput) => void;
   open: boolean;
@@ -245,6 +247,11 @@ export function RelayConnectionDialog({
             </DialogDescription>
           </DialogHeader>
           <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
+            {onBack ? (
+              <Button type="button" size="sm" variant="ghost" onClick={onBack}>
+                Choose another service
+              </Button>
+            ) : null}
             <Alert>
               <CableIcon aria-hidden="true" />
               <AlertTitle>Connect to Relay, then add computers there</AlertTitle>

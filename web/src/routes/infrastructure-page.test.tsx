@@ -42,7 +42,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   repository.provenanceConnections.mockResolvedValue([]);
   repository.infrastructureInventory.mockResolvedValue({
-    targets: [],
+    targets: [{ id: 'local', label: 'Local', kind: 'local', transport_state: 'connected' }],
     services: [],
     connections: [],
     operations: [],
@@ -273,11 +273,8 @@ describe('InfrastructurePage', () => {
     const user = userEvent.setup();
     renderPage('/workspaces/ws_factorio/sessions/sess_demo', 'tools');
 
-    expect(await screen.findByText('4 available')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Built-in 3' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(await screen.findByText('4 tools')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'All 4' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /Create plan/u })).not.toBeVisible();
     await user.click(screen.getByText('Planning'));
     expect(screen.getByRole('button', { name: /Create plan/u })).toBeVisible();
@@ -348,6 +345,7 @@ describe('InfrastructurePage', () => {
     });
 
     renderPage('/workspaces/ws_factorio/sessions/sess_demo', 'agent');
+    await userEvent.click(await screen.findByRole('button', { name: 'Local details' }));
 
     expect(await screen.findByText('Protected execution')).toBeVisible();
     expect(await screen.findByText('Not verified yet on this computer')).toBeVisible();
@@ -370,6 +368,7 @@ describe('InfrastructurePage', () => {
     });
 
     renderPage('/workspaces/ws_factorio/sessions/sess_demo', 'agent');
+    await userEvent.click(await screen.findByRole('button', { name: 'Local details' }));
 
     await user.click(await screen.findByText('Protected execution'));
     expect(
@@ -418,6 +417,7 @@ describe('InfrastructurePage', () => {
     });
 
     renderPage('/workspaces/ws_factorio/sessions/sess_demo', 'agent');
+    await userEvent.click(await screen.findByRole('button', { name: 'Local details' }));
 
     await user.click(await screen.findByText('Protected execution'));
     await user.click(await screen.findByRole('button', { name: /Set up protected execution/u }));
@@ -462,6 +462,7 @@ describe('InfrastructurePage', () => {
     repository.setupSandbox.mockRejectedValue(new Error('the request timed out'));
 
     renderPage('/workspaces/ws_factorio/sessions/sess_demo', 'agent');
+    await userEvent.click(await screen.findByRole('button', { name: 'Local details' }));
 
     await user.click(await screen.findByText('Protected execution'));
     await user.click(await screen.findByRole('button', { name: /Set up protected execution/u }));
@@ -498,6 +499,7 @@ describe('InfrastructurePage', () => {
     });
 
     renderPage('/workspaces/ws_factorio/sessions/sess_demo', 'agent');
+    await userEvent.click(await screen.findByRole('button', { name: 'Local details' }));
 
     await user.click(await screen.findByText('Protected execution'));
     await user.click(await screen.findByRole('button', { name: /Set up protected execution/u }));
@@ -524,6 +526,7 @@ describe('InfrastructurePage', () => {
 
     // Browser session (inTauriMock defaults to false): an instruction, not a button that can't act here.
     renderPage('/workspaces/ws_factorio/sessions/sess_demo', 'agent');
+    await userEvent.click(await screen.findByRole('button', { name: 'Local details' }));
     await user.click(await screen.findByText('Protected execution'));
     expect(await screen.findByText(/Set up, restart/u)).toBeVisible();
     expect(screen.getByText(/Restart .* to activate protected execution/u)).toBeVisible();
@@ -533,6 +536,7 @@ describe('InfrastructurePage', () => {
     // Desktop session: a real "Restart CLIO" button wired to the restart command.
     inTauriMock.mockReturnValue(true);
     renderPage('/workspaces/ws_factorio/sessions/sess_demo', 'agent');
+    await userEvent.click(await screen.findByRole('button', { name: 'Local details' }));
     await user.click(await screen.findByText('Protected execution'));
     await user.click(await screen.findByRole('button', { name: /Restart/u }));
     expect(restartClioMock).toHaveBeenCalled();
@@ -567,16 +571,14 @@ describe('InfrastructurePage', () => {
     renderPage(undefined, 'services');
 
     await user.click(await screen.findByRole('button', { name: 'Connect existing service…' }));
-    await user.click(await screen.findByRole('button', { name: /Connect web search/u }));
+    await user.click(await screen.findByRole('button', { name: 'Connect CLIO Web Search' }));
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
-    expect(screen.getByText('Connect an existing service')).toBeVisible();
-    expect(
-      screen.getByText(/Search and HTML fetches can appear to work without it/u),
-    ).toBeVisible();
+    expect(screen.getByText('Connect existing Web Search')).toBeVisible();
+    expect(screen.getByText(/Its lifecycle remains external/u)).toBeVisible();
     const address = screen.getByLabelText('Service address');
     await user.clear(address);
     await user.type(address, 'http://10.0.0.102:8089');
-    await user.click(screen.getByRole('button', { name: 'Connect to agent' }));
+    await user.click(screen.getByRole('button', { name: 'Connect' }));
 
     await waitFor(() =>
       expect(repository.configureMcpServer).toHaveBeenCalledWith('web', {
@@ -609,6 +611,9 @@ describe('InfrastructurePage', () => {
     renderPage(undefined, 'services');
 
     await user.click(await screen.findByRole('button', { name: 'Connect existing service…' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Edit connection CLIO Web Search' }),
+    );
     await user.click(await screen.findByRole('button', { name: 'Disconnect' }));
 
     await waitFor(() => expect(repository.removeMcpConfiguration).toHaveBeenCalledWith('web'));
@@ -634,11 +639,13 @@ describe('InfrastructurePage', () => {
     renderPage(undefined, 'services');
 
     await user.click(await screen.findByRole('button', { name: 'Connect existing service…' }));
-    await user.click(await screen.findByRole('button', { name: /Repair connection/u }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Edit connection CLIO Web Search' }),
+    );
     expect(await screen.findByDisplayValue('http://offline:8089')).toBeVisible();
     expect(screen.getByText('Configuration saved, service unavailable')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Retry connection' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Use local engines' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Disconnect' })).toBeVisible();
   });
 
   it('keeps Web Search and Relay setup aligned at the same top position and width', async () => {
@@ -646,12 +653,12 @@ describe('InfrastructurePage', () => {
     renderPage(undefined, 'services');
 
     await user.click(await screen.findByRole('button', { name: 'Connect existing service…' }));
-    await user.click(await screen.findByRole('button', { name: /Connect web search/u }));
+    await user.click(await screen.findByRole('button', { name: 'Connect CLIO Web Search' }));
     expect(screen.getByRole('dialog')).toHaveClass('top-[10dvh]', 'translate-y-0', 'sm:max-w-2xl');
     await user.click(screen.getByRole('button', { name: 'Close' }));
 
     await user.click(await screen.findByRole('button', { name: 'Connect existing service…' }));
-    await user.click(screen.getByRole('button', { name: 'Connect Relay' }));
+    await user.click(screen.getByRole('button', { name: 'Connect CLIO Relay' }));
     expect(screen.getByRole('dialog')).toHaveClass('top-[10dvh]', 'translate-y-0', 'sm:max-w-2xl');
   });
 });

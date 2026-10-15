@@ -51,12 +51,18 @@ export const containerRuntimeFactSchema = z.object({
   detail: z.string().default(''),
 });
 
+/** POSIX ownership reported by the host; Windows reports unknown (-1). */
+export const targetIdentitySchema = z.object({
+  uid: z.number().int().default(-1),
+  gid: z.number().int().default(-1),
+});
+
 export const targetFactsSchema = z.object({
   target_id: z.string(),
   label: z.string(),
   os: z.string(),
   arch: z.string(),
-  identity: z.string().optional(),
+  identity: targetIdentitySchema.optional(),
   home: z.string().optional(),
   hostname: z.string().optional(),
   agent_data_root: z.string().optional(),

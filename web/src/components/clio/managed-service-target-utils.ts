@@ -362,11 +362,20 @@ export function modelRuntimeInModels(
   serviceId: string,
   connectionUrl: string,
 ): boolean {
+  return Boolean(modelRuntimeServer(servers, serviceId, connectionUrl));
+}
+
+/** Match a configured provider by preset and address, including additional saved instances. */
+export function modelRuntimeServer(
+  servers: SavedServer[] | undefined,
+  serviceId: string,
+  connectionUrl: string,
+): SavedServer | undefined {
   const root = (address: string) => address.replace(/\/+$/u, '').replace(/\/v1$/u, '');
-  return Boolean(
-    servers?.some(
-      (server) => server.id === serviceId && root(server.address) === root(connectionUrl),
-    ),
+  return servers?.find(
+    (server) =>
+      (server.id === serviceId || server.preset_id === serviceId) &&
+      root(server.address) === root(connectionUrl),
   );
 }
 

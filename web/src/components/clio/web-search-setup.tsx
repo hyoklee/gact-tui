@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Globe2Icon } from 'lucide-react';
+import { ArrowLeftIcon } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { vocab } from '@/lib/brand-vocabulary';
@@ -25,9 +25,11 @@ import { remoteUrlFromSpec } from './web-search-configuration';
 export function WebSearchSetup({
   onOpenChange,
   open,
+  onBack,
 }: {
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  onBack?: () => void;
 }) {
   const repository = useRepository();
   const queryClient = useQueryClient();
@@ -131,15 +133,17 @@ export function WebSearchSetup({
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
-          <Alert>
-            <Globe2Icon aria-hidden="true" />
-            <AlertTitle>Connect an existing service</AlertTitle>
-            <AlertDescription>
-              {vocab.agent} checks health and connects tools, but does not install, stop, or remove
-              this service. Search and HTML fetches can appear to work without it, but document
-              conversion and saved outputs require this endpoint.
-            </AlertDescription>
-          </Alert>
+          <p className="text-sm text-muted-foreground">
+            {vocab.agent} checks health and connects tools, but does not install, stop, or remove
+            this service. {vocab.agent} has built-in search; this connection adds a separately
+            managed research service.
+          </p>
+          {onBack ? (
+            <Button size="sm" variant="ghost" className="w-fit" onClick={onBack}>
+              <ArrowLeftIcon />
+              Choose another service
+            </Button>
+          ) : null}
           <Field>
             <FieldLabel htmlFor="existing-web-search-url">Service address</FieldLabel>
             <Input
@@ -153,19 +157,24 @@ export function WebSearchSetup({
               The address must be reachable from the active {vocab.agent}.
             </FieldDescription>
           </Field>
-          <Field>
-            <FieldLabel htmlFor="existing-web-search-credential">Credential reference</FieldLabel>
-            <Input
-              id="existing-web-search-credential"
-              onChange={(event) => setCredentialRef(event.target.value)}
-              placeholder="infrastructure:nsf-search"
-              value={effectiveCredentialRef}
-            />
-            <FieldDescription>
-              Optional key into the active {vocab.agent}’s credential source. Secrets are never
-              stored in this service record.
-            </FieldDescription>
-          </Field>
+          <details>
+            <summary className="cursor-pointer text-sm font-medium">
+              Advanced connection settings
+            </summary>
+            <Field className="mt-3">
+              <FieldLabel htmlFor="existing-web-search-credential">Credential reference</FieldLabel>
+              <Input
+                id="existing-web-search-credential"
+                onChange={(event) => setCredentialRef(event.target.value)}
+                placeholder="infrastructure:nsf-search"
+                value={effectiveCredentialRef}
+              />
+              <FieldDescription>
+                Optional key into the active {vocab.agent}’s credential source. Secrets are never
+                stored in this service record.
+              </FieldDescription>
+            </Field>
+          </details>
           {external ? (
             <p className="text-xs text-muted-foreground">
               Health: {external.reachable ? 'reachable' : 'unreachable'}
@@ -199,13 +208,16 @@ export function WebSearchSetup({
               {disconnect.isPending
                 ? 'Disconnecting…'
                 : current.data?.configured
-                  ? 'Use local engines'
+                  ? 'Disconnect'
                   : 'Disconnect'}
             </Button>
           ) : (
             <span />
           )}
           <div className="flex gap-2">
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
             {external ? (
               <Button
                 disabled={check.isPending}
@@ -227,9 +239,7 @@ export function WebSearchSetup({
                   ? 'Retry connection'
                   : external
                     ? 'Save and reconnect'
-                    : current.data?.name
-                      ? 'Connect to agent'
-                      : 'Connect'}
+                    : 'Connect'}
             </Button>
           </div>
         </DialogFooter>

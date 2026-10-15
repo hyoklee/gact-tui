@@ -1,7 +1,7 @@
 import type { InfrastructureInventory, ToolCatalogItem } from '@clio/core/v3';
 import { targetFactsSchema } from '@clio/core/v3';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -147,6 +147,7 @@ it('groups each health row once and updates the counts from the live sandbox sta
   expect(screen.getByText('Warnings (1)')).toBeVisible();
   expect(screen.getAllByText('sandbox')).toHaveLength(1);
   expect(screen.getByLabelText('Ready and working (2)')).not.toHaveAttribute('open');
+  expect(screen.queryByLabelText('Errors (0)')).not.toBeInTheDocument();
 });
 
 it('shows the sandbox setup result instead of silently discarding it', async () => {
@@ -185,7 +186,7 @@ it('shows saved provider servers and preserves actual host facts in the topology
     uv_available: true,
     hostname: 'WORKSTATION',
     home: 'C:\\Users\\Alice',
-    identity: 'Alice',
+    identity: { uid: -1, gid: -1 },
     agent_data_root: 'C:\\CLIO data',
   });
   expect(facts.home).toBe('C:\\Users\\Alice');
@@ -204,13 +205,28 @@ it('shows saved provider servers and preserves actual host facts in the topology
       onTarget={vi.fn()}
     />,
   );
+  expect(screen.getByRole('img', { name: /Connections from this client/u })).toBeInTheDocument();
+  expect(repository.managedServiceCatalog).not.toHaveBeenCalled();
+  await userEvent.click(await screen.findByText('Saved model servers · 1'));
   expect(await screen.findByText('My running server')).toBeVisible();
+  await userEvent.click(screen.getByText('Computer details'));
+  expect(await screen.findByText('Home: C:\\Users\\Alice')).not.toBeVisible();
+  await userEvent.click(await screen.findByText('Computer identity & paths'));
+  expect(screen.getByText('Home: C:\\Users\\Alice')).toBeVisible();
   expect(await screen.findByText('Computer: WORKSTATION')).toBeVisible();
-  expect(screen.getByRole('link', { name: 'Provider setup' })).toHaveAttribute(
+  expect(screen.getByRole('link', { name: 'Model providers' })).toHaveAttribute(
     'href',
     '/settings/providers',
   );
-  expect(screen.getByLabelText('Connection map').querySelector('svg path')).not.toBeNull();
+  expect(
+    within(screen.getByLabelText('Connection map')).getByRole('link', {
+      name: /Manage services on connected/u,
+    }),
+  ).toHaveAttribute('href', '/infrastructure/services?target=local');
+  expect(screen.getByRole('link', { name: 'Inspect agent' })).toHaveAttribute(
+    'href',
+    '/infrastructure/agent',
+  );
 });
 
 it('keeps the tool-list action outside the selected tool contract', async () => {

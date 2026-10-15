@@ -20,7 +20,7 @@ const reuse = (thing: string) => ({
 describe('installExpectation', () => {
   it('says several minutes and that leaving is safe when nothing is measured', () => {
     expect(installExpectation({ thing: 'vLLM' })).toBe(
-      `This can take several minutes — ${vocab.agent} downloads and prepares vLLM. ` +
+      `${vocab.agent} downloads and prepares vLLM. This can take several minutes. ` +
         'You can leave this page; progress continues.',
     );
   });
@@ -44,7 +44,7 @@ describe('installExpectation', () => {
         lastSeconds: 754,
         reused: [reuse('vLLM image'), reuse('vLLM image')],
       }),
-    ).toBe('Already available — reusing vLLM image; this should take under a minute.');
+    ).toBe('Reusing vLLM image. This should take under a minute.');
   });
 });
 

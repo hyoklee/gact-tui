@@ -23,12 +23,17 @@ function viewportHeightStorageKey(surfaceKey: string): string {
 
 /** The tallest the viewport may grow to, given the window's current inner height. */
 export function maxViewportHeight(windowInnerHeight: number): number {
-  return Math.max(MIN_VIEWPORT_HEIGHT, Math.floor(windowInnerHeight * MAX_VIEWPORT_HEIGHT_RATIO));
+  // Match the viewport's CSS cap: header, composer and pending controls need 17rem.
+  return Math.max(
+    96,
+    Math.min(Math.floor(windowInnerHeight * MAX_VIEWPORT_HEIGHT_RATIO), windowInnerHeight - 272),
+  );
 }
 
 /** Clamp a candidate height into [MIN_VIEWPORT_HEIGHT, maxViewportHeight(windowInnerHeight)]. */
 export function clampViewportHeight(height: number, windowInnerHeight: number): number {
-  return Math.min(maxViewportHeight(windowInnerHeight), Math.max(MIN_VIEWPORT_HEIGHT, height));
+  const max = maxViewportHeight(windowInnerHeight);
+  return Math.min(max, Math.max(Math.min(MIN_VIEWPORT_HEIGHT, max), height));
 }
 
 /**
@@ -58,10 +63,7 @@ export function readPersistedViewportHeight(surfaceKey: string): number | undefi
  */
 export function persistViewportHeight(surfaceKey: string, height: number): void {
   try {
-    window.sessionStorage.setItem(
-      viewportHeightStorageKey(surfaceKey),
-      String(Math.round(height)),
-    );
+    window.sessionStorage.setItem(viewportHeightStorageKey(surfaceKey), String(Math.round(height)));
   } catch (error) {
     console.warn('a2ui viewport height write skipped reason=session_storage_unavailable', error);
   }
@@ -71,5 +73,8 @@ export function persistViewportHeight(surfaceKey: string, height: number): void 
 export function initialViewportHeight(surfaceKey: string, windowInnerHeight: number): number {
   const persisted = readPersistedViewportHeight(surfaceKey);
   if (persisted !== undefined) return clampViewportHeight(persisted, windowInnerHeight);
-  return clampViewportHeight(DEFAULT_VIEWPORT_HEIGHT, windowInnerHeight);
+  const max = maxViewportHeight(windowInnerHeight);
+  // A first-open tray must leave room to grow. Otherwise a 720px window opens
+  // at its CSS ceiling and the Resize button appears to do nothing.
+  return clampViewportHeight(Math.min(DEFAULT_VIEWPORT_HEIGHT, max - 96), windowInnerHeight);
 }

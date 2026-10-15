@@ -31,7 +31,7 @@ export function installExpectation({
 }: InstallEstimate): string {
   if (reused.length) {
     const things = [...new Set(reused.map((row) => row.thing))].join(', ');
-    return `Already available — reusing ${things}; this should take under a minute.`;
+    return `Reusing ${things}. This should take under a minute.`;
   }
   const known = [
     typeof downloadBytes === 'number' && downloadBytes > 0
@@ -42,7 +42,7 @@ export function installExpectation({
       : '',
   ].filter(Boolean);
   return [
-    `This can take several minutes — ${vocab.agent} downloads and prepares ${thing}.`,
+    `${vocab.agent} downloads and prepares ${thing}. This can take several minutes.`,
     ...known,
     'You can leave this page; progress continues.',
   ].join(' ');
