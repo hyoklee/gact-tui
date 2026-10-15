@@ -3,7 +3,6 @@ import { installerRequestedLlamaCpp } from '@/lib/installer-infrastructure';
 import {
   INSTALL_FROM_SCRATCH_KEY,
   type McpUserConfiguration,
-  type RelayStatus,
   type ServiceActionInput,
   type ManagedServiceDefinition,
   type ProvenanceConnectionInput,
@@ -76,8 +75,6 @@ export function ManagedServices({
   onConnectExistingService,
   onConnectProvenance,
   onManageWebSearch,
-  onManageRelay,
-  relayStatus,
 }: {
   onConnectWebSearch?: (remoteUrl: string) => void;
   onDisconnectWebSearch?: () => void;
@@ -90,8 +87,6 @@ export function ManagedServices({
   onConnectExistingService?: () => void;
   onConnectProvenance?: (input: ProvenanceConnectionInput) => void;
   onManageWebSearch?: () => void;
-  onManageRelay?: () => void;
-  relayStatus?: RelayStatus;
 }) {
   const desktop = inTauri();
   const repository = useRepository();
@@ -544,11 +539,9 @@ export function ManagedServices({
       <AgentServicesOverview
         agentLabel={connectedAgentLabel}
         agentLocation={connectedAgentLocation}
-        relay={relayStatus}
         webSearch={webSearchConnection}
         webSearchConnected={webSearchConnected}
         onManageWebSearch={onManageWebSearch}
-        onManageRelay={onManageRelay}
       />
       <details
         className="rounded-xl border p-4"

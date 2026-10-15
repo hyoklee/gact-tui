@@ -30,12 +30,11 @@ export function workflowDescriptor(
         return [{ name, taskId: typeof step?.task_id === 'string' ? step.task_id : undefined }];
       })
     : [];
-  if (steps.length === 0) return undefined;
   const input = asRecord(tool.input);
   const kwargs = asRecord(input?.kwargs);
   const requestValue = input?.request ?? kwargs?.request;
   const request = typeof requestValue === 'string' ? requestValue.trim() : undefined;
-  return { label: steps.map((step) => step.name).join(' → '), request, steps };
+  return { label: steps.map((step) => step.name).join(' → ') || 'Workflow', request, steps };
 }
 
 /** Adds a concise workflow identity and definition to otherwise generic run_workflow rows. */
@@ -56,7 +55,9 @@ export function withWorkflowPresentation(tool: ToolInvocation): ToolInvocation {
       subject: existing?.subject || subjectId,
       summary:
         existing?.summary?.trim() ||
-        `${descriptor.steps.length} ordered ${descriptor.steps.length === 1 ? 'step' : 'steps'} · waited for completion`,
+        (descriptor.steps.length
+          ? `${descriptor.steps.length} ordered ${descriptor.steps.length === 1 ? 'step' : 'steps'}`
+          : 'Step details unavailable'),
       blocks: [
         ...(existing?.subject
           ? blocks

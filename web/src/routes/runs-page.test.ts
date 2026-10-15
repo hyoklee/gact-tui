@@ -1,4 +1,4 @@
-import type { Session, TranscriptSnapshot, Workspace } from '@clio/core/v3';
+import type { Session, TaskSnapshot, TranscriptSnapshot, Workspace } from '@clio/core/v3';
 import { describe, expect, it } from 'vitest';
 import { buildWorkflowRows } from './runs-page';
 
@@ -57,7 +57,39 @@ describe('workflow run indexing', () => {
       ],
     };
 
-    expect(buildWorkflowRows([transcript], [session], [workspace])).toEqual([
+    const completed = (handle: string): TaskSnapshot => ({
+      handle,
+      kind: 'Subagent',
+      owner: {
+        human_id: 'human',
+        session_id: 'child',
+        assignment_id: handle,
+        parent_handle: 'root',
+      },
+      label: 'Step',
+      description: 'Original assignment',
+      description_reference: null,
+      description_missing: false,
+      tool: 'conversation',
+      invocation_id: handle,
+      status: 'completed',
+      raw_status: 'completed',
+      activity: '',
+      progress: { message: '', completed: null, total: null, unit: '', output: null },
+      supported_actions: [],
+      cancellation_requested_at: null,
+      terminal_at: '2026-09-11T00:00:30Z',
+      connection_freshness: 'fresh',
+      settlement: 'confirmed',
+      recording: 'confirmed',
+      result: null,
+      details: null,
+      backend: null,
+      created_at: '2026-09-11T00:00:00Z',
+      updated_at: '2026-09-11T00:00:30Z',
+    });
+    const tasks = [completed('task_inventory'), completed('task_verification')];
+    expect(buildWorkflowRows([transcript], [session], [workspace], tasks)).toEqual([
       expect.objectContaining({
         label: 'inventory → verification',
         source: 'workflow',
@@ -69,5 +101,21 @@ describe('workflow run indexing', () => {
         workflow: expect.objectContaining({ id: 'call_workflow' }),
       }),
     ]);
+    expect(buildWorkflowRows([transcript], [session], [workspace])[0]).toMatchObject({
+      state: 'unknown',
+    });
+    const stopped = {
+      ...transcript,
+      tools: transcript.tools.map((tool) => ({ ...tool, state: 'cancelled' as const })),
+    };
+    const active = tasks.map((task) => ({
+      ...task,
+      status: 'active',
+      raw_status: 'working',
+      terminal_at: null,
+    }));
+    expect(buildWorkflowRows([stopped], [session], [workspace], active)[0]).toMatchObject({
+      state: 'running',
+    });
   });
 });

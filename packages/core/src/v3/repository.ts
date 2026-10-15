@@ -10,7 +10,6 @@ import type {
   CapabilityNegotiation,
   ApprovalRequest,
   PermissionLedgerItem,
-  OperationalRun,
   Session,
   SessionArtifactListing,
   SessionDefaults,
@@ -18,18 +17,14 @@ import type {
   TurnAttempt,
   Workspace,
   WorkspaceFileListing,
-  RelayStatus,
-  RelayConnectionInput,
   ToolCatalogItem,
   UserQuestion,
 } from './domain.js';
 import type { AgentDefinition } from './agent-domain.js';
 import {
-  operationalRunSchema,
   sessionSchema,
   turnAttemptSchema,
   workspaceSchema,
-  relayStatusSchema,
   sessionDefaultsSchema,
   userQuestionSchema,
 } from './schemas.js';
@@ -38,7 +33,6 @@ import {
   artifactDetailSchema,
   artifactLineageSchema,
   sessionArtifactListingSchema,
-  operationalRunListSchema,
   permissionListSchema,
   questionListSchema,
   sessionListSchema,
@@ -282,16 +276,6 @@ export class ClioRepository extends WorkRepository {
     return result.sessions;
   }
 
-  public async runs(signal?: AbortSignal): Promise<OperationalRun[]> {
-    const result = await this.transport.request({
-      method: 'GET',
-      path: '/v1/runs',
-      decode: (value) => operationalRunListSchema.parse(value),
-      signal,
-    });
-    return result.runs;
-  }
-
   public async workspaceFiles(
     workspaceId: string,
     signal?: AbortSignal,
@@ -347,34 +331,6 @@ export class ClioRepository extends WorkRepository {
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/files/read?path=${encodeURIComponent(path)}`,
       signal,
     );
-  }
-
-  public relayStatus(signal?: AbortSignal): Promise<RelayStatus> {
-    return this.transport.request({
-      method: 'GET',
-      path: '/v1/relay/status',
-      decode: (value) => relayStatusSchema.parse(value),
-      signal,
-    });
-  }
-
-  public configureRelay(input: RelayConnectionInput, signal?: AbortSignal): Promise<RelayStatus> {
-    return this.transport.request({
-      method: 'PUT',
-      path: '/v1/relay/configuration',
-      body: input,
-      decode: (value) => relayStatusSchema.parse(value),
-      signal,
-    });
-  }
-
-  public disconnectRelay(signal?: AbortSignal): Promise<RelayStatus> {
-    return this.transport.request({
-      method: 'DELETE',
-      path: '/v1/relay/configuration',
-      decode: (value) => relayStatusSchema.parse(value),
-      signal,
-    });
   }
 
   public async tools(signal?: AbortSignal): Promise<ToolCatalogItem[]> {
@@ -539,33 +495,6 @@ export class ClioRepository extends WorkRepository {
       `/v1/artifacts/${encodeURIComponent(artifactId)}/export`,
       signal,
     );
-  }
-
-  public detachRun(handleId: string, signal?: AbortSignal): Promise<OperationalRun> {
-    return this.transport.request({
-      method: 'POST',
-      path: `/v1/runs/${encodeURIComponent(handleId)}/detach`,
-      decode: (value) => operationalRunSchema.parse(value),
-      signal,
-    });
-  }
-
-  public dismissRun(handleId: string, signal?: AbortSignal): Promise<void> {
-    return this.transport.request({
-      method: 'POST',
-      path: `/v1/runs/${encodeURIComponent(handleId)}/dismiss`,
-      decode: () => undefined,
-      signal,
-    });
-  }
-
-  public cancelAgentTask(taskId: string, signal?: AbortSignal): Promise<void> {
-    return this.transport.request({
-      method: 'POST',
-      path: `/v1/agent-tasks/${encodeURIComponent(taskId)}/cancel`,
-      decode: () => undefined,
-      signal,
-    });
   }
 
   public async permissions(

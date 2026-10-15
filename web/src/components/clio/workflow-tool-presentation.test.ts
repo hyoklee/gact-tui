@@ -35,15 +35,27 @@ describe('workflow tool presentation', () => {
     });
   });
 
-  it('shows that the tool waited for its ordered workflow to complete', () => {
+  it('shows recorded ordered provenance without inferring child settlement from a tool call', () => {
     expect(withWorkflowPresentation(tool).presentation).toMatchObject({
       action: 'Run workflow',
       subject: 'workflow-definition',
-      summary: '2 ordered steps · waited for completion',
+      summary: '2 ordered steps',
       blocks: [
         { id: 'workflow-definition', type: 'text', label: 'inventory → verification' },
         { id: 'workflow-request', type: 'text', text: 'Inventory and verify Alpha and Beta.' },
       ],
     });
+  });
+
+  it('retains a stopped workflow call whose step identities were not returned', () => {
+    expect(workflowDescriptor({ ...tool, state: 'cancelled', output: undefined })).toEqual({
+      label: 'Workflow',
+      request: 'Inventory and verify Alpha and Beta.',
+      steps: [],
+    });
+    expect(
+      withWorkflowPresentation({ ...tool, state: 'cancelled', output: undefined }).presentation
+        ?.summary,
+    ).toBe('Step details unavailable');
   });
 });
