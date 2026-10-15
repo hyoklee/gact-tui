@@ -140,7 +140,9 @@ fn posix_quote(value: &str) -> String {
     // including escaped quotes, without changing the argument's bytes.
     let mut quoted = String::from("'");
     for (index, character) in value.chars().enumerate() {
-        if index > 0 && index % 256 == 0 {
+        // POSIX only guarantees 255 bytes in a canonical line. A character or
+        // escaped apostrophe costs at most four bytes; leave room for framing.
+        if index > 0 && index % 32 == 0 {
             quoted.push_str("'\\\n'");
         }
         if character == '\'' {
@@ -162,7 +164,7 @@ fn posix_stdin(value: &str) -> String {
     let mut script = String::from("{\n");
     let mut start = 0;
     for (offset, _) in value.char_indices() {
-        if offset - start >= 512 {
+        if offset - start >= 128 {
             script.push_str(&format!(
                 "printf %s {}\n",
                 posix_quote(&value[start..offset])
@@ -316,7 +318,7 @@ mod tests {
             allowed_exit_codes: vec![0],
         };
         let rendered = posix_command(&command, "BEGIN", "END:");
-        assert!(rendered.lines().all(|line| line.len() < 2048));
+        assert!(rendered.lines().all(|line| line.len() < 255));
         assert!(rendered.matches("printf %s ").count() > 100);
     }
 
@@ -383,11 +385,27 @@ mod tests {
         assert!(sent, "real PTY shell never became ready");
         assert!(
             output.contains(&expected),
-            "argument/stdin bytes did not survive the PTY"
+            "argument/stdin bytes did not survive the PTY; output tail: {}",
+            output
+                .chars()
+                .rev()
+                .take(4000)
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect::<String>()
         );
         assert!(
             output.contains("END:0"),
-            "command did not complete successfully"
+            "command did not complete successfully; output tail: {}",
+            output
+                .chars()
+                .rev()
+                .take(4000)
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect::<String>()
         );
     }
 
