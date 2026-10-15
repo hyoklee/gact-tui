@@ -1,4 +1,4 @@
-import { cleanup, screen, within } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Button } from '@/components/ui/button';
@@ -50,8 +50,7 @@ afterEach(() => {
 });
 
 function row(name: string): HTMLElement {
-  const group = screen.getByRole('group', { name: 'Providers and models' });
-  const label = within(group).getByText(name, { selector: 'span' });
+  const label = screen.getByText(name, { selector: '[data-slot="cascader-item"] span' });
   const item = label.closest<HTMLElement>('[data-slot="cascader-item"]');
   if (!item) throw new Error(`Missing picker row ${name}`);
   return item;

@@ -11,6 +11,7 @@ mod brand_backend;
 mod clio_core_daemon;
 mod clio_core_registry;
 mod commands;
+mod credential_chunks;
 mod credentials;
 mod document_apps;
 mod document_path;

@@ -313,7 +313,10 @@ test('bundled installer stops only its managed process tree before replacement o
   // 0.9.4.17 does not know --stop-managed-runtime and launches the full app,
   // which the installer then waits on forever. The new binary is extracted
   // from this installer into $PLUGINSDIR and told the install root.
-  assert.match(stopMacro, /File "\/oname=\$PLUGINSDIR\\clio-runtime-stop\.exe" "\$\{MAINBINARYSRCPATH\}"/);
+  assert.match(
+    stopMacro,
+    /File "\/oname=\$PLUGINSDIR\\clio-runtime-stop\.exe" "\$\{MAINBINARYSRCPATH\}"/,
+  );
   assert.match(
     stopMacro,
     /nsExec::ExecToStack \/TIMEOUT=\d+ '"\$PLUGINSDIR\\clio-runtime-stop\.exe" --stop-managed-runtime "\$INSTDIR"'/,
@@ -327,7 +330,10 @@ test('bundled installer stops only its managed process tree before replacement o
     /\/TIMEOUT=\d+ '"\$INSTDIR\\clio-desktop\.exe" --stop-managed-runtime "\$INSTDIR"'/,
   );
   assert.match(hooks, /NSIS_HOOK_PREINSTALL\r?\n\s+!insertmacro CLIO_STOP_MANAGED_RUNTIME\r?\n/);
-  assert.match(hooks, /NSIS_HOOK_PREUNINSTALL\r?\n\s+!insertmacro CLIO_STOP_MANAGED_RUNTIME_FOR_UNINSTALL/);
+  assert.match(
+    hooks,
+    /NSIS_HOOK_PREUNINSTALL\r?\n\s+!insertmacro CLIO_STOP_MANAGED_RUNTIME_FOR_UNINSTALL/,
+  );
   assert.match(hooks, /result=timeout/);
   assert.doesNotMatch(
     hooks,
@@ -403,7 +409,7 @@ test('installer separates Infrastructure and individual provider choices into un
   assert.match(hooks, /Function ClioInfrastructurePageLeave/);
   assert.match(hooks, /Function ClioProvidersPage\b/);
   assert.match(hooks, /Function ClioProvidersPageLeave/);
-  assert.match(hooks, /CLIO Search \(web search and PDF reading, runs in Docker\)/);
+  assert.match(hooks, /CLIO Search \(native web search, no Docker required\)/);
   assert.match(hooks, /Local model runtime \(llama\.cpp\)/);
   assert.match(hooks, /Science tool kit \(clio-kit\)/);
   for (const provider of [
@@ -419,6 +425,9 @@ test('installer separates Infrastructure and individual provider choices into un
     'vLLM',
     'Sophia',
     'Metis',
+    'Minerva',
+    'Tara',
+    'AmSC MAG',
     'Azure OpenAI',
     'Amazon Bedrock',
     'NVIDIA NIM',
@@ -458,6 +467,9 @@ test('installer separates Infrastructure and individual provider choices into un
     ['ClioProviderVllmCheckbox', 'ClioProviderVllmChecked'],
     ['ClioProviderArgonneSophiaCheckbox', 'ClioProviderArgonneSophiaChecked'],
     ['ClioProviderArgonneMetisCheckbox', 'ClioProviderArgonneMetisChecked'],
+    ['ClioProviderArgonneMinervaCheckbox', 'ClioProviderArgonneMinervaChecked'],
+    ['ClioProviderArgonneTaraCheckbox', 'ClioProviderArgonneTaraChecked'],
+    ['ClioProviderAmscMagCheckbox', 'ClioProviderAmscMagChecked'],
     ['ClioProviderAzureOpenAICheckbox', 'ClioProviderAzureOpenAIChecked'],
     ['ClioProviderBedrockCheckbox', 'ClioProviderBedrockChecked'],
     ['ClioProviderNvidiaNimCheckbox', 'ClioProviderNvidiaNimChecked'],
@@ -465,9 +477,7 @@ test('installer separates Infrastructure and individual provider choices into un
   ]) {
     assert.match(
       providersPage,
-      new RegExp(
-        `!insertmacro CLIO_RESTORE_PROVIDER_CHECKBOX \\$${checkbox} \\$${remembered}`,
-      ),
+      new RegExp(`!insertmacro CLIO_RESTORE_PROVIDER_CHECKBOX \\$${checkbox} \\$${remembered}`),
       `${checkbox} must restore its remembered state instead of a hardcoded default`,
     );
   }
@@ -499,7 +509,7 @@ test('the providers page remembers choices across re-shows and disables Next unt
     hooks.match(/!macro CLIO_REMEMBER_PROVIDER_CHECKBOX([\s\S]*?)!macroend/)?.[1] ?? '';
   assert.match(rememberMacro, /\$\{NSD_GetState\} \$\{_CHECKBOX\} \$0/);
 
-  // All 16 remembers are collected in one macro shared by Next (Leave) and
+  // All 19 remembers are collected in one macro shared by Next (Leave) and
   // Back (OnBack), so both directions capture on-screen state the same way.
   const rememberAllMacro =
     hooks.match(/!macro CLIO_REMEMBER_ALL_PROVIDERS([\s\S]*?)!macroend/)?.[1] ?? '';
@@ -507,7 +517,7 @@ test('the providers page remembers choices across re-shows and disables Next unt
     rememberAllMacro.match(/!insertmacro CLIO_REMEMBER_PROVIDER_CHECKBOX/g) ?? [];
   assert.equal(
     rememberAllCalls.length,
-    16,
+    19,
     'expected one CLIO_REMEMBER_PROVIDER_CHECKBOX call per provider in CLIO_REMEMBER_ALL_PROVIDERS',
   );
 
@@ -531,7 +541,7 @@ test('the providers page remembers choices across re-shows and disables Next unt
   // Every checkbox is captured into the comma list, and the shared macro
   // remembers all of them for the next show, before validation runs.
   const appendCalls = leave.match(/!insertmacro CLIO_APPEND_PROVIDER/g) ?? [];
-  assert.equal(appendCalls.length, 16, 'expected one CLIO_APPEND_PROVIDER call per provider');
+  assert.equal(appendCalls.length, 19, 'expected one CLIO_APPEND_PROVIDER call per provider');
   assert.match(leave, /!insertmacro CLIO_REMEMBER_ALL_PROVIDERS/);
 
   // Next is disabled (not refused with a message box) until a provider is
@@ -541,19 +551,24 @@ test('the providers page remembers choices across re-shows and disables Next unt
   assert.equal(
     (syncNext.match(/!insertmacro CLIO_COUNT_PROVIDER_IF_CHECKED \$ClioProvider\w+Checkbox/g) ?? [])
       .length,
-    16,
+    19,
     'Next must consider every provider checkbox',
   );
   assert.match(syncNext, /GetDlgItem \$R1 \$HWNDPARENT 1/);
   assert.match(syncNext, /EnableWindow \$R1 \$R0/);
   assert.equal(
-    (providersPageBody.match(/\$\{NSD_OnClick\} \$ClioProvider\w+Checkbox ClioProvidersOnToggle/g) ?? [])
-      .length,
-    16,
+    (
+      providersPageBody.match(
+        /\$\{NSD_OnClick\} \$ClioProvider\w+Checkbox ClioProvidersOnToggle/g,
+      ) ?? []
+    ).length,
+    19,
     'every provider checkbox must re-sync Next when clicked',
   );
   const syncAt = providersPageBody.indexOf('Call ClioProvidersSyncNext');
-  const lastRestoreAt = providersPageBody.lastIndexOf('!insertmacro CLIO_RESTORE_PROVIDER_CHECKBOX');
+  const lastRestoreAt = providersPageBody.lastIndexOf(
+    '!insertmacro CLIO_RESTORE_PROVIDER_CHECKBOX',
+  );
   const showAt = providersPageBody.indexOf('nsDialogs::Show');
   assert.ok(
     syncAt > lastRestoreAt && syncAt < showAt,
@@ -597,10 +612,19 @@ test('the providers page marks recommended providers and explains why in tooltip
     );
   }
   assert.equal((page.match(/!insertmacro CLIO_RECOMMEND /g) ?? []).length, 5);
-  assert.match(recs, /!define CLIO_WHY_SUBSCRIPTION "Accessible, powerful frontier models on an affordable subscription\."/);
-  assert.match(recs, /!define CLIO_WHY_OPENROUTER "[^"]*many of them free\. Our recommended free way into CLIO\."/);
+  assert.match(
+    recs,
+    /!define CLIO_WHY_SUBSCRIPTION "Accessible, powerful frontier models on an affordable subscription\."/,
+  );
+  assert.match(
+    recs,
+    /!define CLIO_WHY_OPENROUTER "[^"]*many of them free\. Our recommended free way into CLIO\."/,
+  );
   assert.match(recs, /!define CLIO_WHY_OLLAMA "Easiest local setup\."/);
-  assert.match(recs, /!define CLIO_WHY_LLAMACPP "Best capabilities on a single machine or for a single user\. On shared infrastructure \(a cluster or a team server\), vLLM is usually the better fit\."/);
+  assert.match(
+    recs,
+    /!define CLIO_WHY_LLAMACPP "Best capabilities on a single machine or for a single user\. On shared infrastructure \(a cluster or a team server\), vLLM is usually the better fit\."/,
+  );
 
   // The row: a star, "Recommended", and a "Why?" link in the small link font.
   const row = recs.match(/Function ClioAddRecommendation\b([\s\S]*?)FunctionEnd/)?.[1] ?? '';
@@ -620,12 +644,19 @@ test('the providers page marks recommended providers and explains why in tooltip
 
   // A tooltip cannot bold text, so "free" is spelled out bold on the page.
   assert.match(page, /"Many models "/);
-  assert.match(page, /"free"\s*\n\s*Pop \$R0\s*\n\s*SendMessage \$R0 \$\{WM_SETFONT\} \$ClioProvidersHeadingFont/);
+  assert.match(
+    page,
+    /"free"\s*\n\s*Pop \$R0\s*\n\s*SendMessage \$R0 \$\{WM_SETFONT\} \$ClioProvidersHeadingFont/,
+  );
 
   // Everything the page creates is released once nsDialogs::Show returns.
   const afterShow = page.slice(page.indexOf('nsDialogs::Show'));
   assert.match(afterShow, /DestroyWindow\(p \$ClioProvidersTooltip\)/);
-  for (const font of ['ClioProvidersHeadingFont', 'ClioProvidersLinkFont', 'ClioProvidersStarFont']) {
+  for (const font of [
+    'ClioProvidersHeadingFont',
+    'ClioProvidersLinkFont',
+    'ClioProvidersStarFont',
+  ]) {
     assert.match(page, new RegExp(`StrCpy \\$${font} \\$R9`), `${font} must be created`);
     assert.match(afterShow, new RegExp(`DeleteObject\\(p \\$${font}\\)`), `${font} must be freed`);
   }
@@ -646,17 +677,17 @@ test('the setup pages are skipped for passive and update installs', () => {
   assert.equal(skipCalls.length, 2);
 });
 
-test('installer-options.json is always written through the one v4-schema macro', () => {
+test('installer-options.json is always written through the one v5-schema macro', () => {
   const hooks = readFileSync(resolve(root, 'src-tauri', 'installer-hooks.nsh'), 'utf8');
   const writeCalls = hooks.match(/!insertmacro CLIO_WRITE_INSTALLER_OPTIONS/g) ?? [];
   assert.equal(writeCalls.length, 2);
-  assert.match(hooks, /\$\\"schema\$\\":4/);
+  assert.match(hooks, /\$\\"schema\$\\":5/);
   assert.match(hooks, /\$\\"web_search\$\\":\$\\"'/);
   assert.match(hooks, /\$\\"llama_cpp\$\\":\$\\"'/);
   assert.match(hooks, /\$\\"clio_kit\$\\":\$\\"bundled\$\\"/);
   assert.match(hooks, /\$\\"provider_ids\$\\":\$\\"'/);
   assert.match(hooks, /\$\\"installed_at\$\\":\$\\"'/);
-  for (const status of ['pending', 'not_requested']) {
+  for (const status of ['native_requested', 'not_requested']) {
     assert.match(hooks, new RegExp(`StrCpy \\$ClioWebSearchStatus "${status}"`));
   }
   for (const status of ['requested', 'not_requested']) {
@@ -697,7 +728,10 @@ test('a real install stamps a fresh installed_at revision shared by PREINSTALL a
     assert.ok(pushOrder[i] > pushOrder[i - 1], 'registers must be pushed in $R0..$R6 order');
   }
   for (let i = 1; i < popOrder.length; i += 1) {
-    assert.ok(popOrder[i] < popOrder[i - 1], 'registers must be popped in reverse ($R6..$R0) order');
+    assert.ok(
+      popOrder[i] < popOrder[i - 1],
+      'registers must be popped in reverse ($R6..$R0) order',
+    );
   }
 });
 
