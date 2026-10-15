@@ -357,9 +357,12 @@ describe('composer reference selection', () => {
 
     await user.type(composerEditor(), '@observations');
     await user.click(await screen.findByRole('option', { name: /observations.csv/ }));
+    expect(screen.getByRole('button', { name: 'Queue message' })).toBeEnabled();
+    await user.keyboard('{Control>}');
     const steer = screen.getByRole('button', { name: 'Steer current work' });
     expect(steer).toBeEnabled();
     await user.click(steer);
+    await user.keyboard('{/Control}');
 
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(

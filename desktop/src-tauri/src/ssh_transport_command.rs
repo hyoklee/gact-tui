@@ -115,10 +115,11 @@ pub fn remote_shell_command(platform: &str, ready_marker: &str) -> String {
     } else {
         // An exec'd "sh -s" sees the SSH PTY and starts interactively on macOS,
         // where readline changes the terminal discipline after our stty setup.
-        // Source the stream inside an explicitly noninteractive interpreter;
-        // announce readiness only from that final interpreter.
+        // Give the interpreter pipe input so it stays noninteractive on every
+        // POSIX shell, without relying on sourcing the platform's /dev/stdin.
+        // cat leaves the SSH terminal's bounded canonical input unchanged.
         format!(
-            r#"sh -lc "stty -echo; no_proxy=127.0.0.1,localhost,::1,\$no_proxy; NO_PROXY=127.0.0.1,localhost,::1,\$NO_PROXY; export no_proxy NO_PROXY; exec sh -c 'printf \"{ready_marker}\\n\"; . /dev/stdin'""#
+            r#"sh -lc "stty -echo; no_proxy=127.0.0.1,localhost,::1,\$no_proxy; NO_PROXY=127.0.0.1,localhost,::1,\$NO_PROXY; export no_proxy NO_PROXY; printf '{ready_marker}\\n'; cat | sh -s""#
         )
     }
 }
@@ -283,8 +284,9 @@ mod tests {
         assert!(posix.contains("NO_PROXY=127.0.0.1,localhost,::1,\\$NO_PROXY"));
         assert!(posix.contains("export no_proxy NO_PROXY"));
         assert!(posix.find("NO_PROXY").unwrap() < posix.find("READY").unwrap());
-        assert!(posix.contains(r#"exec sh -c 'printf \"READY\\n\""#));
-        assert!(posix.ends_with(r#"; . /dev/stdin'""#));
+        assert!(posix.contains(r#"printf 'READY\\n'"#));
+        assert!(posix.ends_with(r#"; cat | sh -s""#));
+        assert!(!posix.contains(". /dev/stdin"));
         assert!(!posix.contains("exec sh -s"));
         let windows = remote_shell_command("windows", "READY");
         assert!(windows.contains("$env:NO_PROXY = '127.0.0.1,localhost,::1,'"));
@@ -376,10 +378,14 @@ mod tests {
                 output.push_str(&String::from_utf8_lossy(&chunk));
             }
             if !sent && output.contains("__READY__") {
-                spawned
+                if let Err(error) = spawned
                     .writer
                     .write_all(posix_command(&command, "BEGIN", "END:").as_bytes())
-                    .unwrap();
+                {
+                    let _ = spawned.child.kill();
+                    let _ = spawned.child.wait();
+                    panic!("real PTY input failed: {error}; shell output: {output}");
+                }
                 sent = true;
             }
             if output.contains("END:0") {
