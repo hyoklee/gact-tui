@@ -28,6 +28,7 @@ describe('workflow tool presentation', () => {
     expect(workflowDescriptor(tool)).toEqual({
       label: 'inventory → verification',
       request: 'Inventory and verify Alpha and Beta.',
+      status: 'completed',
       steps: [
         { name: 'inventory', taskId: 'task_inventory' },
         { name: 'verification', taskId: 'task_verification' },

@@ -60,7 +60,7 @@ export const taskSnapshotSchema = z.object({
 
 const taskPageSchema = z.object({
   tasks: z.array(taskSnapshotSchema),
-  total: z.number().int(),
+  total: z.number().int().nullable(),
   cursor: z.string().nullable(),
   revision: z.number().int(),
 });

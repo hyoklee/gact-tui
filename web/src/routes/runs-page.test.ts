@@ -3,6 +3,70 @@ import { describe, expect, it } from 'vitest';
 import { buildWorkflowRows } from './runs-page';
 
 describe('workflow run indexing', () => {
+  it('preserves a recorded failure and distinguishes unlaunched steps from unavailable task views', () => {
+    const transcript: TranscriptSnapshot = {
+      cursor: 'failed',
+      messages: [],
+      tasks: [],
+      subagents: [],
+      artifacts: [],
+      surfaces: [],
+      tools: [
+        {
+          id: 'workflow-failed',
+          session_id: 'session-root',
+          name: 'run_workflow',
+          state: 'succeeded',
+          output: {
+            status: 'workflow_child_failed',
+            failed_step: 'inventory-step',
+            steps: [
+              {
+                step_id: 'inventory-step',
+                child: 'inventory',
+                task_id: 'failed-child',
+                launch_state: 'accepted',
+              },
+              {
+                step_id: 'verify-step',
+                child: 'verification',
+                task_id: null,
+                launch_state: 'not_launched',
+              },
+            ],
+          },
+        },
+      ],
+    };
+    expect(buildWorkflowRows([transcript], [], [])[0]).toMatchObject({
+      state: 'failed',
+      reportedStatus: 'workflow_child_failed',
+      statusReason: 'Workflow failed at inventory. 1 step was not launched.',
+      progress: { completed: null, total: 2, unit: 'steps' },
+    });
+    const uncertain = {
+      ...transcript,
+      tools: transcript.tools.map((tool) => ({
+        ...tool,
+        output: {
+          status: 'task_state_uncertain',
+          steps: [
+            {
+              step_id: 'inventory-step',
+              child: 'inventory',
+              task_id: 'unknown-child',
+              launch_state: 'accepted',
+            },
+          ],
+        },
+      })),
+    };
+    expect(buildWorkflowRows([uncertain], [], [])[0]).toMatchObject({
+      state: 'task_state_uncertain',
+      statusReason: 'Accepted step statuses are not loaded.',
+    });
+  });
+
   it('indexes only recorded workflows and preserves their canvas deep-link identity', () => {
     const session: Session = {
       id: 'session_root',

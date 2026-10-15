@@ -128,6 +128,24 @@ it('loads explicit task pages across sessions and keeps original handles navigab
   expect(screen.queryByRole('button', { name: 'Load more tasks' })).not.toBeInTheDocument();
 });
 
+it('continues an empty sparse page and labels an unknown total without inventing zero', async () => {
+  repository.queryTasks.mockImplementation(async ({ cursor }: { cursor?: string }) =>
+    cursor
+      ? { tasks: [task('task-later', 'Shell')], total: null, cursor: null, revision: 2 }
+      : { tasks: [], total: null, cursor: 'sparse-continuation', revision: 1 },
+  );
+  show();
+  expect(await screen.findByText(/0 tasks loaded/)).toBeVisible();
+  expect(screen.queryByText(/Showing .* of 0 tasks/)).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Load more tasks' }));
+  expect(await screen.findByText(/1 tasks loaded/)).toBeVisible();
+  expect(repository.queryTasks).toHaveBeenCalledWith(
+    expect.objectContaining({ cursor: 'sparse-continuation' }),
+    expect.anything(),
+  );
+  expect(screen.queryByRole('button', { name: 'Load more tasks' })).not.toBeInTheDocument();
+});
+
 it('discloses exact assignment and backend details only when opened', async () => {
   repository.queryTasks.mockResolvedValue({
     tasks: [task('task-one', 'Shell')],

@@ -220,24 +220,36 @@ export function buildWorkflowRows(
       if (!descriptor) return [];
       const session = sessionsById.get(tool.session_id);
       const workspaceId = session?.workspace_id;
-      const steps = descriptor.steps.map((step) =>
-        tasks.find((task) => task.handle === step.taskId),
+      const launched = descriptor.steps.filter(
+        (step) => step.launchState !== 'not_started' && step.launchState !== 'not_launched',
       );
+      const steps = launched.map((step) => tasks.find((task) => task.handle === step.taskId));
+      const recordedFailure = [
+        'workflow_child_failed',
+        'workflow_step_timeout',
+        'workflow_spawn_refused',
+      ].includes(descriptor.status ?? '');
+      const failedStep = descriptor.steps.find((step) => step.stepId === descriptor.failedStep);
+      const unlaunched = descriptor.steps.filter((step) => step.launchState === 'not_launched');
       const completeVisibility = steps.every((task) => task !== undefined);
       const active = steps.some((task) => task && !task.terminal_at);
-      const state: RunState = steps.some((task) => task?.status === 'task_state_uncertain')
-        ? 'task_state_uncertain'
-        : !steps.length || !completeVisibility
-          ? 'unknown'
-          : active
-            ? 'running'
-            : steps.some((task) => task?.status === 'failed')
-              ? 'failed'
-              : steps.some((task) => task?.status === 'cancelled')
-                ? 'cancelled'
-                : steps.every((task) => task?.status === 'completed')
-                  ? 'completed'
-                  : 'interrupted';
+      const state: RunState =
+        descriptor.status === 'task_state_uncertain' ||
+        steps.some((task) => task?.status === 'task_state_uncertain')
+          ? 'task_state_uncertain'
+          : recordedFailure
+            ? 'failed'
+            : !steps.length || !completeVisibility
+              ? 'unknown'
+              : active
+                ? 'running'
+                : steps.some((task) => task?.status === 'failed')
+                  ? 'failed'
+                  : steps.some((task) => task?.status === 'cancelled')
+                    ? 'cancelled'
+                    : steps.every((task) => task?.status === 'completed')
+                      ? 'completed'
+                      : 'interrupted';
       const workspaceLabelFields = workspaceId
         ? (labels.get(workspaceId) ?? {
             name: `${capitalize(vocab.workspace)} unavailable`,
@@ -250,13 +262,19 @@ export function buildWorkflowRows(
           taskId: tool.id,
           label: descriptor.label,
           state,
-          reportedStatus: state,
-          statusReason: completeVisibility
-            ? undefined
-            : 'Some step statuses are not loaded. The recorded call does not establish whether its accepted tasks have settled.',
+          reportedStatus: descriptor.status ?? state,
+          statusReason: recordedFailure
+            ? conciseReason(
+                `Workflow failed${failedStep ? ` at ${failedStep.name}` : ''}.${unlaunched.length ? ` ${unlaunched.length} ${unlaunched.length === 1 ? 'step was' : 'steps were'} not launched.` : ''}`,
+              )
+            : completeVisibility && steps.length
+              ? undefined
+              : !launched.length && descriptor.steps.length
+                ? 'Steps have not launched.'
+                : 'Accepted step statuses are not loaded.',
           progress: {
-            completed: steps.filter((task) => task?.terminal_at).length,
-            total: steps.length,
+            completed: completeVisibility ? steps.filter((task) => task?.terminal_at).length : null,
+            total: descriptor.steps.length,
             unit: 'steps',
           },
           source: 'workflow',
@@ -703,8 +721,10 @@ export function RunsPage() {
         )}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
           <span>
-            Showing {tasks.length} of {runs.data?.pages[0]?.total ?? 0} tasks. Search covers loaded
-            results.
+            {runs.data?.pages[0]?.total == null
+              ? `${tasks.length} tasks loaded`
+              : `Showing ${tasks.length} of ${runs.data.pages[0].total} tasks`}
+            . Search covers loaded results.
           </span>
           {runs.hasNextPage ? (
             <Button
