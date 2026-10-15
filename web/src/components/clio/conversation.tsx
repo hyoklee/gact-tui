@@ -21,6 +21,7 @@ import { placeCompactions } from './conversation-compaction-placement';
 import { conversationModelBoundaries } from './conversation-model-boundaries';
 import { ConversationForkCheckpoint } from './conversation-fork-checkpoint';
 import { OpenQuestionsTracker } from './open-questions-tracker';
+import { useSurfaceQuestionNavigation } from './use-surface-question-navigation';
 import { ClioTranscriptMinimap } from './transcript-minimap';
 import { useAttentionHighlights } from '@/hooks/use-attention-highlights';
 import type { ClioConversationProps } from './conversation-types';
@@ -366,6 +367,12 @@ function ConversationBody({
   );
 
   useAttentionHighlights(scrollRef, entities.attentionData, messages, entities.tools);
+  useSurfaceQuestionNavigation({
+    messages,
+    sessionId: entities.sessionId,
+    scrollRef,
+    jumpToMessage,
+  });
 
   const conversationViewportWidth = useTranscriptWidth({
     virtualized,
