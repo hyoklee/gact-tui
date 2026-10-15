@@ -183,13 +183,11 @@ export function ManagedServiceForm({
               Ports and storage use this computer’s defaults. Open Advanced settings to change them.
             </p>
           ) : null}
-          {!installationOnly ? (
-            <ServiceAccessChoice
-              configuration={configuration}
-              onConfiguration={onConfiguration}
-              service={service}
-            />
-          ) : null}
+          <ServiceAccessChoice
+            configuration={configuration}
+            onConfiguration={onConfiguration}
+            service={service}
+          />
           <details className="border-t pt-4">
             <summary className="cursor-pointer text-sm font-medium">Advanced settings</summary>
             <div className="mt-4 space-y-5">
