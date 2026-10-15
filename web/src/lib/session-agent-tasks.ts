@@ -1,29 +1,10 @@
-import type { AgentTaskRecord, RunState, SubagentRun } from '@clio/core/v3';
+import { operationalRunStateSchema, type AgentTaskRecord, type SubagentRun } from '@clio/core/v3';
 
 /**
- * Registry lifecycle and live states -> the run state every child-agent surface
- * renders. Mirrors the service's own `subagent.upserted` projection, plus the
- * standing-watcher state it does not name: a SPOTTER watcher between checks is
- * `running` in the registry with the live state `waiting`, so it is still a
- * live child agent, not an interrupted one.
+ * Agent aliases use the same operational-state decoder as Runs and Work.
+ * Unknown future or historical states remain explicitly unknown.
  */
-const TASK_STATE: Record<string, RunState> = {
-  queued: 'queued',
-  running: 'running',
-  pause_requested: 'pause_requested',
-  paused: 'paused',
-  working: 'running',
-  waiting: 'running',
-  input_required: 'waiting_user',
-  waiting_user: 'waiting_user',
-  waiting_permission: 'waiting_permission',
-  completed: 'completed',
-  failed: 'failed',
-  cancelled: 'cancelled',
-  interrupted: 'interrupted',
-};
-
-/** Project one registry task into the child-agent record the UI already renders. */
+/** Project one task snapshot into the child-agent record the UI already renders. */
 export function agentTaskToSubagent(task: AgentTaskRecord): SubagentRun {
   const rawState = task.live_state || task.status;
   const title = task.run_label || `${task.expert_id || 'agent'} #${task.run_index + 1}`;
@@ -35,7 +16,7 @@ export function agentTaskToSubagent(task: AgentTaskRecord): SubagentRun {
     ...(task.child_session_id ? { child_session_id: task.child_session_id } : {}),
     ...(task.expert_id ? { agent_id: task.expert_id } : {}),
     title,
-    state: TASK_STATE[rawState] ?? 'unknown',
+    state: operationalRunStateSchema.parse(rawState),
     ...(summary ? { summary } : {}),
     ...(task.answer_excerpt ? { result: task.answer_excerpt } : {}),
   };

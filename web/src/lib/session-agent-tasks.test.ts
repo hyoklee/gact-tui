@@ -27,6 +27,27 @@ function task(overrides: Partial<AgentTaskRecord>): AgentTaskRecord {
 }
 
 describe('agentTaskToSubagent', () => {
+  it.each([
+    ['busy', 'running'],
+    ['executing', 'running'],
+    ['active', 'running'],
+    ['idle', 'yielded'],
+    ['yielded', 'yielded'],
+    ['stopping', 'stopping'],
+    ['paused', 'paused'],
+    ['cancelling', 'cancellation_requested'],
+    ['waiting_for_input', 'waiting_user'],
+    ['input_required', 'waiting_user'],
+    ['accepted', 'queued'],
+    ['submitting', 'queued'],
+    ['recovering', 'recovering'],
+    ['task_state_uncertain', 'task_state_uncertain'],
+  ])('renders the service state %s as %s', (activity, expected) => {
+    expect(agentTaskToSubagent(task({ status: 'active', live_state: activity })).state).toBe(
+      expected,
+    );
+  });
+
   it('shows a standing SPOTTER watcher between checks as a live child, not interrupted', () => {
     const watcher = agentTaskToSubagent(
       task({
