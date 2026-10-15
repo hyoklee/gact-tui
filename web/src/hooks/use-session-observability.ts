@@ -37,5 +37,10 @@ export function useSessionObservability(sessionId: string) {
     enabled,
   });
 
-  return { contextFiles, contextFrames, diffs, processes };
+  const workPages = {
+    hasMore: Boolean(processes.hasNextPage),
+    pending: processes.isFetchingNextPage,
+    loadMore: () => processes.fetchNextPage({ throwOnError: true }),
+  };
+  return { contextFiles, contextFrames, diffs, processes, workPages };
 }

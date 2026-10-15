@@ -83,6 +83,7 @@ vi.mock('./use-session-observability', () => ({
       isFetchingNextPage: false,
       fetchNextPage: vi.fn(),
     },
+    workPages: { hasMore: false, pending: false, loadMore: vi.fn() },
     diffs: { data: [] },
   }),
 }));

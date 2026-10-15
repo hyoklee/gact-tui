@@ -499,11 +499,7 @@ export function useWorkspaceData({
     () => withSubagentOrigins(sessionSubagents, allSessions.data ?? []),
     [allSessions.data, sessionSubagents],
   );
-  const workPages = {
-    hasMore: Boolean(sessionObservability.processes.hasNextPage),
-    pending: sessionObservability.processes.isFetchingNextPage,
-    loadMore: () => sessionObservability.processes.fetchNextPage(),
-  };
+  const workPages = sessionObservability.workPages;
   const interactionSessionIds = useMemo(
     () =>
       computeInteractionSessionIds(

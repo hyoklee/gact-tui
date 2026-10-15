@@ -1,5 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 
@@ -15,6 +23,7 @@ vi.mock('@/providers/connection-provider', () => ({
   useConnectionSettings: () => ({ settings: { endpoint: 'http://service' } }),
 }));
 import { useSessionObservability } from './use-session-observability';
+import { TaskPageContinuation } from '@/components/clio/async-task-list';
 
 afterEach(cleanup);
 
@@ -43,7 +52,7 @@ it('uses one bounded active-work read and retains empty-page continuation', asyn
       expect.any(AbortSignal),
     );
     await act(async () => {
-      await result.current.processes.fetchNextPage();
+      await result.current.workPages.loadMore();
     });
     expect(result.current.processes.data?.pages.flatMap((page) => page.items)).toEqual([
       { handle: 'child-handle' },
@@ -56,6 +65,55 @@ it('uses one bounded active-work read and retains empty-page continuation', asyn
       expect.any(AbortSignal),
     );
     expect(repository.sessionAgentTasks).not.toHaveBeenCalled();
+  } finally {
+    unmount();
+    client.clear();
+  }
+});
+
+it('shows a real next-page query failure, retains loaded work and allows retry', async () => {
+  repository.asyncProcessesPage
+    .mockReset()
+    .mockResolvedValueOnce({
+      items: [{ handle: 'first', title: 'Loaded work' }],
+      cursor: 'next',
+      total: null,
+      revision: 1,
+    })
+    .mockRejectedValueOnce(new Error('Next page unavailable'))
+    .mockResolvedValueOnce({
+      items: [{ handle: 'second', title: 'Additional work' }],
+      cursor: null,
+      total: null,
+      revision: 2,
+    });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  function WorkPage() {
+    const { processes, workPages } = useSessionObservability('sess');
+    return (
+      <>
+        {processes.data?.pages
+          .flatMap((page) => page.items)
+          .map((task) => <p key={task.handle}>{task.title}</p>)}
+        <TaskPageContinuation pagination={workPages} />
+      </>
+    );
+  }
+  const { unmount } = render(
+    <QueryClientProvider client={client}>
+      <WorkPage />
+    </QueryClientProvider>,
+  );
+  try {
+    expect(await screen.findByText('Loaded work')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more work' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Next page unavailable');
+    expect(screen.getByText('Loaded work')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more work' }));
+    expect(await screen.findByText('Additional work')).toBeVisible();
+    expect(screen.getByText('Loaded work')).toBeVisible();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(repository.asyncProcessesPage).toHaveBeenCalledTimes(3);
   } finally {
     unmount();
     client.clear();
