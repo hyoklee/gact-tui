@@ -52,16 +52,12 @@ it.each(['cancel', 'pause', 'resume', 'restart'] as const)(
         else await result.current.control(task, action);
       });
       if (action === 'cancel') {
-        expect(repository.cancelTasks).toHaveBeenCalledExactlyOnceWith('owner', [
-          'original-handle',
-        ]);
+        expect(repository.cancelTasks).toHaveBeenCalledTimes(1);
+        expect(repository.cancelTasks).toHaveBeenCalledWith('owner', ['original-handle']);
         expect(repository.controlSubagent).not.toHaveBeenCalled();
       } else {
-        expect(repository.controlSubagent).toHaveBeenCalledExactlyOnceWith(
-          'owner',
-          'original-handle',
-          action,
-        );
+        expect(repository.controlSubagent).toHaveBeenCalledTimes(1);
+        expect(repository.controlSubagent).toHaveBeenCalledWith('owner', 'original-handle', action);
         expect(repository.cancelTasks).not.toHaveBeenCalled();
       }
       expect(keys.map((key) => client.getQueryState(key)?.isInvalidated)).toEqual([
