@@ -64,6 +64,22 @@ export function useWorkspaceNavigationActions(workspaceId: string, sessionId: st
     [repository],
   );
 
+  const refreshWorkspaceFolders = useCallback(
+    async (targetWorkspaceId: string) => {
+      await Promise.all([
+        refreshNavigation(targetWorkspaceId),
+        queryClient.invalidateQueries({
+          predicate: ({ queryKey }) =>
+            queryKey.includes(settings.endpoint) &&
+            queryKey.includes(targetWorkspaceId) &&
+            typeof queryKey[0] === 'string' &&
+            queryKey[0].startsWith('workspace-'),
+        }),
+      ]);
+    },
+    [queryClient, refreshNavigation, settings.endpoint],
+  );
+
   const navigationActions = useMemo<ResourceActions>(
     () => ({
       createWorkspace: async ({ name, rootPath }) => {
@@ -97,24 +113,15 @@ export function useWorkspaceNavigationActions(workspaceId: string, sessionId: st
       },
       updateWorkspace: async (targetWorkspaceId, input) => {
         await repository.updateWorkspace(targetWorkspaceId, input);
-        await Promise.all([
-          refreshNavigation(targetWorkspaceId),
-          queryClient.invalidateQueries({
-            predicate: ({ queryKey }) =>
-              queryKey.includes(settings.endpoint) &&
-              queryKey.includes(targetWorkspaceId) &&
-              typeof queryKey[0] === 'string' &&
-              queryKey[0].startsWith('workspace-'),
-          }),
-        ]);
+        await refreshWorkspaceFolders(targetWorkspaceId);
       },
       grantWorkspaceFolder: async (targetWorkspaceId, path) => {
         await repository.grantWorkspaceFolder(targetWorkspaceId, path);
-        await refreshNavigation(targetWorkspaceId);
+        await refreshWorkspaceFolders(targetWorkspaceId);
       },
       revokeWorkspaceFolder: async (targetWorkspaceId, path) => {
         await repository.revokeWorkspaceFolder(targetWorkspaceId, path);
-        await refreshNavigation(targetWorkspaceId);
+        await refreshWorkspaceFolders(targetWorkspaceId);
       },
       renameSession: async (targetSessionId, title) => {
         await updateSessionIdentity(targetSessionId, { title });
@@ -174,9 +181,8 @@ export function useWorkspaceNavigationActions(workspaceId: string, sessionId: st
       navigate,
       navigateToAvailableSession,
       refreshNavigation,
-      queryClient,
+      refreshWorkspaceFolders,
       repository,
-      settings.endpoint,
       sessionId,
       workspaceId,
       updateSessionIdentity,

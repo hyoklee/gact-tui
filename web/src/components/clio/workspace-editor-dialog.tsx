@@ -43,20 +43,25 @@ export function WorkspaceEditorDialog({
   );
   const [name, setName] = useState(workspace.display_name);
   const [primaryPath, setPrimaryPath] = useState(workspace.path);
-  const [additional, setAdditional] = useState(
-    initialFolders.filter((folder) => !folder.primary).map((folder) => folder.path),
-  );
+  const [added, setAdded] = useState<string[]>([]);
+  const [removed, setRemoved] = useState<string[]>([]);
   const [newFolder, setNewFolder] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
   const originalAdditional = initialFolders
     .filter((folder) => !folder.primary)
     .map((folder) => folder.path);
+  // Merge live approvals/revocations with explicit draft changes. A newly
+  // approved folder must never become an implicit removal on an unrelated Save.
+  const additional = [...new Set([...originalAdditional, ...added])].filter(
+    (path) => !removed.includes(path),
+  );
 
   const addFolder = () => {
     const path = newFolder.trim();
     if (!path || path === primaryPath.trim() || additional.includes(path)) return;
-    setAdditional((current) => [...current, path]);
+    setAdded((current) => [...current, path]);
+    setRemoved((current) => current.filter((candidate) => candidate !== path));
     setNewFolder('');
   };
 
@@ -136,10 +141,10 @@ export function WorkspaceEditorDialog({
                   onRemove={
                     pending
                       ? undefined
-                      : () =>
-                          setAdditional((current) =>
-                            current.filter((candidate) => candidate !== path),
-                          )
+                      : () => {
+                          setAdded((current) => current.filter((candidate) => candidate !== path));
+                          setRemoved((current) => [...new Set([...current, path])]);
+                        }
                   }
                   path={path}
                 />

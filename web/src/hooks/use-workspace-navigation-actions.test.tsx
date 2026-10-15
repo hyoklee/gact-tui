@@ -8,12 +8,16 @@ import { useLiveStore } from '@/store/live-store';
 const mocks = vi.hoisted(() => ({
   updateSession: vi.fn(),
   updateWorkspace: vi.fn(),
+  grantWorkspaceFolder: vi.fn(),
+  revokeWorkspaceFolder: vi.fn(),
   navigate: vi.fn(),
 }));
 vi.mock('./use-repository', () => ({
   useRepository: () => ({
     updateSession: mocks.updateSession,
     updateWorkspace: mocks.updateWorkspace,
+    grantWorkspaceFolder: mocks.grantWorkspaceFolder,
+    revokeWorkspaceFolder: mocks.revokeWorkspaceFolder,
   }),
 }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => mocks.navigate }));
@@ -142,3 +146,31 @@ it('refreshes folder, directory and warmup queries after the acknowledged primar
   for (const key of keys) expect(client.getQueryState(key)?.isInvalidated).toBe(true);
   expect(client.getQueryState(unrelated)?.isInvalidated).toBe(false);
 });
+
+it.each(['grantWorkspaceFolder', 'revokeWorkspaceFolder'] as const)(
+  'refreshes permitted folders and Files immediately after %s succeeds',
+  async (operation) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const endpoint = 'http://localhost:8100';
+    const keys = [
+      ['workspaces', endpoint],
+      ['workspace-files', endpoint, 'w1'],
+      ['workspace-directory', endpoint, 'w1', 'scope', ''],
+    ];
+    for (const key of keys) client.setQueryData(key, {});
+    const unrelated = ['workspace-files', endpoint, 'other'];
+    client.setQueryData(unrelated, {});
+    mocks[operation].mockResolvedValue(undefined);
+    const { result } = renderHook(() => useWorkspaceNavigationActions('w1', 's1'), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    await act(async () => {
+      await result.current.navigationActions[operation]('w1', 'C:\\Shared');
+    });
+    expect(mocks[operation]).toHaveBeenCalledWith('w1', 'C:\\Shared');
+    for (const key of keys) expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(unrelated)?.isInvalidated).toBe(false);
+  },
+);

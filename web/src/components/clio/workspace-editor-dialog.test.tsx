@@ -24,6 +24,103 @@ function actions(): WorkspaceEditorActions {
 
 afterEach(cleanup);
 
+it('shows a folder approved while open and preserves it when saving unrelated edits', async () => {
+  const user = userEvent.setup();
+  const handlers = actions();
+  const onClose = vi.fn();
+  const view = render(
+    <WorkspaceEditorDialog actions={handlers} workspace={workspace} onClose={onClose} />,
+  );
+  await user.clear(screen.getByLabelText('Workspace name'));
+  await user.type(screen.getByLabelText('Workspace name'), 'Renamed research');
+  view.rerender(
+    <WorkspaceEditorDialog
+      actions={handlers}
+      workspace={{
+        ...workspace,
+        source_folders: [
+          ...workspace.source_folders!,
+          { name: 'Final_thesis', path: 'C:\\Documents\\Final_thesis', primary: false },
+        ],
+      }}
+      onClose={onClose}
+    />,
+  );
+  expect(screen.getByRole('button', { name: 'Remove folder Final_thesis' })).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Save workspace' }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  expect(handlers.updateWorkspace).toHaveBeenCalledWith('research', {
+    name: 'Renamed research',
+    root_path: workspace.path,
+  });
+  expect(handlers.revokeWorkspaceFolder).not.toHaveBeenCalled();
+  expect(handlers.grantWorkspaceFolder).not.toHaveBeenCalled();
+});
+
+it('merges incoming grants with a draft addition and an explicit draft removal', async () => {
+  const user = userEvent.setup();
+  const handlers = actions();
+  const saved: Workspace = {
+    ...workspace,
+    source_folders: [
+      ...workspace.source_folders!,
+      { name: 'Old', path: 'C:\\Old', primary: false },
+    ],
+  };
+  const view = render(
+    <WorkspaceEditorDialog actions={handlers} workspace={saved} onClose={vi.fn()} />,
+  );
+  await user.click(screen.getByRole('button', { name: 'Remove folder Old' }));
+  await user.click(screen.getAllByRole('button', { name: 'Enter a path instead' })[1]!);
+  await user.type(screen.getByRole('textbox', { name: 'Additional folder path' }), 'C:\\Draft');
+  await user.click(screen.getByRole('button', { name: 'Add permitted folder' }));
+  view.rerender(
+    <WorkspaceEditorDialog
+      actions={handlers}
+      workspace={{
+        ...saved,
+        source_folders: [
+          ...saved.source_folders!,
+          { name: 'Approved', path: 'C:\\Approved', primary: false },
+        ],
+      }}
+      onClose={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole('button', { name: 'Remove folder Approved' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Remove folder Draft' })).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Save workspace' }));
+  await waitFor(() => expect(handlers.revokeWorkspaceFolder).toHaveBeenCalledOnce());
+  expect(handlers.revokeWorkspaceFolder).toHaveBeenCalledWith('research', 'C:\\Old');
+  expect(handlers.grantWorkspaceFolder).toHaveBeenCalledTimes(1);
+  expect(handlers.grantWorkspaceFolder).toHaveBeenCalledWith('research', 'C:\\Draft');
+});
+
+it('reflects an externally revoked folder without granting it again on Save', async () => {
+  const user = userEvent.setup();
+  const handlers = actions();
+  const view = render(
+    <WorkspaceEditorDialog
+      actions={handlers}
+      workspace={{
+        ...workspace,
+        source_folders: [
+          ...workspace.source_folders!,
+          { name: 'Revoked', path: 'C:\\Revoked', primary: false },
+        ],
+      }}
+      onClose={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole('button', { name: 'Remove folder Revoked' })).toBeVisible();
+  view.rerender(
+    <WorkspaceEditorDialog actions={handlers} workspace={workspace} onClose={vi.fn()} />,
+  );
+  expect(screen.queryByRole('button', { name: 'Remove folder Revoked' })).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Save workspace' }));
+  expect(handlers.grantWorkspaceFolder).not.toHaveBeenCalled();
+});
+
 it('saves a typed additional folder without requiring Add first', async () => {
   const user = userEvent.setup();
   const handlers = actions();
