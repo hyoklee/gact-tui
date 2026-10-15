@@ -216,9 +216,13 @@ it('shows saved provider servers and preserves actual host facts in the topology
   );
   expect(
     within(screen.getByLabelText('Connection map')).getByRole('link', {
-      name: /Inspect connected/u,
+      name: /Manage services on connected/u,
     }),
-  ).toHaveAttribute('href', '/infrastructure/agent');
+  ).toHaveAttribute('href', '/infrastructure/services?target=local');
+  expect(screen.getByRole('link', { name: 'Inspect agent' })).toHaveAttribute(
+    'href',
+    '/infrastructure/agent',
+  );
 });
 
 it('keeps the tool-list action outside the selected tool contract', async () => {
