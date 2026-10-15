@@ -3,11 +3,20 @@ import {
   modelAcquisitionSchema,
   modelInventorySchema,
   modelSearchSchema,
+  modelRegistryDetailsSchema,
   type ModelDownloadInput,
 } from './model-acquisition-contract.js';
 
 /** Model files belong to an execution host; acquisition does not start a runtime. */
 export class ModelAcquisitionRepository extends ConnectedStorageRepository {
+  public modelRegistryDetails(repository: string, signal?: AbortSignal) {
+    return this.transport.request({
+      method: 'GET',
+      path: `/v1/infrastructure/models/details?repository=${encodeURIComponent(repository)}`,
+      signal,
+      decode: (value) => modelRegistryDetailsSchema.parse(value),
+    });
+  }
   public searchModels(query: string, signal?: AbortSignal) {
     return this.transport.request({
       method: 'GET',
@@ -36,7 +45,7 @@ export class ModelAcquisitionRepository extends ConnectedStorageRepository {
   public modelAcquisitionAction(
     targetId: string,
     jobId: string,
-    action: 'cancel' | 'retry',
+    action: 'cancel' | 'retry' | 'remove',
     signal?: AbortSignal,
   ) {
     return this.transport.request({

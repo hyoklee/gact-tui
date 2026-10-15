@@ -9,11 +9,12 @@ import {
   type ProvenanceConnectionInput,
 } from '@clio/core/v3';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { CpuIcon, ServerIcon } from 'lucide-react';
+import { CpuIcon } from 'lucide-react';
 import { RefreshButton } from './refresh-button';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useInfrastructureState } from '@/hooks/use-infrastructure-state';
+import { useInfrastructureTargetSelection } from '@/hooks/use-infrastructure-target-selection';
 import { useManagedOperations } from '@/hooks/use-managed-operations';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -34,25 +35,18 @@ import { ManagedServiceHostSelector } from './managed-service-host-selector';
 import { ManagedServiceHostFacts } from './managed-service-host-facts';
 import {
   attachInfrastructureSshTransport,
-  sshTransportStatus,
-  type SshStateEvent,
   type SshTransportStatus,
 } from '@/tauri/ssh-infrastructure-transport';
-import {
-  InspectionProgress,
-  SshAuthentication,
-  type ManagedTargetKind,
-} from './managed-service-target';
+import { InspectionProgress, SshAuthentication } from './managed-service-target';
 import {
   configurationForVariant,
-  modelRuntimeInModels,
+  modelRuntimeServer,
   targetLabel,
   targetMatchesHost,
   waitForOperation,
 } from './managed-service-target-utils';
 import { ManagedServiceInventory } from './managed-service-inventory';
 
-type Target = ManagedTargetKind;
 /** Desktop controls for CLIO-managed providers and supporting resources. */
 export function ManagedServices({
   onConnectWebSearch,
@@ -86,20 +80,22 @@ export function ManagedServices({
   const desktop = inTauri();
   const repository = useRepository();
   const { isManagedConnection, settings } = useConnectionSettings();
-  const [target, setTarget] = useInfrastructureState<Target>(
-    settings.endpoint,
-    'target-kind',
-    'local',
-  );
-  const [targetId, setTargetId] = useInfrastructureState(settings.endpoint, 'target-id', 'local');
-  const [sshHost, setSshHost] = useInfrastructureState<SshHost | undefined>(
-    settings.endpoint,
-    'ssh-host',
-    undefined,
-  );
-  const [transportStatus, setTransportStatus] = useInfrastructureState<
-    SshTransportStatus | undefined
-  >(settings.endpoint, 'transport', undefined);
+  const targets = useQuery({
+    queryKey: ['infrastructure-targets', settings.endpoint],
+    queryFn: ({ signal }) => repository.infrastructureTargets(signal),
+    staleTime: 30_000,
+  });
+  const {
+    target,
+    targetId,
+    sshHost,
+    transportStatus,
+    selectTarget,
+    setTarget,
+    setTargetId,
+    setSshHost,
+    setTransportStatus,
+  } = useInfrastructureTargetSelection(targets.data ?? []);
   const [deploying, setDeploying] = useInfrastructureState(
     settings.endpoint,
     `${targetId}:deploying`,
@@ -153,40 +149,12 @@ export function ManagedServices({
     queryFn: ({ signal }) => repository.modelInventory(targetId, signal),
     retry: false,
   });
-  useEffect(() => {
-    const key = `${settings.endpoint}:${targetId}:${requestedModel}`;
-    if (!requestedModel || requestedTarget !== targetId || appliedModelLink.current === key) return;
-    const selected = modelSelection.data?.models.find(
-      (row) => row.id === requestedModel && row.state === 'ready',
-    );
-    if (!selected || modelSelection.data?.unavailable_reason) return;
-    appliedModelLink.current = key;
-    setSelectedProvider('vllm');
-    setDeploying(true);
-    setConfiguration((current) => ({
-      ...current,
-      vllm: {
-        ...current.vllm,
-        model: selected.destination,
-        model_revision: selected.revision || '',
-      },
-    }));
-  }, [
-    modelSelection.data,
-    requestedModel,
-    requestedTarget,
-    settings.endpoint,
-    targetId,
-    setSelectedProvider,
-    setDeploying,
-    setConfiguration,
-  ]);
   const visitedTargetLink = useRef('');
   const canManageSshTargets = desktop && isManagedConnection;
   const executionHostLabel =
-    target === 'local' && !desktop
-      ? `the connected ${vocab.agent} host`
-      : targetLabel(target, sshHost);
+    target === 'local'
+      ? 'Local'
+      : targets.data?.find((row) => row.id === targetId)?.label || targetLabel(target, sshHost);
   // The NSIS installer's Infrastructure page records a llama.cpp request as a
   // PREFERENCE only — it never installs a runtime itself. When set, this
   // finishes that intent by pointing the user at the model-runtime controls
@@ -197,37 +165,6 @@ export function ManagedServices({
     queryFn: installerRequestedLlamaCpp,
     staleTime: Infinity,
   });
-  const targets = useQuery({
-    queryKey: ['infrastructure-targets', settings.endpoint],
-    queryFn: ({ signal }) => repository.infrastructureTargets(signal),
-    staleTime: 30_000,
-  });
-  const selectTarget = useCallback(
-    (id: string) => {
-      const selected = targets.data?.find((row) => row.id === id);
-      if ((!selected && id !== 'local') || selected?.kind === 'direct') return;
-      setTargetId(id);
-      setTarget(selected?.kind ?? 'local');
-      setTransportStatus(undefined);
-      setSshHost(
-        selected?.ssh
-          ? {
-              id: selected.id,
-              label: selected.label,
-              profile: selected.ssh.profile,
-              host: selected.ssh.host,
-              user: selected.ssh.user,
-              port: selected.ssh.port,
-              jumpHosts: selected.ssh.jump_hosts,
-              identityFile: selected.ssh.identity_file,
-              platform: selected.ssh.platform,
-              installRoot: selected.install_root,
-            }
-          : undefined,
-      );
-    },
-    [targets.data, setTargetId, setTarget, setTransportStatus, setSshHost],
-  );
   useEffect(() => {
     const linkKey = `${settings.endpoint}:${requestedTarget}`;
     if (!requestedTarget || visitedTargetLink.current === linkKey) return;
@@ -270,48 +207,6 @@ export function ManagedServices({
       await targets.refetch();
     },
   });
-  const transportSessionId = transportStatus?.session_id;
-  useEffect(() => {
-    if (!transportSessionId) return;
-    let active = true;
-    const cleanup: Array<() => void> = [];
-    void import('@tauri-apps/api/event').then(async ({ listen }) => {
-      cleanup.push(
-        await listen<SshStateEvent>('clio:ssh-transport-state', ({ payload }) => {
-          if (!active || payload.session_id !== transportSessionId) return;
-          setTransportStatus((current) =>
-            current ? { ...current, state: payload.state, prompt: payload.prompt } : current,
-          );
-          void repository.setInfrastructureTransportState(targetId, payload.state);
-          if (payload.state === 'connected') {
-            void repository.infrastructureTargets().then(async (rows) => {
-              const current = rows.find((row) => row.id === targetId);
-              if (!current) return;
-              const status = await attachInfrastructureSshTransport(
-                settings.endpoint,
-                settings.token,
-                current,
-              );
-              if (active) setTransportStatus(status);
-            });
-          }
-        }),
-      );
-      const snapshot = await sshTransportStatus(transportSessionId);
-      if (active) setTransportStatus(snapshot);
-    });
-    return () => {
-      active = false;
-      cleanup.forEach((stop) => stop());
-    };
-  }, [
-    repository,
-    settings.endpoint,
-    settings.token,
-    targetId,
-    transportSessionId,
-    setTransportStatus,
-  ]);
   const catalog = useQuery({
     enabled:
       target === 'local' ||
@@ -384,17 +279,116 @@ export function ManagedServices({
       }));
     },
   });
+  useEffect(() => {
+    const key = `${settings.endpoint}:${targetId}:${requestedModel}`;
+    if (!requestedModel || requestedTarget !== targetId || appliedModelLink.current === key) return;
+    const selected = modelSelection.data?.models.find(
+      (row) => row.id === requestedModel && row.state === 'ready',
+    );
+    if (!selected || modelSelection.data?.unavailable_reason) return;
+    appliedModelLink.current = key;
+    setSelectedProvider('');
+    setDeploying(true);
+    setConfiguration((current) => ({
+      ...current,
+      llama_cpp: {
+        ...current.llama_cpp,
+        model_path: selected.file_path?.endsWith('.gguf') ? selected.file_path : '',
+        hf_model: '',
+      },
+      vllm: {
+        ...current.vllm,
+        model: selected.destination,
+        model_revision: selected.revision || '',
+      },
+    }));
+  }, [
+    modelSelection.data,
+    requestedModel,
+    requestedTarget,
+    settings.endpoint,
+    targetId,
+    setSelectedProvider,
+    setDeploying,
+    setConfiguration,
+  ]);
   const services = catalog.data?.services ?? [];
   // The installer banner follows observed installation state across navigation.
   const llamaCppService = services.find((service) => service.id === 'llama_cpp');
   const llamaCppInstalled =
     llamaCppService?.state === 'running' || llamaCppService?.state === 'stopped';
 
-  const renderService = (service: ManagedServiceDefinition, setup = false) => {
+  const connectionFor = (
+    service: ManagedServiceDefinition,
+  ): ComponentProps<typeof ManagedServiceCard>['connectionAction'] => {
     const agentConnectionUrl = service.connection_url;
+    const configuredModelServer = agentConnectionUrl
+      ? modelRuntimeServer(savedServers.servers.data, service.id, agentConnectionUrl)
+      : undefined;
     const webSearchTargetConnected =
       service.id === 'web_search' &&
       webSearchConnectionMatchesTarget(webSearchConnected, webSearchConnection, agentConnectionUrl);
+    return service.category === 'monitoring' && service.state === 'running' && onConnectProvenance
+      ? {
+          label: 'Connect',
+          blockedReason:
+            targetId !== 'local'
+              ? `Connect to the ${vocab.agent} on this execution host to configure its local provenance settings.`
+              : undefined,
+          onSelect: () =>
+            onConnectProvenance({
+              service_id: service.id === 'flowcept' ? 'flowcept' : 'cmf',
+              label: service.label,
+              url: agentConnectionUrl ?? service.connection_url ?? '',
+              ...(service.id === 'flowcept'
+                ? { settings_path: service.configuration.flowcept_settings ?? '' }
+                : {}),
+            }),
+        }
+      : service.category === 'model_runtime' &&
+          agentConnectionUrl &&
+          (configuredModelServer ||
+            (service.state === 'running' && (!service.observation || service.observation.serving)))
+        ? configuredModelServer
+          ? {
+              label: savedServers.remove.isPending ? 'Disconnecting…' : 'Disconnect',
+              connected: true,
+              pending: savedServers.remove.isPending,
+              onSelect: () => savedServers.remove.mutate(configuredModelServer.id),
+            }
+          : {
+              label: savedServers.save.isPending ? 'Connecting…' : 'Connect',
+              connected: false,
+              pending: savedServers.save.isPending,
+              onSelect: () =>
+                savedServers.save.mutate({
+                  address: agentConnectionUrl,
+                  label: `${service.label} (${executionHostLabel})`,
+                  presetId: service.id,
+                }),
+            }
+        : service.id === 'web_search' && (webSearchTargetConnected || service.state === 'running')
+          ? {
+              label: webSearchTargetConnected
+                ? webSearchDisconnecting
+                  ? 'Disconnecting…'
+                  : 'Disconnect'
+                : webSearchConnecting
+                  ? 'Connecting…'
+                  : 'Connect',
+              connected: webSearchTargetConnected,
+              onSelect: webSearchTargetConnected
+                ? onDisconnectWebSearch
+                : !agentConnectionUrl
+                  ? undefined
+                  : () => onConnectWebSearch?.(agentConnectionUrl),
+              pending: webSearchTargetConnected ? webSearchDisconnecting : webSearchConnecting,
+              blockedReason: undefined,
+            }
+          : undefined;
+  };
+  const renderService = (service: ManagedServiceDefinition, setup = false) => {
+    const agentConnectionUrl = service.connection_url;
     return (
       <ManagedServiceCard
         setup={setup}
@@ -417,7 +411,7 @@ export function ManagedServices({
             />
           ) : undefined
         }
-        key={service.id}
+        key={`${targetId}:${service.id}`}
         onAction={(requestedAction, options) => {
           const applying = requestedAction === 'install' || requestedAction === 'reinstall';
           const variant = applying
@@ -455,62 +449,9 @@ export function ManagedServices({
             [service.id]: { ...current[service.id], [field]: value },
           }))
         }
+        onResetConfiguration={() => setConfiguration(({ [service.id]: _discard, ...rest }) => rest)}
         onVariant={(value) => setVariants((current) => ({ ...current, [service.id]: value }))}
-        connectionAction={
-          service.category === 'monitoring' && service.state === 'running' && onConnectProvenance
-            ? {
-                label: 'Use for provenance',
-                blockedReason:
-                  targetId !== 'local'
-                    ? `Connect to the ${vocab.agent} on this execution host to configure its local provenance settings.`
-                    : undefined,
-                onSelect: () =>
-                  onConnectProvenance({
-                    service_id: service.id === 'flowcept' ? 'flowcept' : 'cmf',
-                    label: service.label,
-                    url: agentConnectionUrl ?? service.connection_url ?? '',
-                    ...(service.id === 'flowcept'
-                      ? { settings_path: service.configuration.flowcept_settings ?? '' }
-                      : {}),
-                  }),
-              }
-            : service.category === 'model_runtime' &&
-                service.state === 'running' &&
-                (!service.observation || service.observation.serving) &&
-                agentConnectionUrl
-              ? modelRuntimeInModels(savedServers.servers.data, service.id, agentConnectionUrl)
-                ? { label: 'Open in Models', to: '/settings/providers' }
-                : {
-                    label: savedServers.save.isPending ? 'Adding to Models…' : 'Use in Models',
-                    pending: savedServers.save.isPending,
-                    onSelect: () =>
-                      savedServers.save.mutate({
-                        address: agentConnectionUrl,
-                        label: `${service.label} (${executionHostLabel})`,
-                        presetId: service.id,
-                      }),
-                  }
-              : service.id === 'web_search' && service.state === 'running'
-                ? {
-                    label: webSearchTargetConnected
-                      ? webSearchDisconnecting
-                        ? 'Disconnecting…'
-                        : 'Disconnect'
-                      : webSearchConnecting
-                        ? 'Connecting…'
-                        : `Connect to ${vocab.agent}`,
-                    onSelect: webSearchTargetConnected
-                      ? onDisconnectWebSearch
-                      : !agentConnectionUrl
-                        ? undefined
-                        : () => onConnectWebSearch?.(agentConnectionUrl),
-                    pending: webSearchTargetConnected
-                      ? webSearchDisconnecting
-                      : webSearchConnecting,
-                    blockedReason: undefined,
-                  }
-                : undefined
-        }
+        connectionAction={connectionFor(service)}
         operation={
           operationIds[service.id] || runningOperations[service.id]?.id
             ? {
@@ -528,7 +469,7 @@ export function ManagedServices({
   };
 
   return (
-    <section aria-labelledby="agent-services-title" className="mt-6 space-y-6">
+    <section aria-label="Services" className="mt-6 space-y-4">
       <AgentServicesOverview
         agentLabel={connectedAgentLabel}
         agentLocation={connectedAgentLocation}
@@ -538,26 +479,42 @@ export function ManagedServices({
         onManageWebSearch={onManageWebSearch}
         onManageRelay={onManageRelay}
       />
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b pb-5">
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">Service host</p>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <ServerIcon className="size-4 text-primary" aria-hidden="true" />
-            <h2 className="text-lg font-semibold">{executionHostLabel}</h2>
-            {target === 'ssh' ? (
-              <span className="text-xs text-muted-foreground" role="status">
-                {registerTarget.isPending
-                  ? 'Connecting…'
-                  : transportStateLabel(
-                      transportStatus?.state ??
-                        targets.data?.find((row) => row.id === targetId)?.transport_state ??
-                        'state_unknown',
-                    )}
-              </span>
-            ) : null}
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ManagedServiceHostSelector
+          targets={targets.data ?? []}
+          targetId={targetId}
+          canAdd={canManageSshTargets}
+          sshHost={sshHost}
+          pending={registerTarget.isPending}
+          error={registerTarget.error?.message}
+          onSelect={(id) => {
+            selectTarget(id);
+            setSearchParams(
+              (previous) => {
+                const params = new URLSearchParams(previous);
+                params.set('target', id);
+                params.delete('model');
+                return params;
+              },
+              { replace: true },
+            );
+          }}
+          onSshHost={async (host) => {
+            setTarget('ssh');
+            setSshHost(host);
+            await registerTarget.mutateAsync(host);
+          }}
+        />
+        <div className="flex items-center gap-2">
+          {target === 'ssh' ? (
+            <span className="text-xs text-muted-foreground" role="status">
+              {transportStateLabel(
+                transportStatus?.state ??
+                  targets.data?.find((row) => row.id === targetId)?.transport_state ??
+                  'state_unknown',
+              )}
+            </span>
+          ) : null}
           {target === 'ssh' &&
           sshHost &&
           canManageSshTargets &&
@@ -578,33 +535,8 @@ export function ManagedServices({
             aria-expanded={hostDetailsOpen}
             onClick={() => setHostDetailsOpen((open) => !open)}
           >
-            {hostDetailsOpen ? 'Hide host details' : 'Host details'}
+            {hostDetailsOpen ? 'Hide details' : 'Computer details'}
           </Button>
-          <ManagedServiceHostSelector
-            targets={targets.data ?? []}
-            targetId={targetId}
-            canAdd={canManageSshTargets}
-            sshHost={sshHost}
-            pending={registerTarget.isPending}
-            error={registerTarget.error?.message}
-            onSelect={(id) => {
-              selectTarget(id);
-              setSearchParams(
-                (previous) => {
-                  const params = new URLSearchParams(previous);
-                  params.set('target', id);
-                  params.delete('model');
-                  return params;
-                },
-                { replace: true },
-              );
-            }}
-            onSshHost={async (host) => {
-              setTarget('ssh');
-              setSshHost(host);
-              await registerTarget.mutateAsync(host);
-            }}
-          />
         </div>
       </div>
       {hostDetailsOpen ? (
@@ -681,6 +613,19 @@ export function ManagedServices({
           ...Object.fromEntries(Object.entries(runningOperations).map(([id, row]) => [id, row.id])),
           ...operationIds,
         }}
+        model={modelSelection.data?.models.find((row) => row.id === requestedModel)}
+        connectionFor={connectionFor}
+        onRun={(service, requestedAction) =>
+          action.mutate({
+            service_id: service.id,
+            target_id: targetId,
+            action: requestedAction,
+            variant_id: service.recommended_variant,
+            configuration: service.configuration,
+          })
+        }
+        busyService={action.isPending ? action.variables?.service_id : undefined}
+        feedback={results}
         loading={catalog.isFetching}
         unavailable={!catalog.data || Boolean(catalog.error)}
       />

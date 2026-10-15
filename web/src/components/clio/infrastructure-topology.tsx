@@ -3,21 +3,7 @@ import { ArrowDownIcon, LaptopIcon, ServerIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { vocab } from '@/lib/brand-vocabulary';
-
-/** Product names for the installed services exposed in the inventory. */
-function infrastructureServiceName(id: string): string {
-  const names: Record<string, string> = {
-    searxng: 'SearXNG',
-    web_search: `${vocab.agent} Web Search`,
-    relay: `${vocab.agent} Relay`,
-    vllm: 'vLLM',
-    llama_cpp: 'llama.cpp',
-    ollama: 'Ollama',
-    flowcept: 'Flowcept',
-    cmf: 'HPE CMF',
-  };
-  return names[id] ?? id.replaceAll('_', ' ');
-}
+import { infrastructureServiceName } from '@/lib/infrastructure-service-labels';
 
 /** Management edges connect real computers, without claiming their services are selected. */
 export function InfrastructureTopology({
@@ -31,7 +17,7 @@ export function InfrastructureTopology({
 }) {
   const remote = data.targets.filter((target) => target.kind !== 'local');
   const local = data.targets.find((target) => target.kind === 'local');
-  const height = Math.max(260, remote.length * 130);
+  const height = Math.max(180, remote.length * 100);
   const hostServices = (targetId: string) =>
     data.services.filter((row) => row.target_id === targetId);
   const servicesOn = (id: string) => (
@@ -58,7 +44,7 @@ export function InfrastructureTopology({
           Select a computer to manage its services.
         </p>
       </div>
-      <div className="relative overflow-hidden rounded-xl bg-muted/40 p-5 sm:p-8">
+      <div className="relative overflow-hidden rounded-xl bg-muted/40 p-4">
         <div
           className="relative grid items-center gap-5 md:grid-cols-[0.7fr_1fr_1fr] md:gap-8"
           style={{ minHeight: height }}
@@ -89,9 +75,9 @@ export function InfrastructureTopology({
           </div>
           <ArrowDownIcon className="mx-auto size-4 text-primary/60 md:hidden" aria-hidden="true" />
           <Link
-            to="/infrastructure/agent"
-            aria-label={`Inspect connected ${vocab.agent}`}
-            className="relative rounded-xl border border-primary/40 bg-background p-5 shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+            to="/infrastructure/services?target=local"
+            aria-label={`Manage services on connected ${vocab.agent}`}
+            className="relative rounded-xl border border-primary/40 bg-background p-4 transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
           >
             <div className="flex items-center gap-2 text-primary">
               <ServerIcon className="size-4" />
@@ -108,7 +94,7 @@ export function InfrastructureTopology({
               <Link
                 key={host.id}
                 to={`/infrastructure/services?target=${encodeURIComponent(host.id)}`}
-                className="rounded-xl border bg-background p-4 shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+                className="rounded-xl border bg-background p-3 transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
               >
                 <div className="flex items-center gap-2">
                   <ServerIcon className="size-4 shrink-0 text-muted-foreground" />

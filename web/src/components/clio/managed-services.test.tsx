@@ -181,10 +181,7 @@ describe('ManagedServices', () => {
       },
     ]);
     renderServices();
-    await userEvent.click(screen.getByRole('button', { name: 'Change host' }));
-    await userEvent.click(
-      await screen.findByRole('button', { name: 'Manage services on Homelab' }),
-    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Select Homelab computer' }));
     await waitFor(() =>
       expect(repository.managedServiceCatalog).toHaveBeenCalledWith(
         'homelab',
@@ -289,7 +286,7 @@ describe('ManagedServices', () => {
     expect(screen.getByText('http://127.0.0.1:8089')).toBeVisible();
     expect(screen.getByText('Runs on Ares')).toBeVisible();
     expect(screen.getByText('Runs on relay.lab.example')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Deploy new' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Install service' })).toBeVisible();
   });
 
   it('shows installed inventory before choosing a new runtime', async () => {
@@ -300,9 +297,10 @@ describe('ManagedServices', () => {
     ).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'vLLM' })).not.toBeInTheDocument();
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Deploy new' }));
+    await user.click(screen.getByRole('button', { name: 'Install service' }));
     await user.click(screen.getByRole('button', { name: 'Set up vLLM' }));
     expect(screen.getByRole('heading', { name: 'vLLM' })).toBeVisible();
+    await user.click(screen.getByText('Advanced settings', { exact: true }));
     expect(screen.getByLabelText('vLLM Reasoning parser')).toBeVisible();
     expect(repository.runManagedServiceAction).not.toHaveBeenCalled();
     expect(deployment.managedServiceCatalog).toHaveBeenCalledTimes(1);
@@ -336,13 +334,14 @@ describe('ManagedServices', () => {
     });
     renderServices();
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Deploy new' })).toBeEnabled());
-    await userEvent.click(screen.getByRole('button', { name: 'Deploy new' }));
-    await userEvent.click(
-      screen.getByRole('button', { name: `Review ${vocab.agent} Web Search requirements` }),
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Install service' })).toBeEnabled(),
     );
-    expect(screen.getByText(/Not available on this target. Requires Docker./u)).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Install' })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Install service' }));
+    expect(screen.getByText('Requires Docker.')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: `${vocab.agent} Web Search unavailable` }),
+    ).toBeDisabled();
   });
 
   it('connects a running service to CLIO without repeating its state as command output', async () => {
@@ -353,13 +352,11 @@ describe('ManagedServices', () => {
       await screen.findByRole('button', { name: `Manage ${vocab.agent} Web Search` }),
     );
 
-    expect(
-      await screen.findByRole('button', { name: `Connect to ${brand.agentName}` }),
-    ).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'Connect' })).toBeVisible();
     expect(
       screen.getByRole('article', { name: `${vocab.agent} Web Search management` }),
     ).toHaveTextContent('Running');
-    await user.click(screen.getByRole('button', { name: `Connect to ${brand.agentName}` }));
+    await user.click(screen.getByRole('button', { name: 'Connect' }));
     expect(connect).toHaveBeenCalledWith('http://127.0.0.1:8089');
     await user.click(screen.getByRole('button', { name: 'Check status' }));
     expect(
@@ -427,7 +424,7 @@ describe('ManagedServices', () => {
       within(screen.getByRole('dialog')).getByText('Web Search document conversion is not ready'),
     ).toBeVisible();
     expect(screen.queryByText(`Connected to ${brand.agentName}`)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: `Connect to ${brand.agentName}` })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeVisible();
   });
 
   it('shows an active status check and a completion result', async () => {
@@ -505,14 +502,18 @@ describe('ManagedServices', () => {
       status: 'ok',
       logs: 'line one\nline two',
     });
-    const user = userEvent.setup();
     renderServices();
     await userEvent.click(
       await screen.findByRole('button', { name: `Manage ${vocab.agent} Web Search` }),
     );
     await userEvent.click(screen.getByRole('tab', { name: 'Logs' }));
 
-    await user.click(await screen.findByRole('button', { name: 'View logs' }));
+    await waitFor(() =>
+      expect(repository.runManagedServiceAction).toHaveBeenCalledWith(
+        'web_search',
+        expect.objectContaining({ action: 'logs' }),
+      ),
+    );
 
     const panel = await screen.findByRole('region', {
       name: `${vocab.agent} Web Search recent logs`,
@@ -547,7 +548,7 @@ describe('ManagedServices', () => {
     );
 
     expect(await screen.findByText('Another Web Search deployment is connected')).toBeVisible();
-    const action = screen.getByRole('button', { name: `Connect to ${brand.agentName}` });
+    const action = screen.getByRole('button', { name: 'Connect' });
     await user.click(action);
     expect(connect).toHaveBeenCalledWith('http://127.0.0.1:8089');
   });
@@ -558,10 +559,8 @@ describe('ManagedServices', () => {
       connectedAgentLabel: 'Utah CLIO',
       connectedAgentLocation: 'Utah',
     });
-    await userEvent.click(screen.getByRole('button', { name: 'Change host' }));
-
-    expect(await screen.findByRole('button', { name: /^Manage services on /u })).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Add another computer' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Select Local computer' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Add computer' })).not.toBeInTheDocument();
     expect(screen.queryByText('This connection would not be reachable')).not.toBeInTheDocument();
   });
 
@@ -594,7 +593,7 @@ describe('ManagedServices', () => {
       await screen.findByRole('button', { name: `Manage ${vocab.agent} Web Search` }),
     );
 
-    await user.click(await screen.findByRole('button', { name: `Connect to ${brand.agentName}` }));
+    await user.click(await screen.findByRole('button', { name: 'Connect' }));
 
     expect(connect).toHaveBeenCalledWith('http://127.0.0.1:8089');
     expect(screen.queryByText('This connection would not be reachable')).not.toBeInTheDocument();
@@ -604,7 +603,7 @@ describe('ManagedServices', () => {
     deployment.managedServiceCatalog.mockReturnValue(new Promise(() => undefined));
     renderServices();
 
-    expect(screen.getByRole('button', { name: 'Change host' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Select Local computer' })).toBeVisible();
     expect(screen.getByText('Inspecting this computer')).toBeVisible();
   });
 
@@ -630,9 +629,7 @@ describe('ManagedServices', () => {
           }),
     );
     renderServices();
-    await userEvent.click(screen.getByRole('button', { name: 'Change host' }));
-
-    await user.click(screen.getByRole('button', { name: 'Add another computer' }));
+    await user.click(screen.getByRole('button', { name: 'Add computer' }));
     await user.click(await screen.findByRole('combobox', { name: 'Saved SSH host' }));
     await user.click(screen.getByRole('option', { name: 'homelab' }));
 
@@ -671,9 +668,7 @@ describe('ManagedServices', () => {
       .mockResolvedValue([registered]);
     repository.updateInfrastructureTarget.mockResolvedValue(registered);
     renderServices();
-    await userEvent.click(screen.getByRole('button', { name: 'Change host' }));
-
-    await user.click(screen.getByRole('button', { name: 'Add another computer' }));
+    await user.click(screen.getByRole('button', { name: 'Add computer' }));
     await user.click(await screen.findByRole('combobox', { name: 'Saved SSH host' }));
     await user.click(screen.getByRole('option', { name: 'homelab' }));
 
@@ -688,10 +683,17 @@ describe('ManagedServices', () => {
 
   it('adds a manual SSH host beside imported profiles and uses it for inspection', async () => {
     const user = userEvent.setup();
+    const create = repository.createInfrastructureTarget.getMockImplementation()!;
+    repository.createInfrastructureTarget.mockImplementationOnce(async (input) => {
+      const created = await create(input);
+      repository.infrastructureTargets.mockResolvedValue([
+        { id: 'local', label: 'Local', kind: 'local', transport_state: 'connected' },
+        created,
+      ]);
+      return created;
+    });
     renderServices();
-    await userEvent.click(screen.getByRole('button', { name: 'Change host' }));
-
-    await user.click(screen.getByRole('button', { name: 'Add another computer' }));
+    await user.click(screen.getByRole('button', { name: 'Add computer' }));
     await user.click(screen.getByRole('button', { name: 'Add SSH host' }));
     await user.type(screen.getByLabelText('Address'), 'login.example.edu');
     await user.clear(screen.getByLabelText('Port'));
@@ -712,31 +714,33 @@ describe('ManagedServices', () => {
     await waitFor(() =>
       expect(screen.queryByRole('dialog', { name: 'Connect a computer' })).not.toBeInTheDocument(),
     );
-    expect(screen.getByRole('heading', { name: 'Utah cluster' })).toBeVisible();
+    expect(
+      await screen.findByRole('button', { name: 'Select Utah cluster computer' }),
+    ).toHaveAttribute('aria-pressed', 'true');
     // The route's own sortable list also renders an assistive-tech live
     // region once it has a destination row, so this scopes past it.
-    expect(screen.getByText('Connected', { selector: '[role="status"]' })).toBeVisible();
+    expect(repository.setInfrastructureTransportState).toHaveBeenCalledWith(
+      'ssh-target',
+      'connected',
+    );
   });
 
   it('renders a recoverable error when target inspection fails', async () => {
     deployment.managedServiceCatalog.mockRejectedValue(new Error('Docker inspection stalled'));
     renderServices();
 
-    expect(await screen.findByText('Could not inspect this computer')).toBeVisible();
+    expect(await screen.findByText('Could not inspect Local')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeVisible();
     expect(screen.queryByText(/No managed services on/u)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Deploy new' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Install service' })).toBeDisabled();
   });
 
   it('keeps same-host CLIO lifecycle controls available in browser mode', async () => {
     runtime.desktop = false;
     connection.isManagedConnection = false;
     renderServices();
-    await userEvent.click(screen.getByRole('button', { name: 'Change host' }));
-
-    expect(await screen.findByRole('dialog', { name: 'Choose a service host' })).toBeVisible();
-    expect(await screen.findByRole('button', { name: /^Manage services on /u })).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Add another computer' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Select Local computer' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Add computer' })).not.toBeInTheDocument();
   });
 
   it('opens the installer-requested runtime directly', async () => {
@@ -745,7 +749,7 @@ describe('ManagedServices', () => {
     renderServices();
 
     expect(await screen.findByText('Finish setting up your local model runtime')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Deploy new' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Install service' })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: 'Finish setup' }));
 
@@ -758,7 +762,7 @@ describe('ManagedServices', () => {
     installerInfra.installerRequestedLlamaCpp.mockResolvedValue(false);
     renderServices();
 
-    await screen.findByRole('button', { name: 'Change host' });
+    await screen.findByRole('button', { name: 'Select Local computer' });
     expect(
       screen.queryByText('Finish setting up your local model runtime'),
     ).not.toBeInTheDocument();
@@ -782,7 +786,7 @@ describe('ManagedServices', () => {
     });
     renderServices();
 
-    await screen.findByRole('button', { name: 'Change host' });
+    await screen.findByRole('button', { name: 'Select Local computer' });
     expect(
       screen.queryByText('Finish setting up your local model runtime'),
     ).not.toBeInTheDocument();

@@ -223,13 +223,13 @@ export const INFRASTRUCTURE_SECTIONS = [
     id: 'models',
     label: 'Models & storage',
     icon: HardDriveIcon,
-    description: 'Choose where each host keeps models, service data, and evidence.',
+    description: 'Find and download models, inspect their capabilities, and manage storage.',
   },
   {
     id: 'tools',
     label: 'Tools',
     icon: WrenchIcon,
-    description: 'Inspect tools available to the selected session.',
+    description: 'Browse the agent’s tool catalog or inspect the tools recorded for this session.',
   },
   {
     id: 'activity',

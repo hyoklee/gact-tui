@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { SearchIcon, CheckIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import type { RegistryModel } from '@clio/core/v3';
+import { CheckIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { buildModelFacets, hubTaskLabel, type FacetEntry } from '@/lib/model-facets';
@@ -10,15 +10,16 @@ import {
   providerFilterToken,
 } from '@/lib/model-filter-tokens';
 import type { ModelCapabilityTag } from '@/lib/model-capability-tags';
+import { displayedTags } from '@/lib/model-capability-tags';
+import { registryModelTags } from '@/lib/registry-model-tags';
+import { modelFactSummary } from '@/lib/model-facts';
+import { ModelCapabilityTags } from './model-capability-tags';
 import { ModelPickerSearch } from './model-picker-search';
 
-interface RepositoryModel {
-  repository: string;
-  revision: string | null;
-  task: string | null;
-  gated: boolean | string;
-  downloads: number | null;
-}
+type RepositoryModel = Pick<
+  RegistryModel,
+  'repository' | 'revision' | 'task' | 'gated' | 'downloads' | 'capability_tags' | 'model_facts'
+>;
 
 /** Use the model picker's token field and facets with facts reported by the Hub. */
 export function ModelDownloadSearch({
@@ -44,16 +45,18 @@ export function ModelDownloadSearch({
   const [facetsOpen, setFacetsOpen] = useState(false);
   const entries = (models ?? []).map((model): FacetEntry => {
     const organization = model.repository.split('/')[0];
-    const tags: ModelCapabilityTag[] = model.task
-      ? [
-          {
-            axis: 'task',
-            value: model.task,
-            hubTasks: [model.task],
-            evidence: [{ source: 'hf_repo' }],
-          },
-        ]
-      : [];
+    const tags: ModelCapabilityTag[] = model.capability_tags
+      ? registryModelTags(model)
+      : model.task
+        ? [
+            {
+              axis: 'task',
+              value: model.task,
+              hubTasks: [model.task],
+              evidence: [{ source: 'hf_repo' }],
+            },
+          ]
+        : [];
     const carried = modelFilterTokens(tags);
     carried.add(providerFilterToken(organization));
     return {
@@ -61,7 +64,7 @@ export function ModelDownloadSearch({
       providerName: organization,
       tags,
       tokens: carried,
-      facts: {},
+      facts: modelFactSummary(model.model_facts),
       matchesText: true,
     };
   });
@@ -83,7 +86,9 @@ export function ModelDownloadSearch({
       }}
     >
       <Field>
-        <FieldLabel htmlFor="model-search">Find on Hugging Face</FieldLabel>
+        <FieldLabel htmlFor="model-search" className="sr-only">
+          Find on Hugging Face
+        </FieldLabel>
         <div className="flex items-start gap-2">
           <ModelPickerSearch
             inputId="model-search"
@@ -100,18 +105,6 @@ export function ModelDownloadSearch({
             facetsOpen={facetsOpen}
             onFacetsOpenChange={setFacetsOpen}
           />
-          <Button
-            type="button"
-            variant="outline"
-            aria-label="Search models"
-            disabled={!query.trim() || searching}
-            onClick={() => {
-              setFacetsOpen(false);
-              onSearch();
-            }}
-          >
-            <SearchIcon />
-          </Button>
         </div>
       </Field>
       {searching ? (
@@ -126,29 +119,44 @@ export function ModelDownloadSearch({
       ) : null}
       {models ? (
         <div
-          className="max-h-64 overflow-y-auto divide-y border-y"
+          className="max-h-[30dvh] overflow-y-auto divide-y border-y md:max-h-[55dvh]"
           aria-label="Model search results"
         >
           {!visible.length ? (
             <p className="py-3 text-sm text-muted-foreground">
-              No matching repositories. Adjust filters or enter an exact repository below.
+              No matching repositories. Adjust the search or use Advanced download settings for an
+              exact repository.
             </p>
           ) : (
             visible.map((model) => (
-              <button
+              <div
                 key={model.repository}
-                type="button"
-                aria-pressed={selected === model.repository}
                 className="flex w-full items-center gap-3 px-2 py-3 text-left text-sm hover:bg-muted focus-visible:outline-ring"
-                onClick={() => {
-                  setFacetsOpen(false);
-                  onSelect(model);
-                }}
               >
                 <div className="min-w-0 flex-1">
-                  <p className="break-words font-medium">{model.repository}</p>
+                  <button
+                    type="button"
+                    aria-pressed={selected === model.repository}
+                    className="w-full break-words text-left font-medium hover:underline underline-offset-4"
+                    onClick={() => {
+                      setFacetsOpen(false);
+                      onSelect(model);
+                    }}
+                  >
+                    {model.repository}
+                  </button>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    {model.task ? (
+                    {model.capability_tags ? (
+                      <ModelCapabilityTags
+                        size="sm"
+                        tags={displayedTags(registryModelTags(model))}
+                        onTagClick={(tag) =>
+                          setTokens((previous) => [
+                            ...new Set([...previous, ...modelFilterTokens([tag])]),
+                          ])
+                        }
+                      />
+                    ) : model.task ? (
                       <Badge variant="secondary">{hubTaskLabel(model.task)}</Badge>
                     ) : null}
                     {model.gated ? <Badge variant="outline">Requires access</Badge> : null}
@@ -160,7 +168,7 @@ export function ModelDownloadSearch({
                 {selected === model.repository ? (
                   <CheckIcon className="size-4 text-primary" aria-label="Selected" />
                 ) : null}
-              </button>
+              </div>
             ))
           )}
         </div>

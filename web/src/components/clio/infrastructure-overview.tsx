@@ -7,13 +7,7 @@ import { useRepository } from '@/hooks/use-repository';
 import { useSavedServers } from '@/hooks/use-saved-servers';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { ManagedServiceHostSelector } from './managed-service-host-selector';
 import { ManagedServiceHostFacts } from './managed-service-host-facts';
 import { displayHostPath } from '@/lib/host-path-display';
 import { vocab } from '@/lib/brand-vocabulary';
@@ -134,22 +128,21 @@ export function InfrastructureOverview({
     },
   ];
   return (
-    <div className="mt-6 space-y-8">
+    <div className="mt-6 space-y-5">
       <InfrastructureTopology
         data={data}
         agentLabel={settings.label || vocab.agent}
         endpoint={settings.endpoint}
       />
       <section aria-label="Manage your setup">
-        <h2 className="text-lg font-semibold">Manage your setup</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Each service can use a different host. Your agent connection stays the same.
         </p>
-        <div className="mt-4 divide-y border-y">
+        <div className="mt-3 divide-y border-y">
           {rows.map(({ label, icon: Icon, detail, description, action, to, onClick }) => (
             <div
               key={label}
-              className="grid items-center gap-3 py-4 sm:grid-cols-[9rem_minmax(0,1fr)_auto]"
+              className="grid items-center gap-3 py-3 sm:grid-cols-[9rem_minmax(0,1fr)_auto]"
             >
               <div className="flex items-center gap-3 font-medium">
                 <Icon className="size-4 text-primary" />
@@ -224,20 +217,11 @@ export function InfrastructureOverview({
       >
         <summary className="cursor-pointer text-sm font-medium">Computer details</summary>
         <section className="mt-4 space-y-3" aria-label="Computer inspection">
-          <Select value={targetId} onValueChange={onTarget}>
-            <SelectTrigger className="w-full sm:max-w-xs" aria-label="Inspection host">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {data.targets
-                .filter((host) => host.kind !== 'direct')
-                .map((host) => (
-                  <SelectItem key={host.id} value={host.id}>
-                    {host.label}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+          <ManagedServiceHostSelector
+            targets={data.targets}
+            targetId={targetId}
+            onSelect={onTarget}
+          />
           {inspectionOpen ? <InfrastructureHostInspection targetId={targetId} /> : null}
         </section>
       </details>

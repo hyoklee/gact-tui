@@ -64,19 +64,16 @@ export function CatalogToolset({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 xl:hidden">
-        <Button
-          className="bg-blue-600 text-white hover:bg-blue-500"
-          onClick={() => setBrowserOpen(true)}
-        >
+      <div className="flex flex-wrap items-center gap-3 lg:hidden">
+        <Button onClick={() => setBrowserOpen(true)}>
           <ListFilterIcon aria-hidden="true" /> View tool list
         </Button>
         <p className="text-sm text-muted-foreground">
           Choose from {tools.length} available tool{tools.length === 1 ? '' : 's'}.
         </p>
       </div>
-      <div className="border-y bg-card xl:grid xl:min-h-[38rem] xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)]">
-        <aside className="hidden border-r xl:block">
+      <div className="border-y bg-card lg:grid lg:min-h-[28rem] lg:grid-cols-[minmax(13rem,16rem)_minmax(0,1fr)]">
+        <aside className="hidden border-r lg:block">
           <ToolBrowser
             bundles={bundles}
             catalog={catalog}

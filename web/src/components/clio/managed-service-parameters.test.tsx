@@ -225,7 +225,7 @@ describe('model runtime server parameters', () => {
     );
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(screen.getByText(/This can take several minutes/u)).toHaveTextContent(
-      'prepares vLLM. You can leave this page; progress continues.',
+      'prepares vLLM. This can take several minutes. You can leave this page; progress continues.',
     );
   });
 
