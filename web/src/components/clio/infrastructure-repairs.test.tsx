@@ -1,7 +1,7 @@
 import type { InfrastructureInventory, ToolCatalogItem } from '@clio/core/v3';
 import { targetFactsSchema } from '@clio/core/v3';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -185,7 +185,7 @@ it('shows saved provider servers and preserves actual host facts in the topology
     uv_available: true,
     hostname: 'WORKSTATION',
     home: 'C:\\Users\\Alice',
-    identity: 'Alice',
+    identity: { uid: -1, gid: -1 },
     agent_data_root: 'C:\\CLIO data',
   });
   expect(facts.home).toBe('C:\\Users\\Alice');
@@ -210,7 +210,10 @@ it('shows saved provider servers and preserves actual host facts in the topology
     'href',
     '/settings/providers',
   );
-  expect(screen.getByLabelText('Connection map').querySelector('svg path')).not.toBeNull();
+  expect(within(screen.getByLabelText('Connection map')).getByRole('link')).toHaveAttribute(
+    'href',
+    '/infrastructure/agent',
+  );
 });
 
 it('keeps the tool-list action outside the selected tool contract', async () => {
