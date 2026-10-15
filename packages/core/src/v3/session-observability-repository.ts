@@ -5,6 +5,13 @@ import { ExecutionProvenanceRepository } from './execution-provenance-repository
 import { operationalRunStateSchema } from './schemas.js';
 import { variantRunsFromRecords, type VariantRuns } from './variant-reducer.js';
 import { variantRunListSchema } from './variant-schemas.js';
+import { cursorPageMetadataSchema } from './repository-decoders.js';
+import {
+  cursorPageQuery,
+  readCursorPages,
+  type CursorPage,
+  type CursorPageOptions,
+} from './transport.js';
 
 const sessionDiffSchema = z.object({
   path: z.string(),
@@ -230,28 +237,60 @@ export class SessionObservabilityRepository extends ExecutionProvenanceRepositor
   }
 
   public async asyncProcesses(sessionId: string, signal?: AbortSignal): Promise<AsyncProcess[]> {
-    const value = await this.transport.request({
-      method: 'GET',
-      path: `/v1/sessions/${encodeURIComponent(sessionId)}/async-processes`,
-      decode: (input) =>
-        z.object({ processes: z.array(asyncProcessSchema).default([]) }).parse(input),
-      signal,
-    });
-    return value.processes as AsyncProcess[];
+    return readCursorPages((cursor) => this.asyncProcessesPage(sessionId, { cursor }, signal));
   }
 
-  /** Every agent task the registry holds for `sessionId` (children, delegations, watchers). */
+  public async asyncProcessesPage(
+    sessionId: string,
+    options: CursorPageOptions = {},
+    signal?: AbortSignal,
+  ): Promise<CursorPage<AsyncProcess>> {
+    const query = cursorPageQuery(options);
+    const value = await this.transport.request({
+      method: 'GET',
+      path: `/v1/sessions/${encodeURIComponent(sessionId)}/async-processes${query.size ? `?${query}` : ''}`,
+      decode: (input) =>
+        cursorPageMetadataSchema
+          .extend({ processes: z.array(asyncProcessSchema).default([]) })
+          .parse(input),
+      signal,
+    });
+    return {
+      items: value.processes as AsyncProcess[],
+      cursor: value.cursor,
+      total: value.total,
+      revision: value.revision,
+    };
+  }
+
+  /** Explicit full child-history read; live views use the common task page instead. */
   public async sessionAgentTasks(
     sessionId: string,
     signal?: AbortSignal,
   ): Promise<AgentTaskRecord[]> {
+    return readCursorPages((cursor) => this.sessionAgentTasksPage(sessionId, { cursor }, signal));
+  }
+
+  public async sessionAgentTasksPage(
+    sessionId: string,
+    options: CursorPageOptions = {},
+    signal?: AbortSignal,
+  ): Promise<CursorPage<AgentTaskRecord>> {
+    const query = cursorPageQuery(options);
     const value = await this.transport.request({
       method: 'GET',
-      path: `/v1/sessions/${encodeURIComponent(sessionId)}/agent-tasks`,
+      path: `/v1/sessions/${encodeURIComponent(sessionId)}/agent-tasks${query.size ? `?${query}` : ''}`,
       decode: (input) =>
-        z.object({ tasks: z.array(agentTaskRecordSchema).default([]) }).parse(input),
+        cursorPageMetadataSchema
+          .extend({ tasks: z.array(agentTaskRecordSchema).default([]) })
+          .parse(input),
       signal,
     });
-    return value.tasks;
+    return {
+      items: value.tasks,
+      cursor: value.cursor,
+      total: value.total,
+      revision: value.revision,
+    };
   }
 }

@@ -66,7 +66,7 @@ import {
 import { ClioStatus, type ClioStatusValue } from './status';
 import type { SubagentOpenTarget } from './subagent-card';
 import { getToolActivityTitle, getToolStatus, getToolSummary } from './tool-presentation';
-import { AsyncTaskList } from './async-task-list';
+import { AsyncTaskList, type TaskPageControls } from './async-task-list';
 import { SessionEvidenceSummary } from './session-evidence-summary';
 import { taskActivity } from './task-activity';
 import { OpenQuestionsSection } from './open-question-list';
@@ -80,6 +80,7 @@ export interface ClioEvidenceViewProps {
   diffs: readonly SessionDiff[];
   messages: readonly Message[];
   processes: readonly AsyncProcess[];
+  workPages?: TaskPageControls;
   onCancelTask?: (task: AsyncProcess) => Promise<void>;
   onControlTask?: (task: AsyncProcess, action: 'pause' | 'resume' | 'restart') => Promise<void>;
   interactions?: readonly PendingInteraction[];
@@ -141,7 +142,8 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
         props.artifacts,
       );
   const hasEvidence = Boolean(
-    diffs.length ||
+    (showActivity && props.workPages?.hasMore) ||
+      diffs.length ||
       outputs.length ||
       sources.length ||
       plans.length ||
@@ -239,7 +241,7 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
             <ToolEvidence tools={tools} />
           </EvidenceSection>
         ) : null}
-        {backgroundProcesses.length ? (
+        {backgroundProcesses.length || props.workPages?.hasMore ? (
           <EvidenceSection
             icon={ServerIcon}
             label="Background tasks"
@@ -252,6 +254,7 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
               onOpenSubagent={props.onOpenSubagent}
               onCancelTask={props.onCancelTask}
               onControlTask={props.onControlTask}
+              pagination={props.workPages}
             />
           </EvidenceSection>
         ) : null}

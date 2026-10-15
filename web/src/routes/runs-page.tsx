@@ -229,6 +229,10 @@ export function buildWorkflowRows(
         'workflow_step_timeout',
         'workflow_spawn_refused',
       ].includes(descriptor.status ?? '');
+      const recordedYield = ['workflow_predicate_unsatisfied', 'workflow_step_stalled'].includes(
+        descriptor.status ?? '',
+      );
+      const allStepsLaunched = launched.length === descriptor.steps.length;
       const failedStep = descriptor.steps.find((step) => step.stepId === descriptor.failedStep);
       const unlaunched = descriptor.steps.filter((step) => step.launchState === 'not_launched');
       const completeVisibility = steps.every((task) => task !== undefined);
@@ -239,17 +243,21 @@ export function buildWorkflowRows(
           ? 'task_state_uncertain'
           : recordedFailure
             ? 'failed'
-            : !steps.length || !completeVisibility
-              ? 'unknown'
-              : active
-                ? 'running'
-                : steps.some((task) => task?.status === 'failed')
-                  ? 'failed'
-                  : steps.some((task) => task?.status === 'cancelled')
-                    ? 'cancelled'
-                    : steps.every((task) => task?.status === 'completed')
-                      ? 'completed'
-                      : 'interrupted';
+            : recordedYield
+              ? 'yielded'
+              : !steps.length || !completeVisibility
+                ? 'unknown'
+                : active
+                  ? 'running'
+                  : steps.some((task) => task?.status === 'failed')
+                    ? 'failed'
+                    : steps.some((task) => task?.status === 'cancelled')
+                      ? 'cancelled'
+                      : !allStepsLaunched
+                        ? 'yielded'
+                        : steps.every((task) => task?.status === 'completed')
+                          ? 'completed'
+                          : 'interrupted';
       const workspaceLabelFields = workspaceId
         ? (labels.get(workspaceId) ?? {
             name: `${capitalize(vocab.workspace)} unavailable`,
@@ -267,11 +275,13 @@ export function buildWorkflowRows(
             ? conciseReason(
                 `Workflow failed${failedStep ? ` at ${failedStep.name}` : ''}.${unlaunched.length ? ` ${unlaunched.length} ${unlaunched.length === 1 ? 'step was' : 'steps were'} not launched.` : ''}`,
               )
-            : completeVisibility && steps.length
-              ? undefined
-              : !launched.length && descriptor.steps.length
-                ? 'Steps have not launched.'
-                : 'Accepted step statuses are not loaded.',
+            : recordedYield || !allStepsLaunched
+              ? 'The declared workflow has an uncompleted step.'
+              : completeVisibility && steps.length
+                ? undefined
+                : !launched.length && descriptor.steps.length
+                  ? 'Steps have not launched.'
+                  : 'Accepted step statuses are not loaded.',
           progress: {
             completed: completeVisibility ? steps.filter((task) => task?.terminal_at).length : null,
             total: descriptor.steps.length,

@@ -57,6 +57,7 @@ export function SessionEvidenceSummary({
   | 'onOpenActivity'
   | 'onCancelTask'
   | 'onControlTask'
+  | 'workPages'
 > & {
   outputs: readonly Artifact[];
   files: readonly EvidenceFile[];
@@ -139,7 +140,7 @@ export function SessionEvidenceSummary({
           ))}
         </EvidenceSection>
       ) : null}
-      {activityCount ? (
+      {activityCount || actions.workPages?.hasMore ? (
         <EvidenceSection
           compact
           icon={ActivityIcon}
@@ -153,6 +154,7 @@ export function SessionEvidenceSummary({
             onOpenSubagent={actions.onOpenSubagent}
             onCancelTask={actions.onCancelTask}
             onControlTask={actions.onControlTask}
+            pagination={actions.workPages}
           />
         </EvidenceSection>
       ) : null}

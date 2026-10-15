@@ -181,5 +181,27 @@ describe('workflow run indexing', () => {
     expect(buildWorkflowRows([stopped], [session], [workspace], active)[0]).toMatchObject({
       state: 'running',
     });
+    for (const status of ['workflow_predicate_unsatisfied', 'workflow_step_stalled', undefined]) {
+      const unfinished = {
+        ...transcript,
+        tools: transcript.tools
+          .filter((tool) => tool.name === 'run_workflow')
+          .map((tool) => ({
+            ...tool,
+            output: {
+              status,
+              steps: [
+                { child: 'inventory', task_id: 'task_inventory', launch_state: 'accepted' },
+                { child: 'verification', task_id: null, launch_state: 'not_started' },
+              ],
+            },
+          })),
+      };
+      expect(buildWorkflowRows([unfinished], [session], [workspace], [tasks[0]])[0]).toMatchObject({
+        state: 'yielded',
+        statusReason: 'The declared workflow has an uncompleted step.',
+        progress: { completed: 1, total: 2, unit: 'steps' },
+      });
+    }
   });
 });

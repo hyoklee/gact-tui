@@ -1,4 +1,5 @@
 import { subagentOpenTarget } from './subagent-navigation';
+import type { TaskPageControls } from './async-task-list';
 import type {
   Artifact,
   AsyncProcess,
@@ -57,6 +58,7 @@ export interface ClioObservabilityDockProps {
   messages: readonly Message[];
   interactions?: readonly PendingInteraction[];
   processes: readonly AsyncProcess[];
+  workPages?: TaskPageControls;
   onCancelTask?: (task: AsyncProcess) => Promise<void>;
   onControlTask?: (task: AsyncProcess, action: 'pause' | 'resume' | 'restart') => Promise<void>;
   tasks: readonly Task[];

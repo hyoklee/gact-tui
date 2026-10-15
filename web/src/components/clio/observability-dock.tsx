@@ -59,6 +59,7 @@ export function ClioObservabilityView({
   diffs,
   messages,
   processes,
+  workPages,
   tasks,
   tools,
   runs,
@@ -331,6 +332,7 @@ export function ClioObservabilityView({
               messages={messages}
               onOpenSubagent={onOpenSubagent}
               processes={processes}
+              workPages={workPages}
               runs={runs}
               subagents={subagents}
               tools={tools}
@@ -368,6 +370,7 @@ export function ClioObservabilityView({
               onOpenResource={onOpenResource}
               onOpenSubagent={onOpenSubagent}
               processes={processes}
+              workPages={workPages}
               runs={runs}
               subagents={subagents}
               tasks={tasks}

@@ -20,12 +20,49 @@ import type { ClioEvidenceViewProps } from './observability-evidence';
 
 const settled = new Set(['completed', 'failed', 'cancelled', 'interrupted']);
 
+export interface TaskPageControls {
+  hasMore: boolean;
+  pending: boolean;
+  loadMore: () => Promise<unknown>;
+}
+
+/** Continue the same read; a page failure leaves the already loaded work visible. */
+export function TaskPageContinuation({ pagination }: { pagination?: TaskPageControls }) {
+  const [error, setError] = useState('');
+  if (!pagination?.hasMore) return null;
+  return (
+    <div className="py-1">
+      <Button
+        size="sm"
+        variant="ghost"
+        disabled={pagination.pending}
+        onClick={async () => {
+          setError('');
+          try {
+            await pagination.loadMore();
+          } catch (reason) {
+            setError(reason instanceof Error ? reason.message : String(reason));
+          }
+        }}
+      >
+        {pagination.pending ? 'Loading work…' : 'Load more work'}
+      </Button>
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export interface AsyncTaskListProps {
   processes: readonly AsyncProcess[];
   subagents?: readonly SubagentRun[];
   onOpenSubagent?: ClioEvidenceViewProps['onOpenSubagent'];
   onCancelTask?: (task: AsyncProcess) => Promise<void>;
   onControlTask?: (task: AsyncProcess, action: 'pause' | 'resume' | 'restart') => Promise<void>;
+  pagination?: TaskPageControls;
 }
 
 export function AsyncTaskList({
@@ -34,6 +71,7 @@ export function AsyncTaskList({
   onOpenSubagent,
   onCancelTask,
   onControlTask,
+  pagination,
 }: AsyncTaskListProps) {
   const [selected, setSelected] = useState<AsyncProcess>();
   const [requested, setRequested] = useState<Set<string>>(new Set());
@@ -98,7 +136,9 @@ export function AsyncTaskList({
         const active = !settled.has(status);
         const cancellable = task.supported_actions?.includes('cancel');
         const cancelling =
-          status !== 'task_state_uncertain' && (active || cancellable) && (task.cancel_requested || requested.has(handle));
+          status !== 'task_state_uncertain' &&
+          (active || cancellable) &&
+          (task.cancel_requested || requested.has(handle));
         const kind = task.task_kind ?? (task.kind === 'agent' ? 'Subagent' : 'MCP');
         return (
           <TaskActivityRow
@@ -169,6 +209,7 @@ export function AsyncTaskList({
           />
         );
       })}
+      <TaskPageContinuation pagination={pagination} />
       {error ? (
         <p role="alert" className="text-sm text-destructive">
           {error}
