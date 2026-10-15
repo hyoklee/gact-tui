@@ -134,6 +134,10 @@ function upsertBlock(message: Message, block: MessageBlock): Message {
       : candidate.id === block.id,
   );
   if (index < 0) return { ...message, blocks: [...message.blocks, block] };
+  // REST keeps the first block for a tool invocation. Its result updates the
+  // tool entity, not this transcript identity/sequence: steering receipts and
+  // text references can already be anchored to the original call block.
+  if (block.type === 'tool' && message.blocks[index]?.type === 'tool') return message;
   const blocks = [...message.blocks];
   blocks[index] = block;
   return { ...message, blocks };

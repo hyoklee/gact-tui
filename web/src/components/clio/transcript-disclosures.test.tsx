@@ -5,14 +5,49 @@ import { TranscriptDisclosures } from './transcript-disclosures';
 
 afterEach(cleanup);
 
-function ThinkingChoice() {
-  const [open, setOpen] = useTranscriptDisclosure('thinking');
+function ThinkingChoice({ defaultOpen = false }: { defaultOpen?: boolean }) {
+  const [open, setOpen] = useTranscriptDisclosure('thinking', defaultOpen);
   return (
     <button aria-expanded={open} onClick={() => setOpen(!open)}>
       Thinking
     </button>
   );
 }
+
+it('retains an explicit close across row remounts and changing automatic defaults', () => {
+  const view = render(
+    <TranscriptDisclosures sessionId="s">
+      <ThinkingChoice defaultOpen />
+    </TranscriptDisclosures>,
+  );
+  const button = screen.getByRole('button', { name: 'Thinking' });
+  expect(button).toHaveAttribute('aria-expanded', 'true');
+  fireEvent.click(button);
+  view.rerender(<TranscriptDisclosures sessionId="s">{null}</TranscriptDisclosures>);
+  view.rerender(
+    <TranscriptDisclosures sessionId="s">
+      <ThinkingChoice defaultOpen />
+    </TranscriptDisclosures>,
+  );
+  expect(screen.getByRole('button', { name: 'Thinking' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  view.rerender(
+    <TranscriptDisclosures sessionId="s">
+      <ThinkingChoice />
+    </TranscriptDisclosures>,
+  );
+  view.rerender(
+    <TranscriptDisclosures sessionId="s">
+      <ThinkingChoice defaultOpen />
+    </TranscriptDisclosures>,
+  );
+  expect(screen.getByRole('button', { name: 'Thinking' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+});
 
 it('retains choices when the responsive conversation and its nested provider remount', () => {
   const view = render(

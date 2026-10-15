@@ -174,9 +174,7 @@ describe('OperationProgress', () => {
       />,
     );
     expect(
-      await screen.findByText(
-        'Already available — reusing vLLM image; this should take under a minute.',
-      ),
+      await screen.findByText('Reusing vLLM image. This should take under a minute.'),
     ).toBeVisible();
   });
 
@@ -195,7 +193,13 @@ describe('OperationProgress', () => {
       'Last install took ~10 min.',
     );
     repository.infrastructureOperationEvents.mockImplementation(
-      streamOf([{ id: 0, type: 'operation.snapshot', operation: record({ id: 'op-2', state: 'succeeded' }) }]),
+      streamOf([
+        {
+          id: 0,
+          type: 'operation.snapshot',
+          operation: record({ id: 'op-2', state: 'succeeded' }),
+        },
+      ]),
     );
     rerender(
       <OperationProgress
@@ -242,14 +246,17 @@ describe('OperationProgress', () => {
         streamOf([
           { id: 0, type: 'operation.snapshot', operation: record() },
           { id: 4, type: 'operation.log', log: { line: 'two', stream: 'stdout' } },
-          { id: 5, type: 'operation.completed', operation: record({ id: 'op-2', state: 'succeeded' }) },
+          {
+            id: 5,
+            type: 'operation.completed',
+            operation: record({ id: 'op-2', state: 'succeeded' }),
+          },
         ]),
       );
     render(<OperationProgress operationId="op-1" title="vLLM install" />);
-    await waitFor(
-      () => expect(repository.infrastructureOperationEvents).toHaveBeenCalledTimes(2),
-      { timeout: 3000 },
-    );
+    await waitFor(() => expect(repository.infrastructureOperationEvents).toHaveBeenCalledTimes(2), {
+      timeout: 3000,
+    });
     expect(repository.infrastructureOperationEvents.mock.calls[0]?.[1]).toBeUndefined();
     expect(repository.infrastructureOperationEvents.mock.calls[1]?.[1]).toBe(3);
     expect(await screen.findByRole('button', { name: /Live log \(2 lines\)/u })).toBeVisible();

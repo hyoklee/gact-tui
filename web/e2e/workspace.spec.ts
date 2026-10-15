@@ -513,9 +513,8 @@ test('renders dense flat-NDP semantics with accessible interactions', async ({
       const composerSurface = await composerStack
         .locator('[data-slot="input-group"]')
         .evaluate((element) => getComputedStyle(element).backgroundColor);
-      // The composer has its own opaque, more visible surface. The attention
-      // tray retains its shared card surface above it.
-      return composerSurface !== responseSurface && composerSurface !== 'rgba(0, 0, 0, 0)';
+      // The user's question, queue and composer share one opaque surface tone.
+      return composerSurface === responseSurface && composerSurface !== 'rgba(0, 0, 0, 0)';
     })
     .toBe(true);
   const expandedConversationBounds = await conversation.boundingBox();
@@ -643,8 +642,13 @@ test('renders dense flat-NDP semantics with accessible interactions', async ({
     name: 'Jump to user message 1',
   });
   await expect(firstRailLandmark).toBeVisible();
-  await firstRailLandmark.hover();
   const railPreview = page.locator('[data-slot="hover-card-content"]');
+  // Scrolling across the rail can open another preview. Close it before the
+  // next hover: count=1 alone can match that old card before the new one opens.
+  await page.mouse.move(0, 0);
+  await expect(railPreview).toHaveCount(0);
+  await firstRailLandmark.hover();
+  await expect(railPreview).toHaveCount(1);
   const railPreviewTitle = railPreview.locator('p.font-semibold');
   await expect(railPreviewTitle).toHaveText('Sanitized evidence ledger entry 1.');
   await expect(railPreviewTitle).toHaveCSS('font-weight', '600');

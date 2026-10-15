@@ -12,6 +12,27 @@ import { HostPathPicker } from './host-path-picker';
 import { InfoTip } from './info-tip';
 import { SourceProviderLogo } from './source-provider-logo';
 
+/** Configure the host destination beside the Globus source that needs it. */
+export function GlobusReceivingStorageControl({ hostLabel }: { hostLabel: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details
+      className="border-t py-3"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary className="cursor-pointer text-sm font-medium">
+        Receiving storage on {hostLabel}
+      </summary>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Globus downloads need a receiving collection on this host. Other sources download directly
+        into workspace storage.
+      </p>
+      {open ? <GlobusReceivingStorage hostLabel={hostLabel} /> : null}
+    </details>
+  );
+}
+
 /** Receiving storage belongs to the connected host and is reused by every workspace. */
 export function GlobusReceivingStorage({ hostLabel }: { hostLabel: string }) {
   const repository = useRepository();
@@ -42,7 +63,7 @@ export function GlobusReceivingStorage({ hostLabel }: { hostLabel: string }) {
     setDraft({ ...current, [name]: value });
   };
   return (
-    <section className="space-y-3 rounded-lg border p-4" aria-label="Globus receiving storage">
+    <section className="space-y-3 py-4" aria-label="Globus receiving storage">
       <div className="flex items-center gap-3">
         <SourceProviderLogo provider="globus" />
         <div className="min-w-0 flex-1">

@@ -30,7 +30,7 @@ const groups: Array<{ title: string; names: string[] }> = [
   { title: 'Decisions and work', names: ['clio.weather.v1', 'clio.message-draft.v1', 'clio.steps.v1', 'clio.action-card.v1', 'clio.approval.v1', 'clio.workflow.v1'] },
   { title: 'Information', names: ['clio.metric.v1', 'clio.status.v1', 'clio.progress.v1', 'clio.callout.v1', 'clio.artifact.v1', 'clio.code.v1', 'clio.diff.v1', 'clio.mermaid.v1'] },
   { title: 'Controls', names: ['Button', 'CheckBox', 'ChoicePicker', 'DateTimeInput', 'Slider', 'TextField', 'clio.slider.v1'] },
-  { title: 'Layout and media', names: ['Column', 'Divider', 'Frame', 'Grid', 'Icon', 'Image', 'List', 'Modal', 'Row', 'Tabs', 'Text'] },
+  { title: 'Layout and media', names: ['Carousel', 'Column', 'Divider', 'Frame', 'Grid', 'Icon', 'Image', 'List', 'Modal', 'Row', 'Tabs', 'Text', 'Video'] },
 ];
 
 const labels: Record<string, string> = {
@@ -112,6 +112,19 @@ function clioDemo(name: ComponentName, variant: string): DemoComponent[] {
     case 'TextField': return root({ id: 'demo', component: name, label: 'Station note', value: { path: '/demo/note' }, variant: 'longText' });
     case 'Icon': return root({ id: 'demo', component: name, name: 'calendarToday' });
     case 'Image': return root({ id: 'demo', component: name, url: 'artifact://artifact_plot', description: 'Vertical displacement chart', variant: 'mediumFeature' });
+    case 'Video': return root({ id: 'demo', component: name, url: 'artifact://artifact_guide_export', accessibility: { label: 'Export and open a saved conversation' } });
+    case 'Carousel': return [
+      { id: 'root', component: 'Carousel', children: ['find', 'mark', 'watch'], accessibility: { label: 'Find and keep useful messages' } },
+      { id: 'find', component: 'Column', children: ['find-image', 'find-caption'] },
+      { id: 'find-image', component: 'Image', url: 'artifact://artifact_guide_find', description: 'Message rail preview', fit: 'contain', variant: 'largeFeature' },
+      { id: 'find-caption', component: 'Text', text: 'Point to a message in the rail to see its title and context, then open it.' },
+      { id: 'mark', component: 'Column', children: ['mark-image', 'mark-caption'] },
+      { id: 'mark-image', component: 'Image', url: 'artifact://artifact_guide_mark', description: 'Marked messages list', fit: 'contain', variant: 'largeFeature' },
+      { id: 'mark-caption', component: 'Text', text: 'Mark a useful message. Open Marked messages to return to it later.' },
+      { id: 'watch', component: 'Column', children: ['export-video', 'export-caption'] },
+      { id: 'export-video', component: 'Video', url: 'artifact://artifact_guide_export', accessibility: { label: 'Export and open a saved conversation' } },
+      { id: 'export-caption', component: 'Text', text: 'Export the conversation when you need a saved review to share.' },
+    ];
     case 'Tabs': return [
       { id: 'root', component: 'Tabs', tabs: [
         { title: 'Summary', child: 'summary' },

@@ -22,23 +22,19 @@ export function AgentServicesOverview({
   const webSearchUrl = remoteUrlFromSpec(webSearch?.spec);
   const agent = agentIdentity(agentLabel, agentLocation);
   return (
-    <section aria-labelledby="agent-services-title" className="border-y">
-      <header className="flex flex-wrap items-end justify-between gap-3 py-4">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-primary">
-            Connected agent
-          </p>
-          <h2 className="mt-1 text-xl font-semibold" id="agent-services-title">
-            {agent}
-          </h2>
-        </div>
+    <section aria-labelledby="agent-services-title">
+      <header className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+        <span>Connected {vocab.agent} ·</span>
+        <h2 id="agent-services-title" className="font-medium text-foreground">
+          {agent}
+        </h2>
         <InfoTip label={`About the connected ${vocab.agent}`}>
           Services shown here are attached to this {vocab.agent}. Change the {vocab.agent}{' '}
           connection from the top-left menu. The execution host below identifies where a managed
           service runs.
         </InfoTip>
       </header>
-      <div className="divide-y border-t">
+      <div className="divide-y">
         {webSearch?.configured || webSearchConnected ? (
           <ServiceConnectionRow
             action={

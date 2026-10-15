@@ -113,8 +113,13 @@ pub fn remote_shell_command(platform: &str, ready_marker: &str) -> String {
             "powershell -NoLogo -NoProfile -Command \"$env:NO_PROXY = '127.0.0.1,localhost,::1,' + $env:NO_PROXY; Write-Output '{ready_marker}'; while (($line = [Console]::In.ReadLine()) -ne $null) {{ Invoke-Expression $line }}\""
         )
     } else {
+        // An exec'd "sh -s" sees the SSH PTY and starts interactively on macOS,
+        // where readline changes the terminal discipline after our stty setup.
+        // Give the interpreter pipe input so it stays noninteractive on every
+        // POSIX shell, without relying on sourcing the platform's /dev/stdin.
+        // cat leaves the SSH terminal's bounded canonical input unchanged.
         format!(
-            "sh -lc \"stty -echo; no_proxy=127.0.0.1,localhost,::1,\\$no_proxy; NO_PROXY=127.0.0.1,localhost,::1,\\$NO_PROXY; export no_proxy NO_PROXY; printf '{ready_marker}\\n'; exec sh -s\""
+            r#"sh -lc "stty -echo; no_proxy=127.0.0.1,localhost,::1,\$no_proxy; NO_PROXY=127.0.0.1,localhost,::1,\$NO_PROXY; export no_proxy NO_PROXY; printf '{ready_marker}\\n'; cat | sh -s""#
         )
     }
 }
@@ -136,7 +141,47 @@ pub fn validate_command(command: &TransportCommand) -> Result<(), String> {
 }
 
 fn posix_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\\''"))
+    // The SSH PTY may keep canonical input enabled. Bound physical lines,
+    // including escaped quotes, without changing the argument's bytes.
+    let mut quoted = String::from("'");
+    for (index, character) in value.chars().enumerate() {
+        // POSIX only guarantees 255 bytes in a canonical line. A character or
+        // escaped apostrophe costs at most four bytes; leave room for framing.
+        if index > 0 && index % 32 == 0 {
+            quoted.push_str("'\\\n'");
+        }
+        if character == '\'' {
+            quoted.push_str("'\\''");
+        } else {
+            quoted.push(character);
+        }
+    }
+    quoted.push('\'');
+    quoted
+}
+
+/// Feed stdin in bounded writes: manifests must not become one oversized PTY line
+/// or one oversized argv entry to an external printf implementation.
+fn posix_stdin(value: &str) -> String {
+    if value.is_empty() {
+        return String::new();
+    }
+    let mut script = String::from("{\n");
+    let mut start = 0;
+    for (offset, _) in value.char_indices() {
+        if offset - start >= 128 {
+            script.push_str(&format!(
+                "printf %s {}\n",
+                posix_quote(&value[start..offset])
+            ));
+            start = offset;
+        }
+    }
+    script.push_str(&format!(
+        "printf %s {}\n}} | ",
+        posix_quote(&value[start..])
+    ));
+    script
 }
 
 pub fn posix_command(command: &TransportCommand, begin: &str, end: &str) -> String {
@@ -144,12 +189,8 @@ pub fn posix_command(command: &TransportCommand, begin: &str, end: &str) -> Stri
         .chain(command.args.iter().map(String::as_str))
         .map(posix_quote)
         .collect::<Vec<_>>()
-        .join(" ");
-    let stdin = if command.stdin.is_empty() {
-        String::new()
-    } else {
-        format!("printf %s {} | ", posix_quote(&command.stdin))
-    };
+        .join(" \\\n");
+    let stdin = posix_stdin(&command.stdin);
     format!(
         "printf '\\n{begin}\\n'; {stdin}{invocation}; __clio_status=$?; printf '\\n{end}%s\\n' \"$__clio_status\"\n"
     )
@@ -243,7 +284,10 @@ mod tests {
         assert!(posix.contains("NO_PROXY=127.0.0.1,localhost,::1,\\$NO_PROXY"));
         assert!(posix.contains("export no_proxy NO_PROXY"));
         assert!(posix.find("NO_PROXY").unwrap() < posix.find("READY").unwrap());
-        assert!(posix.ends_with("exec sh -s\""));
+        assert!(posix.contains(r#"printf 'READY\\n'"#));
+        assert!(posix.ends_with(r#"; cat | sh -s""#));
+        assert!(!posix.contains(". /dev/stdin"));
+        assert!(!posix.contains("exec sh -s"));
         let windows = remote_shell_command("windows", "READY");
         assert!(windows.contains("$env:NO_PROXY = '127.0.0.1,localhost,::1,'"));
     }
@@ -269,6 +313,112 @@ mod tests {
         let rendered = posix_command(&command, "BEGIN", "END:");
         assert!(rendered.contains("'a'\\''; rm -rf /'"));
         assert!(rendered.contains("END:%s"));
+    }
+
+    #[test]
+    fn posix_wrapper_bounds_large_utf8_arguments_and_stdin_lines() {
+        let command = TransportCommand {
+            program: "python3".into(),
+            args: vec!["-c".into(), "# long controller source\n".repeat(1000)],
+            scope: "target".into(),
+            timeout_seconds: 30.0,
+            stdin: "é𐍈'\"$()`\\\n".repeat(30_000),
+            allowed_exit_codes: vec![0],
+        };
+        let rendered = posix_command(&command, "BEGIN", "END:");
+        assert!(rendered.lines().all(|line| line.len() < 255));
+        assert!(rendered.matches("printf %s ").count() > 100);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn large_input_round_trips_through_a_real_canonical_pty() {
+        use portable_pty::CommandBuilder;
+        use sha2::{Digest, Sha256};
+        use std::io::{Read, Write};
+        use std::time::{Duration, Instant};
+
+        // Keep canonical mode enabled, exactly as the production SSH shell does.
+        // A single large line used to be silently truncated before sh could parse it.
+        let payload = "é𐍈'\"$()`\\\n".repeat(30_000);
+        let argument = "literal-'$()𐍈".repeat(1000);
+        let mut hash = Sha256::new();
+        hash.update(payload.as_bytes());
+        hash.update(argument.as_bytes());
+        let expected = format!("{:x}", hash.finalize());
+        let command = TransportCommand {
+            program: "python3".into(),
+            args: vec!["-c".into(), "import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()+sys.argv[1].encode()).hexdigest())".into(), argument],
+            scope: "target".into(),
+            timeout_seconds: 30.0,
+            stdin: payload,
+            allowed_exit_codes: vec![0],
+        };
+        let mut shell = CommandBuilder::new("sh");
+        shell.arg("-c");
+        shell.arg(remote_shell_command("linux", "__READY__"));
+        let mut spawned =
+            crate::terminal_pty::spawn_command(&std::env::current_dir().unwrap(), 100, 30, shell)
+                .unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let mut reader = spawned.reader;
+        std::thread::spawn(move || {
+            let mut bytes = [0_u8; 4096];
+            while let Ok(count) = reader.read(&mut bytes) {
+                if count == 0 || sender.send(bytes[..count].to_vec()).is_err() {
+                    break;
+                }
+            }
+        });
+        let mut output = String::new();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let mut sent = false;
+        while Instant::now() < deadline {
+            if let Ok(chunk) = receiver.recv_timeout(Duration::from_millis(50)) {
+                output.push_str(&String::from_utf8_lossy(&chunk));
+            }
+            if !sent && output.contains("__READY__") {
+                if let Err(error) = spawned
+                    .writer
+                    .write_all(posix_command(&command, "BEGIN", "END:").as_bytes())
+                {
+                    let _ = spawned.child.kill();
+                    let _ = spawned.child.wait();
+                    panic!("real PTY input failed: {error}; shell output: {output}");
+                }
+                sent = true;
+            }
+            if output.contains("END:0") {
+                break;
+            }
+        }
+        let _ = spawned.child.kill();
+        let _ = spawned.child.wait();
+        assert!(sent, "real PTY shell never became ready");
+        assert!(
+            output.contains(&expected),
+            "argument/stdin bytes did not survive the PTY; output tail: {}",
+            output
+                .chars()
+                .rev()
+                .take(4000)
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect::<String>()
+        );
+        assert!(
+            output.contains("END:0"),
+            "command did not complete successfully; output tail: {}",
+            output
+                .chars()
+                .rev()
+                .take(4000)
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect::<String>()
+        );
     }
 
     #[test]

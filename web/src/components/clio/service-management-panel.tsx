@@ -3,7 +3,7 @@ import type {
   ManagedServiceDefinition,
   ServiceActionInput,
 } from '@clio/core/v3';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -53,6 +53,7 @@ export function ManagedServiceCard({
   onAction,
   onCancel,
   onConfiguration,
+  onResetConfiguration,
   onVariant,
   operation,
   progress,
@@ -71,6 +72,7 @@ export function ManagedServiceCard({
     label: string;
     onSelect?: () => void;
     pending?: boolean;
+    connected?: boolean;
     to?: string;
   };
   connectionStatus?: ReactNode;
@@ -78,6 +80,7 @@ export function ManagedServiceCard({
   onAction: (action: ServiceAction, options?: ServiceActionOptions) => void;
   onCancel?: () => void;
   onConfiguration: (field: string, value: string) => void;
+  onResetConfiguration?: () => void;
   onVariant: (value: string) => void;
   /** The running operation, when CLIO reported one: its live progress is shown. */
   operation?: { id: string; initial?: InfrastructureOperation };
@@ -114,13 +117,32 @@ export function ManagedServiceCard({
   const fields = service.configuration_fields.filter(
     (field) => !field.variants?.length || field.variants.includes(variant),
   );
-  const missing = fields.some((field) => field.required && !configuration[field.id]?.trim());
+  const modelProblem =
+    service.id === 'llama_cpp'
+      ? variant === 'native-windows-cpu'
+        ? !configuration.model_path?.trim()
+          ? 'Choose a GGUF model file on this computer.'
+          : undefined
+        : Boolean(configuration.model_path?.trim()) === Boolean(configuration.hf_model?.trim())
+          ? 'Choose either a GGUF file or a Hugging Face model.'
+          : undefined
+      : undefined;
+  const missing =
+    fields.some((field) => field.required && !configuration[field.id]?.trim()) ||
+    Boolean(modelProblem);
   const activeTab = tab ?? localTab;
+  const editing = setup || (!installed && !recorded);
+  const loadedLogs = useRef(false);
+  useEffect(() => {
+    if (!editing && activeTab === 'logs' && !activeAction && !loadedLogs.current) {
+      loadedLogs.current = true;
+      onAction('logs');
+    }
+  }, [editing, activeTab, activeAction, onAction]);
   const selectTab = (value: string) => {
     setLocalTab(value);
     onTab?.(value);
   };
-  const editing = setup || (!installed && !recorded);
   const changed = Object.entries(configuration).some(
     ([key, value]) => value !== (service.configuration[key] ?? ''),
   );
@@ -154,7 +176,8 @@ export function ManagedServiceCard({
       disabled={
         Boolean(activeAction) ||
         (!compatible && ['install', 'reinstall', 'start'].includes(action)) ||
-        (missing && ['install', 'reinstall'].includes(action))
+        (missing &&
+          (['install', 'reinstall'].includes(action) || (action === 'start' && !installed)))
       }
       onClick={() =>
         ['uninstall', 'delete_data', 'reinstall'].includes(action)
@@ -198,13 +221,16 @@ export function ManagedServiceCard({
       </header>
       {editing ? (
         <>
-          {form}
           {!compatible ? (
             <p role="status" className="text-sm text-destructive">
               Not available on this target.{' '}
               {service.variants.find((row) => row.id === variant)?.reason ||
                 service.variants[0]?.reason}
             </p>
+          ) : null}
+          {compatible ? form : null}
+          {compatible && modelProblem ? (
+            <p className="text-sm text-muted-foreground">{modelProblem}</p>
           ) : null}
           <div className="flex gap-2">{act('install')}</div>
         </>
@@ -279,7 +305,19 @@ export function ManagedServiceCard({
                   afterward. Keep using the existing configuration until you apply your edits.
                 </InfoTip>
                 {changed ? (
-                  <span className="text-xs text-muted-foreground">Unapplied changes</span>
+                  <>
+                    <span className="text-xs text-muted-foreground">Unapplied changes</span>
+                    {onResetConfiguration ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={Boolean(activeAction)}
+                        onClick={onResetConfiguration}
+                      >
+                        Discard changes
+                      </Button>
+                    ) : null}
+                  </>
                 ) : null}
               </div>
             ) : (
@@ -291,7 +329,14 @@ export function ManagedServiceCard({
             />
           </TabsContent>
           <TabsContent value="logs" className="space-y-3 pt-3">
-            {act('logs')}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={Boolean(activeAction)}
+              onClick={() => onAction('logs')}
+            >
+              {activeAction === 'logs' ? 'Refreshing…' : 'Refresh logs'}
+            </Button>
             {result?.action === 'logs' ? (
               <section aria-label={`${service.label} recent logs`} className="rounded-lg border">
                 <p className="border-b p-3 text-xs font-medium">Recent logs</p>
@@ -303,7 +348,9 @@ export function ManagedServiceCard({
                 </pre>
               </section>
             ) : (
-              <p className="text-sm text-muted-foreground">Load recent logs from {hostLabel}.</p>
+              <p className="text-sm text-muted-foreground" role="status">
+                Reading recent logs from {hostLabel}…
+              </p>
             )}
           </TabsContent>
           <TabsContent value="storage" className="space-y-4 pt-3">
@@ -422,21 +469,21 @@ export function ManagedServiceCard({
               {fromScratch
                 ? `Reinstall ${service.label} from scratch?`
                 : confirmation === 'delete_data'
-                ? `Delete retained ${service.label} data?`
-                : confirmation === 'reinstall'
-                  ? `Apply ${service.label} configuration?`
-                  : `Remove ${service.label} runtime?`}
+                  ? `Delete retained ${service.label} data?`
+                  : confirmation === 'reinstall'
+                    ? `Apply ${service.label} configuration?`
+                    : `Remove ${service.label} runtime?`}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {fromScratch
                 ? 'This installs again without reusing anything already on the host: images are pulled, environments rebuilt and models downloaded again. It can take much longer.'
                 : confirmation === 'delete_data'
-                ? 'This permanently deletes this deployment’s databases, environment cache, logs and captured evidence. Separately downloaded models are retained.'
-                : confirmation === 'reinstall'
-                  ? 'This stops and reinstalls the runtime on the selected host. Existing verification expires; run Verify setup again afterward.'
-                  : retainsData
-                    ? 'Stop and remove the runtime, retaining its databases, models, logs and evidence.'
-                    : 'Stop and remove this deployment and the resources listed under Storage.'}
+                  ? 'This permanently deletes this deployment’s databases, environment cache, logs and captured evidence. Separately downloaded models are retained.'
+                  : confirmation === 'reinstall'
+                    ? 'This stops and reinstalls the runtime on the selected host. Existing verification expires; run Verify setup again afterward.'
+                    : retainsData
+                      ? 'Stop and remove the runtime, retaining its databases, models, logs and evidence.'
+                      : 'Stop and remove this deployment and the resources listed under Storage.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {fromScratch || confirmation === 'reinstall' ? (

@@ -15,6 +15,9 @@ UI aren't tracked.
 
 ### Fixed
 
+- Saving a long access token (for example a JWT personal access token) no longer fails with
+  "Secure credential storage is unavailable" on Windows. Secrets over the Credential
+  Manager size limit are split across several entries and reassembled when read.
 - Windows installation explicitly requests backend protected execution setup,
   allowing a visible one-time administrator approval when the backend needs the
   legacy sandbox. Ordinary startup does not request account creation. Managed

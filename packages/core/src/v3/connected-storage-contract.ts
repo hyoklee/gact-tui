@@ -102,6 +102,7 @@ export interface CreateSourceInput {
   label: string;
   root: string;
   mode: SourceMode;
+  create_vault?: boolean;
   configuration?: Partial<z.infer<typeof sourceConfigurationSchema>>;
   sftp_credentials?: SftpCredentials;
 }

@@ -63,6 +63,7 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
   injectionMessages,
   injectionsGrouped = false,
   active = false,
+  liveActivityId,
   responseContinued = false,
   responseContinuation = false,
   turnPresentation,
@@ -398,6 +399,9 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({
                       ) : (
                         <div key={segment.iterations[0]?.id}>
                           <ConversationTurn
+                            followLiveActivity={segment.iterations.some(
+                              (iteration) => iteration.id === liveActivityId,
+                            )}
                             activeMcpAppId={entities.activeMcpAppId}
                             answerStarted={answerStarted}
                             artifacts={entities.artifacts}
@@ -560,6 +564,7 @@ export function conversationMessageRowPropsEqual(
   if (
     left.message !== right.message ||
     left.active !== right.active ||
+    left.liveActivityId !== right.liveActivityId ||
     left.responseContinued !== right.responseContinued ||
     left.responseContinuation !== right.responseContinuation ||
     left.turnPresentation !== right.turnPresentation ||

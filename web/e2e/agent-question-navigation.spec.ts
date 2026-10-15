@@ -4,6 +4,11 @@ const endpoint = `http://127.0.0.1:${process.env['CLIO_FIXTURE_PORT'] ?? '18799'
 const prompt =
   'What do the treatment labels represent, and which units should be used? Until confirmed, I will compare the recorded categories without assigning a numeric dose.';
 
+test.afterEach(async ({ page }) => {
+  // Finish polling response handlers before Playwright disposes their request context.
+  await page.unrouteAll({ behavior: 'wait' });
+});
+
 for (const theme of ['light', 'dark'] as const) {
   test(`${theme}: open questions remain reachable above the composer and link to their source`, async ({
     page,

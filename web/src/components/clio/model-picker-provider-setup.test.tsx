@@ -438,7 +438,8 @@ describe('ClioModelPicker: a provider that is not usable yet', () => {
           'Your ALCF session needs to be verified again. Sign in again to continue.',
       },
     ]);
-    await user.click(screen.getByText('ALCF Sophia'));
+    await user.click(screen.getByText('ALCF inference'));
+    await user.click(screen.getByText('Sophia', { selector: 'span' }));
 
     expect(await screen.findByRole('button', { name: 'Sign in again' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Log in' })).toBeNull();
@@ -480,7 +481,8 @@ describe('ClioModelPicker: a provider that is not usable yet', () => {
           'Your ALCF session needs to be verified again. Sign in again to continue.',
       },
     ]);
-    await user.click(screen.getByText('ALCF Metis'));
+    await user.click(screen.getByText('ALCF inference'));
+    await user.click(screen.getByText('Metis', { selector: 'span' }));
 
     expect(await screen.findByRole('button', { name: 'Sign in again' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull();

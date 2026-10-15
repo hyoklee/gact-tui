@@ -52,6 +52,12 @@ export default defineConfig({
                   transcriptReview: fileURLToPath(
                     new URL('./tests/review/transcript-text-flow.html', import.meta.url),
                   ),
+                  liveActivityReview: fileURLToPath(
+                    new URL('./tests/review/live-activity.html', import.meta.url),
+                  ),
+                  standardMathReview: fileURLToPath(
+                    new URL('./tests/review/standard-math.html', import.meta.url),
+                  ),
                 }
               : {}),
           },

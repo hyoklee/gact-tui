@@ -85,9 +85,9 @@ function mount(phase: 'stopped' | 'not_installed') {
 describe('native service lifecycle', () => {
   it('keeps installed, serving and capture verification distinct', async () => {
     mount('stopped');
-    expect(screen.getByText('Installed · stopped')).toBeVisible();
+    expect(screen.getByText('Stopped')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled();
-    expect(screen.queryByText('Serving')).not.toBeInTheDocument();
+    expect(screen.queryByText('Running')).not.toBeInTheDocument();
     await userEvent.click(screen.getByText('Deployment receipt'));
     expect(screen.getByText('Not verified')).toBeVisible();
     await userEvent.click(screen.getByRole('button', { name: 'About attention verification' }));

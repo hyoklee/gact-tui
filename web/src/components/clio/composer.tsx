@@ -7,7 +7,6 @@ import type {
   WorkspaceReference,
   WorkspaceResource,
 } from '@clio/core/v3';
-import { CornerDownRightIcon } from 'lucide-react';
 import {
   useCallback,
   useEffect,
@@ -23,17 +22,16 @@ import { brand } from '@brand';
 import { ModelSelectorLogo } from '@/components/ai-elements/model-selector';
 import {
   PromptInput,
-  PromptInputButton,
   PromptInputCommand,
   PromptInputCommandEmpty,
   PromptInputCommandGroup,
   PromptInputCommandItem,
   PromptInputCommandList,
   PromptInputFooter,
-  PromptInputSubmit,
   PromptInputTools,
 } from '@/components/ai-elements/prompt-input';
-import { ClioStatus } from './status';
+import { ComposerSubmitControls } from './composer-submit-controls';
+import { composerDelivery } from '@/hooks/use-composer-delivery';
 import { ClioModelPicker } from './model-picker';
 import { useComposerModelSelection } from './use-composer-model-selection';
 import { useSpotterAvailability } from '@/hooks/use-spotter-availability';
@@ -149,13 +147,6 @@ export interface ClioComposerProps extends ComposerQueueControls {
   onAnnotationsChange?: (annotations: readonly ComposerAnnotation[]) => void;
   focusRequestKey?: number;
   variant?: 'docked' | 'welcome';
-}
-
-function chatStatus(state: RunState): 'ready' | 'submitted' | 'streaming' | 'error' {
-  if (state === 'queued') return 'submitted';
-  if (state === 'running') return 'streaming';
-  if (state === 'failed') return 'error';
-  return 'ready';
 }
 
 export function ClioComposer({
@@ -296,7 +287,7 @@ export function ClioComposer({
   // The attachment in flight when a submit is rejected; the progress state is
   // cleared on the way out, so the name is kept separately.
   const uploadingFilenameRef = useRef<string>(undefined);
-  const nextDeliveryRef = useRef<MessageDelivery>(state === 'running' ? 'steer' : 'start');
+  const nextDeliveryRef = useRef<MessageDelivery | 'queued' | undefined>(undefined);
   const [internalInput, setInternalInput] = useState('');
   const input = value ?? internalInput;
   const latestInputRef = useRef(input);
@@ -582,7 +573,7 @@ export function ClioComposer({
             try {
               await onSubmit({
                 behavior: messageBehavior,
-                delivery: state === 'running' ? nextDeliveryRef.current : 'start',
+                delivery: state === 'running' ? (nextDeliveryRef.current ?? 'queued') : 'start',
                 files,
                 references: selectedReferences.map(({ reference }) => toMessagePart(reference)),
                 text: messageTextWithAnnotations(annotations, trimmed),
@@ -610,7 +601,7 @@ export function ClioComposer({
               setUploadProgress(undefined);
               restoreInputFocusWhenReady();
             }
-            nextDeliveryRef.current = state === 'running' ? 'steer' : 'start';
+            nextDeliveryRef.current = undefined;
             await sourceAttachments.keep();
             if (latestInputRef.current.trim() === trimmed) setInput('');
             setSelectedReferences([]);
@@ -670,7 +661,7 @@ export function ClioComposer({
             const form = event.currentTarget.closest('form');
             const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
             if (submit?.disabled) return;
-            nextDeliveryRef.current = state === 'running' ? 'steer' : 'start';
+            nextDeliveryRef.current = composerDelivery(state, event.ctrlKey || event.metaKey);
             form?.requestSubmit();
           }}
         />
@@ -759,35 +750,16 @@ export function ClioComposer({
                 Preparing views…
               </span>
             ) : null}
-            {state === 'running' ? (
-              <PromptInputButton
-                aria-label="Steer current work"
-                className="gap-1.5 border-action/40 text-action hover:bg-action/10 hover:text-action"
-                disabled={
-                  disabled ||
-                  connectedSources.pending ||
-                  (!input.trim() && selectedReferences.length === 0)
-                }
-                onClick={() => {
-                  nextDeliveryRef.current = 'steer';
-                }}
-                title="Send feedback before the next model iteration"
-                type="submit"
-                variant="outline"
-              >
-                <CornerDownRightIcon aria-hidden="true" />
-                <span className="hidden sm:inline">Steer</span>
-              </PromptInputButton>
-            ) : state === 'waiting_permission' || state === 'waiting_user' ? (
-              <ClioStatus value={state} />
-            ) : null}
-            <PromptInputSubmit
+            <ComposerSubmitControls
+              state={state}
+              hasContent={Boolean(input.trim() || selectedReferences.length || annotations.length)}
               disabled={
-                ((disabled || catalogPreparing) && state !== 'running') ||
-                (connectedSources.pending && state !== 'running')
+                disabled || (catalogPreparing && state !== 'running') || connectedSources.pending
               }
+              onSubmit={(event) => {
+                nextDeliveryRef.current = composerDelivery(state, event.ctrlKey || event.metaKey);
+              }}
               onStop={onStop}
-              status={chatStatus(state)}
             />
           </div>
         </PromptInputFooter>

@@ -85,7 +85,9 @@ export function ClioPendingInteractions({
     (interaction) =>
       interaction.status === 'pending' && interaction.requires_human_response !== false,
   );
-  const hasInteractiveSurface = pending.some((interaction) => interaction.kind === 'a2ui');
+  const hasInteractiveSurface = pending.some(
+    (interaction) => interaction.kind === 'a2ui' || Boolean(interaction.source.surface_id),
+  );
   const handleResponse = useCallback(
     async (interaction: PendingInteraction, response: PendingInteractionResponse) => {
       if (responseInFlight.current.has(interaction.id)) return;
@@ -113,12 +115,8 @@ export function ClioPendingInteractions({
     <Queue
       aria-label="Agent needs your response"
       aria-live="polite"
-      // No background of its own: this panel floats over the conversation
-      // stacked directly on the composer, and the two read as one surface only
-      // while it keeps the Queue's translucent bg-card/70 (dark: /60) — the
-      // exact tone the composer gives its input group. An opaque fill here also
-      // cancels the backdrop blur that makes the float legible.
-      className="relative z-10 mx-auto -mb-px min-h-0 w-[calc(100%_-_1.5rem)] max-w-[54.5rem] shrink rounded-b-none border-b-0 py-0.5"
+      // Match the queue and composer, including the rounded outer boundary.
+      className="relative z-10 mx-auto -mb-px min-h-0 w-[calc(100%_-_1.5rem)] max-w-[54.5rem] shrink overflow-hidden rounded-b-none border-b-0 border-composer-border bg-composer py-0.5 shadow-none backdrop-blur-none dark:bg-composer dark:shadow-none"
       role="region"
     >
       {/* Open by default: the agent is blocked until one of these controls is used,
@@ -129,22 +127,22 @@ export function ClioPendingInteractions({
           <QueueSectionLabel
             count={pending.length || undefined}
             icon={<MessageCircleQuestionIcon aria-hidden="true" className="size-3.5" />}
-            label={pending.length === 0 ? 'Response status' : pending.length === 1 ? 'response needed' : 'responses needed'}
+            label={
+              pending.length === 0
+                ? 'Response status'
+                : pending.length === 1
+                  ? 'response needed'
+                  : 'responses needed'
+            }
           />
         </QueueSectionTrigger>
         <QueueSectionContent className="flex min-h-0 flex-col">
           <ScrollArea
             className={cn(
               'min-h-0 w-full shrink [&_[data-orientation=vertical]]:w-1.5 [&_[data-slot=scroll-area-scrollbar]]:opacity-50',
-              // An interactive surface's own viewport can grow to 85dvh
-              // (a2ui-response-viewport-resize.ts's MAX_VIEWPORT_HEIGHT_RATIO)
-              // plus its header/controls row; the tray's own cap must clear
-              // that whole card, or the card scrolls a second time inside a
-              // tray that still has room. +3rem covers the header, corner
-              // handle, and card padding above/around the viewport itself.
-              // A dvh-based cap tracks a window resize automatically — no JS
-              // re-clamp needed.
-              hasInteractiveSurface ? 'max-h-[calc(85dvh+3rem)]' : 'max-h-[min(22rem,40dvh)]',
+              // Reserve room for the composer rather than allowing a tall
+              // visual to push its controls beyond the conversation viewport.
+              hasInteractiveSurface ? 'max-h-[calc(100dvh-12rem)]' : 'max-h-[min(22rem,40dvh)]',
             )}
             scrollHideDelay={500}
             type="hover"

@@ -21,6 +21,13 @@ export interface SandboxStatus extends ServiceIntegrationHealth {
   setup_in_progress: boolean;
   /** Where the connected service found its Codex binary, or `undefined` when it found none. */
   codex_source?: 'bundled' | 'path';
+  /** Service-owned progress survives leaving the setup page. */
+  setup_progress?: {
+    status: string;
+    detail: string;
+    started_at: string;
+    elapsed_seconds: number;
+  };
 }
 
 /**

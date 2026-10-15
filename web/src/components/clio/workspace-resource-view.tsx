@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   BracesIcon,
   EyeIcon,
+  FileCode2Icon,
   FilesIcon,
   GitBranchIcon,
   FileInputIcon,
@@ -48,6 +49,7 @@ import { ResourceLoading, ResourceUnavailable } from './resource-states';
 import { ImageResourceView, TextResourceView } from './resource-viewers';
 import { WorkspaceResourceDerivativesView } from './workspace-resource-derivatives';
 import { FileViewerShell } from './file-viewer-shell';
+import { isHtmlFile } from './html-preview-policy';
 import { AttachmentPreviewCarousel } from './attachment-preview-carousel';
 
 interface WorkspaceResourceViewProps {
@@ -142,7 +144,10 @@ export function WorkspaceResourceView({ resource, workspaceId }: WorkspaceResour
   const repository = useRepository();
   const { settings } = useConnectionSettings();
   const endpoint = settings.endpoint;
+  const html =
+    isTextMediaType(resource.detected_mime) && isHtmlFile(resource.name, resource.detected_mime);
   const [activeTab, setActiveTab] = useState('preview');
+  const selectedTab = activeTab === 'source' && !html ? 'preview' : activeTab;
   const preview = useQuery({
     queryKey: queryKeys.workspaceResourcePreview(
       endpoint,
@@ -194,7 +199,7 @@ export function WorkspaceResourceView({ resource, workspaceId }: WorkspaceResour
       <FileViewerShell
         source={{ kind: 'resource', resource, workspaceId }}
         label="Resource views"
-        value={activeTab}
+        value={selectedTab}
         onValueChange={setActiveTab}
         tabs={[
           {
@@ -207,9 +212,28 @@ export function WorkspaceResourceView({ resource, workspaceId }: WorkspaceResour
                 bytes={preview.data}
                 error={preview.error?.message}
                 resource={resource}
+                htmlView={html ? 'preview' : undefined}
               />
             ),
           },
+          ...(html
+            ? [
+                {
+                  value: 'source',
+                  label: 'Source',
+                  icon: FileCode2Icon,
+                  title: 'Read the original HTML source',
+                  content: (
+                    <ResourcePreview
+                      bytes={preview.data}
+                      error={preview.error?.message}
+                      resource={resource}
+                      htmlView="source"
+                    />
+                  ),
+                },
+              ]
+            : []),
           {
             value: 'structure',
             label: 'Structure',
@@ -266,10 +290,12 @@ function ResourcePreview({
   bytes,
   error,
   resource,
+  htmlView,
 }: {
   bytes?: Uint8Array;
   error?: string;
   resource: WorkspaceResource;
+  htmlView?: 'preview' | 'source';
 }) {
   if (resource.state === 'uploading') {
     const progress = resource.declared_size
@@ -317,6 +343,7 @@ function ResourcePreview({
         error={error}
         path={resource.name}
         mediaType={resource.detected_mime}
+        htmlView={htmlView}
       />
     );
   }

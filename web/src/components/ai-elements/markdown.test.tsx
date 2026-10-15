@@ -8,6 +8,8 @@ vi.mock('@/tauri/external-url', () => ({ openExternalUrl: mocks.openExternalUrl 
 vi.mock('@/lib/transport/tauri-runtime', () => ({ inTauri: () => true }));
 
 vi.mock('streamdown', () => ({
+  defaultRemarkPlugins: {},
+  parseMarkdownIntoBlocks: (content: string) => [content],
   // A thin stand-in for the real renderer: it still resolves `components.a`
   // the same way Streamdown does, so a test can prove links render through
   // whatever component MarkdownText passes, not just that a prop is set.

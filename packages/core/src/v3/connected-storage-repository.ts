@@ -18,6 +18,7 @@ import {
   knowledgeGraphSnapshotSchema,
   knowledgeOpenSchema,
   knowledgeSyncSchema,
+  obsidianStatusSchema,
 } from './knowledge-contract.js';
 
 const root = (workspaceId: string) => `/v1/workspaces/${encodeURIComponent(workspaceId)}/sources`;
@@ -33,6 +34,54 @@ const storageSignInSchema = z.object({
 
 /** Trusted setup and approved data on the connected CLIO, never the desktop implicitly. */
 export class ConnectedStorageRepository extends A2uiRepository {
+  /** Account setup never attaches or grants access to workspace notes. */
+  public obsidianStatus(signal?: AbortSignal) {
+    return this.transport.request({
+      method: 'GET',
+      path: '/v1/storage/obsidian',
+      signal,
+      decode: (value) => obsidianStatusSchema.parse(value),
+    });
+  }
+  public installObsidian() {
+    return this.transport.request({
+      method: 'POST',
+      path: '/v1/storage/obsidian/install',
+      decode: (value) => obsidianStatusSchema.parse(value),
+    });
+  }
+  public signInObsidian(input: { email: string; password: string; mfa?: string }) {
+    return this.transport.request({
+      method: 'POST',
+      path: '/v1/storage/obsidian/login',
+      body: input,
+      decode: (value) => obsidianStatusSchema.parse(value),
+    });
+  }
+  public signOutObsidian() {
+    return this.transport.request({
+      method: 'POST',
+      path: '/v1/storage/obsidian/logout',
+      decode: (value) => obsidianStatusSchema.parse(value),
+    });
+  }
+  public obsidianVaults(signal?: AbortSignal) {
+    return this.transport.request({
+      method: 'GET',
+      path: '/v1/storage/obsidian/vaults',
+      signal,
+      decode: (value) =>
+        z.object({ vaults: z.array(z.object({ id: z.string(), name: z.string() })) }).parse(value),
+    });
+  }
+  public setupObsidianVault(vault_id: string, password?: string) {
+    return this.transport.request({
+      method: 'POST',
+      path: '/v1/storage/obsidian/setup',
+      body: { vault_id, password },
+      decode: (value) => z.object({ root: z.string() }).parse(value),
+    });
+  }
   /** Full topology crosses file pages, while note bytes remain on demand. */
   public knowledgeGraph(
     workspaceId: string,

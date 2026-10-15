@@ -665,11 +665,13 @@ describe('ClioComposer service commands', () => {
 
     expect(input).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Stop' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Steer current work' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Queue message' })).toBeDisabled();
     expect(screen.queryByText('Working')).not.toBeInTheDocument();
 
     await user.type(input, 'Prioritize the provenance gap.');
+    await user.keyboard('{Control>}');
     await user.click(screen.getByRole('button', { name: 'Steer current work' }));
+    await user.keyboard('{/Control}');
 
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ text: 'Prioritize the provenance gap.' }),
@@ -677,7 +679,7 @@ describe('ClioComposer service commands', () => {
     expect(onStop).not.toHaveBeenCalled();
   });
 
-  it('steers Enter, Ctrl+Enter and Cmd+Enter into the running turn', async () => {
+  it('queues Enter and steers Ctrl+Enter and Cmd+Enter into the running turn', async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderComposer({ state: 'running' });
     const input = composerEditor();
@@ -686,7 +688,7 @@ describe('ClioComposer service commands', () => {
     await waitFor(() =>
       expect(onSubmit).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          delivery: 'steer',
+          delivery: 'queued',
           text: 'Review the second station.',
         }),
       ),
@@ -749,7 +751,7 @@ describe('ClioComposer service commands', () => {
     const view = render(renderState('running'));
     const input = composerEditor();
 
-    await user.type(input, 'Use this feedback while running.{Enter}');
+    await user.type(input, 'Use this feedback while running.{Control>}{Enter}{/Control}');
     await waitFor(() =>
       expect(onSubmit).toHaveBeenLastCalledWith(
         expect.objectContaining({ delivery: 'steer', text: 'Use this feedback while running.' }),

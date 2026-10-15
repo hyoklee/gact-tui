@@ -25,10 +25,13 @@ Var ClioProviderLlamaCppCheckbox
 Var ClioProviderVllmCheckbox
 Var ClioProviderArgonneSophiaCheckbox
 Var ClioProviderArgonneMetisCheckbox
+Var ClioProviderArgonneMinervaCheckbox
+Var ClioProviderArgonneTaraCheckbox
 Var ClioProviderAzureOpenAICheckbox
 Var ClioProviderBedrockCheckbox
 Var ClioProviderNvidiaNimCheckbox
 Var ClioProviderOpenRouterCheckbox
+Var ClioProviderAmscMagCheckbox
 ; Remembered checked/unchecked state ("0"/"1") per provider, so the page
 ; restores the user's previous selection instead of resetting to hardcoded
 ; defaults whenever the wizard revisits it (Back then Next). Vars start empty,
@@ -46,10 +49,13 @@ Var ClioProviderLlamaCppChecked
 Var ClioProviderVllmChecked
 Var ClioProviderArgonneSophiaChecked
 Var ClioProviderArgonneMetisChecked
+Var ClioProviderArgonneMinervaChecked
+Var ClioProviderArgonneTaraChecked
 Var ClioProviderAzureOpenAIChecked
 Var ClioProviderBedrockChecked
 Var ClioProviderNvidiaNimChecked
 Var ClioProviderOpenRouterChecked
+Var ClioProviderAmscMagChecked
 Var ClioInstallWebSearch
 Var ClioInstallLlamaCpp
 Var ClioWebSearchStatus
@@ -120,7 +126,7 @@ Function ClioInfrastructurePage
   ${NSD_CreateLabel} 0 0 100% 24u "Choose the optional services CLIO should prepare. You can install or remove them later from Infrastructure."
   Pop $1
 
-  ${NSD_CreateCheckbox} 0 30u 100% 12u "CLIO Search (web search and PDF reading, runs in Docker)"
+  ${NSD_CreateCheckbox} 0 30u 100% 12u "CLIO Search (native web search, no Docker required)"
   Pop $ClioWebSearchCheckbox
   ${NSD_Check} $ClioWebSearchCheckbox
 
@@ -192,10 +198,13 @@ FunctionEnd
   !insertmacro CLIO_REMEMBER_PROVIDER_CHECKBOX $ClioProviderVllmCheckbox $ClioProviderVllmChecked
   !insertmacro CLIO_REMEMBER_PROVIDER_CHECKBOX $ClioProviderArgonneSophiaCheckbox $ClioProviderArgonneSophiaChecked
   !insertmacro CLIO_REMEMBER_PROVIDER_CHECKBOX $ClioProviderArgonneMetisCheckbox $ClioProviderArgonneMetisChecked
+  !insertmacro CLIO_REMEMBER_PROVIDER_CHECKBOX $ClioProviderArgonneMinervaCheckbox $ClioProviderArgonneMinervaChecked
+  !insertmacro CLIO_REMEMBER_PROVIDER_CHECKBOX $ClioProviderArgonneTaraCheckbox $ClioProviderArgonneTaraChecked
   !insertmacro CLIO_REMEMBER_PROVIDER_CHECKBOX $ClioProviderAzureOpenAICheckbox $ClioProviderAzureOpenAIChecked
   !insertmacro CLIO_REMEMBER_PROVIDER_CHECKBOX $ClioProviderBedrockCheckbox $ClioProviderBedrockChecked
   !insertmacro CLIO_REMEMBER_PROVIDER_CHECKBOX $ClioProviderNvidiaNimCheckbox $ClioProviderNvidiaNimChecked
   !insertmacro CLIO_REMEMBER_PROVIDER_CHECKBOX $ClioProviderOpenRouterCheckbox $ClioProviderOpenRouterChecked
+  !insertmacro CLIO_REMEMBER_PROVIDER_CHECKBOX $ClioProviderAmscMagCheckbox $ClioProviderAmscMagChecked
 !macroend
 
 ; nsDialogs only invokes a custom page's Leave function (ClioProvidersPageLeave
@@ -232,10 +241,13 @@ Function ClioProvidersSyncNext
   !insertmacro CLIO_COUNT_PROVIDER_IF_CHECKED $ClioProviderVllmCheckbox
   !insertmacro CLIO_COUNT_PROVIDER_IF_CHECKED $ClioProviderArgonneSophiaCheckbox
   !insertmacro CLIO_COUNT_PROVIDER_IF_CHECKED $ClioProviderArgonneMetisCheckbox
+  !insertmacro CLIO_COUNT_PROVIDER_IF_CHECKED $ClioProviderArgonneMinervaCheckbox
+  !insertmacro CLIO_COUNT_PROVIDER_IF_CHECKED $ClioProviderArgonneTaraCheckbox
   !insertmacro CLIO_COUNT_PROVIDER_IF_CHECKED $ClioProviderAzureOpenAICheckbox
   !insertmacro CLIO_COUNT_PROVIDER_IF_CHECKED $ClioProviderBedrockCheckbox
   !insertmacro CLIO_COUNT_PROVIDER_IF_CHECKED $ClioProviderNvidiaNimCheckbox
   !insertmacro CLIO_COUNT_PROVIDER_IF_CHECKED $ClioProviderOpenRouterCheckbox
+  !insertmacro CLIO_COUNT_PROVIDER_IF_CHECKED $ClioProviderAmscMagCheckbox
   GetDlgItem $R1 $HWNDPARENT 1
   EnableWindow $R1 $R0
 FunctionEnd
@@ -353,17 +365,32 @@ Function ClioProvidersPage
   !insertmacro CLIO_RESTORE_PROVIDER_CHECKBOX $ClioProviderVllmCheckbox $ClioProviderVllmChecked
   ${NSD_OnClick} $ClioProviderVllmCheckbox ClioProvidersOnToggle
 
-  ${NSD_CreateLabel} 34% 92u 31% 12u "Argonne ALCF"
+  ${NSD_CreateLabel} 34% 90u 31% 12u "Argonne ALCF"
   Pop $1
   SendMessage $1 ${WM_SETFONT} $ClioProvidersHeadingFont 0
-  ${NSD_CreateCheckbox} 34% 106u 31% 12u "Sophia"
+  ${NSD_CreateCheckbox} 34% 104u 15% 12u "Sophia"
   Pop $ClioProviderArgonneSophiaCheckbox
   !insertmacro CLIO_RESTORE_PROVIDER_CHECKBOX $ClioProviderArgonneSophiaCheckbox $ClioProviderArgonneSophiaChecked
   ${NSD_OnClick} $ClioProviderArgonneSophiaCheckbox ClioProvidersOnToggle
-  ${NSD_CreateCheckbox} 34% 120u 31% 12u "Metis"
+  ${NSD_CreateCheckbox} 50% 104u 15% 12u "Metis"
   Pop $ClioProviderArgonneMetisCheckbox
   !insertmacro CLIO_RESTORE_PROVIDER_CHECKBOX $ClioProviderArgonneMetisCheckbox $ClioProviderArgonneMetisChecked
   ${NSD_OnClick} $ClioProviderArgonneMetisCheckbox ClioProvidersOnToggle
+
+  ${NSD_CreateCheckbox} 34% 118u 15% 12u "Minerva"
+  Pop $ClioProviderArgonneMinervaCheckbox
+  !insertmacro CLIO_RESTORE_PROVIDER_CHECKBOX $ClioProviderArgonneMinervaCheckbox $ClioProviderArgonneMinervaChecked
+  ${NSD_OnClick} $ClioProviderArgonneMinervaCheckbox ClioProvidersOnToggle
+
+  ${NSD_CreateCheckbox} 50% 118u 15% 12u "Tara"
+  Pop $ClioProviderArgonneTaraCheckbox
+  !insertmacro CLIO_RESTORE_PROVIDER_CHECKBOX $ClioProviderArgonneTaraCheckbox $ClioProviderArgonneTaraChecked
+  ${NSD_OnClick} $ClioProviderArgonneTaraCheckbox ClioProvidersOnToggle
+
+  ${NSD_CreateCheckbox} 68% 99u 32% 12u "AmSC MAG"
+  Pop $ClioProviderAmscMagCheckbox
+  !insertmacro CLIO_RESTORE_PROVIDER_CHECKBOX $ClioProviderAmscMagCheckbox $ClioProviderAmscMagChecked
+  ${NSD_OnClick} $ClioProviderAmscMagCheckbox ClioProvidersOnToggle
 
   ${NSD_CreateLabel} 68% 0 32% 12u "Other clouds"
   Pop $1
@@ -447,6 +474,9 @@ Function ClioProvidersPageLeave
   !insertmacro CLIO_APPEND_PROVIDER "bedrock" $ClioProviderBedrockCheckbox
   !insertmacro CLIO_APPEND_PROVIDER "nvidia_nim" $ClioProviderNvidiaNimCheckbox
   !insertmacro CLIO_APPEND_PROVIDER "openrouter" $ClioProviderOpenRouterCheckbox
+  !insertmacro CLIO_APPEND_PROVIDER "argonne_minerva" $ClioProviderArgonneMinervaCheckbox
+  !insertmacro CLIO_APPEND_PROVIDER "argonne_tara" $ClioProviderArgonneTaraCheckbox
+  !insertmacro CLIO_APPEND_PROVIDER "amsc_mag" $ClioProviderAmscMagCheckbox
   !insertmacro CLIO_REMEMBER_ALL_PROVIDERS
 
   ; Next stays disabled until a provider is checked (ClioProvidersSyncNext),
@@ -585,7 +615,7 @@ FunctionEnd
 !macro CLIO_WRITE_INSTALLER_OPTIONS
   CreateDirectory "$LOCALAPPDATA\${BUNDLEID}"
   FileOpen $2 "$LOCALAPPDATA\${BUNDLEID}\installer-options.json" w
-  FileWrite $2 '{$\"schema$\":4,$\"web_search$\":$\"'
+  FileWrite $2 '{$\"schema$\":5,$\"web_search$\":$\"'
   FileWrite $2 $ClioWebSearchStatus
   FileWrite $2 '$\",$\"llama_cpp$\":$\"'
   FileWrite $2 $ClioLlamaCppStatus
@@ -631,7 +661,7 @@ FunctionEnd
     ${EndIf}
 
     ${If} $ClioInstallWebSearch == "1"
-      StrCpy $ClioWebSearchStatus "pending"
+      StrCpy $ClioWebSearchStatus "native_requested"
     ${Else}
       StrCpy $ClioWebSearchStatus "not_requested"
     ${EndIf}
@@ -723,7 +753,7 @@ FunctionEnd
   ; The managed CLIO applies this request after its API is ready, using the
   ; same durable driver, progress, recovery, and ownership model as the UI.
   ${If} $ClioInstallWebSearch == "1"
-    StrCpy $ClioWebSearchStatus "requested"
+    StrCpy $ClioWebSearchStatus "native_requested"
     !insertmacro CLIO_WRITE_INSTALLER_OPTIONS
     DetailPrint "CLIO Search will be installed by CLIO on first launch."
   ${EndIf}

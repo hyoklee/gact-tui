@@ -350,8 +350,18 @@ describe('WorkspaceFileView', () => {
         />,
       );
       expect(await screen.findByTitle(`HTML preview of ${path}`)).toBeVisible();
+      expect(document.querySelectorAll('[data-slot="viewer-toolbar"]')).toHaveLength(1);
+      const toolbar = screen
+        .getByRole('tab', { name: 'Preview' })
+        .closest('[data-slot="viewer-toolbar"]');
+      expect(toolbar).not.toBeNull();
+      expect(toolbar).toContainElement(screen.getByRole('tab', { name: 'Source' }));
+      expect(screen.queryByText(/Static preview ·/)).not.toBeInTheDocument();
       await userEvent.click(screen.getByRole('tab', { name: 'Source' }));
       expect(document.querySelector('[data-language="html"]')).toHaveTextContent('<h1>Pedal!</h1>');
+      await userEvent.click(screen.getByRole('tab', { name: 'Preview' }));
+      expect(screen.getByTitle(`HTML preview of ${path}`)).toBeVisible();
+      expect(repository.readWorkspaceFile).toHaveBeenCalledTimes(1);
       expect(repository.readWorkspaceFile).toHaveBeenCalledWith(
         'workspace_1',
         path,

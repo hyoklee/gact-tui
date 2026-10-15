@@ -5,12 +5,15 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NewConversationPage } from './new-conversation-page';
+import { connectionScope } from '@/lib/connection-scope';
 
 const mocks = vi.hoisted(() => ({
   openFile: vi.fn(),
   revealWorkbench: vi.fn(),
   downloads: vi.fn().mockResolvedValue(undefined),
   error: vi.fn(),
+  locationState: null as unknown,
+  navigate: vi.fn(),
 }));
 vi.mock('@/tauri/downloads', () => ({ openDownloads: mocks.downloads }));
 vi.mock('@/hooks/use-connection-indicator-state', () => ({
@@ -18,7 +21,28 @@ vi.mock('@/hooks/use-connection-indicator-state', () => ({
 }));
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ workspaceId: 'workspace_demo' }),
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mocks.navigate,
+  useLocation: () => ({ pathname: '/workspaces/workspace_demo/new', state: mocks.locationState }),
+}));
+vi.mock('@/components/clio/connected-source-picker', () => ({
+  ConnectedSourcePicker: ({
+    workspaceId,
+    initialProviderId,
+    initialObsidianChoice,
+    onOpenChange,
+  }: {
+    workspaceId: string;
+    initialProviderId?: string;
+    initialObsidianChoice?: string;
+    onOpenChange: (open: boolean) => void;
+  }) => (
+    <div role="dialog" aria-label="Source connection">
+      <span>
+        {workspaceId}:{initialProviderId}:{initialObsidianChoice}
+      </span>
+      <button onClick={() => onOpenChange(false)}>Close source setup</button>
+    </div>
+  ),
 }));
 vi.mock('sonner', () => ({ toast: { error: mocks.error } }));
 vi.mock('@/providers/connection-provider', () => ({
@@ -128,9 +152,47 @@ vi.mock('@/components/clio/composer', () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  mocks.locationState = null;
 });
 
 describe('new conversation reference navigation', () => {
+  it('opens the Settings source intent in the chosen workspace and consumes it on close', async () => {
+    mocks.locationState = {
+      sourceConnection: {
+        scope: connectionScope({ endpoint: 'http://clio.test' }),
+        providerId: 'obsidian',
+        choice: 'existing',
+      },
+    };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <NewConversationPage />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole('dialog', { name: 'Source connection' })).toHaveTextContent(
+      'workspace_demo:obsidian:existing',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Close source setup' }));
+    expect(mocks.navigate).toHaveBeenCalledWith('/workspaces/workspace_demo/new', {
+      replace: true,
+      state: null,
+    });
+  });
+  it('does not replay a Settings source intent on a different service', async () => {
+    mocks.locationState = {
+      sourceConnection: {
+        scope: connectionScope({ endpoint: 'http://other-clio.test' }),
+        providerId: 'obsidian',
+        choice: 'new',
+      },
+    };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <NewConversationPage />
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByRole('dialog', { name: 'Source connection' })).not.toBeInTheDocument();
+  });
   it('keeps the header menu and bottom status available before sending', async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>

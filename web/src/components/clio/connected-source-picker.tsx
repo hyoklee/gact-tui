@@ -33,6 +33,8 @@ import { ConnectedSourceForm } from './connected-source-form';
 import { linkAccessNames } from './connected-source-labels';
 import { ConnectedSourceDetail } from './connected-source-detail';
 import { SourceProviderLogo } from './source-provider-logo';
+import { SourceProviderInfo } from './source-provider-info';
+import type { ObsidianChoice } from './obsidian-source-form';
 import { InfoTip } from './info-tip';
 import { DesktopFolderUpload } from './desktop-folder-upload';
 import { ConnectedSourceActions } from './connected-source-actions';
@@ -54,6 +56,8 @@ export function ConnectedSourcePicker({
   initialFolder,
   initialDownloaded,
   initialSourceId,
+  initialProviderId,
+  initialObsidianChoice,
   manageOnly = false,
   onDownloadStarted,
 }: {
@@ -68,6 +72,8 @@ export function ConnectedSourcePicker({
   initialFolder?: string;
   initialDownloaded?: boolean;
   initialSourceId?: string;
+  initialProviderId?: string;
+  initialObsidianChoice?: ObsidianChoice;
   manageOnly?: boolean;
   onDownloadStarted?: (
     source: ConnectedSourceState,
@@ -134,6 +140,8 @@ export function ConnectedSourcePicker({
               initialFolder={initialFolder}
               initialDownloaded={initialDownloaded}
               initialSourceId={initialSourceId}
+              initialProviderId={initialProviderId}
+              initialObsidianChoice={initialObsidianChoice}
               headerActions={headerActions}
               onDiscard={() => {
                 if (activeScope.current === scope) onOpenChange(false);
@@ -169,6 +177,8 @@ export function ConnectedSourceContents({
   initialFolder,
   initialDownloaded,
   initialSourceId,
+  initialProviderId,
+  initialObsidianChoice,
   headerActions,
   onDiscard,
   settingsView = false,
@@ -188,6 +198,8 @@ export function ConnectedSourceContents({
   initialFolder?: string;
   initialDownloaded?: boolean;
   initialSourceId?: string;
+  initialProviderId?: string;
+  initialObsidianChoice?: ObsidianChoice;
   headerActions: HTMLDivElement | null;
   onDiscard: () => void;
   settingsView?: boolean;
@@ -216,6 +228,8 @@ export function ConnectedSourceContents({
   const select = (id: string) =>
     privateSelection ? setManagedSelection(id) : queryClient.setQueryData(selectionKey, id);
   const [provider, setProvider] = useState<SourceProvider>();
+  const [providerIntent, setProviderIntent] = useState(initialProviderId);
+  const [obsidianChoice, setObsidianChoice] = useState(initialObsidianChoice);
   const [accountLogin, setAccountLogin] = useState<SourceProvider>();
   const [editing, setEditing] = useState<ConnectedSourceState>();
   const [desktopUpload, setDesktopUpload] = useState(Boolean(initialFolderFiles?.length));
@@ -328,18 +342,22 @@ export function ConnectedSourceContents({
         }}
       />
     );
-  if (provider)
+  const activeProvider =
+    provider ?? providers.data?.providers.find((row) => row.id === providerIntent);
+  if (activeProvider)
     return (
       <>
         {editing && toolbar(editing, false)}
         <ConnectedSourceForm
           workspaceId={workspaceId}
-          provider={provider}
+          provider={activeProvider}
+          obsidianChoice={obsidianChoice}
           source={editing}
           hostLabel={hostLabel}
           browseStartPath={host.data?.effective.root}
           onBack={() => {
             setProvider(undefined);
+            setProviderIntent(undefined);
             setEditing(undefined);
           }}
           onConnected={(connected) => {
@@ -349,6 +367,7 @@ export function ConnectedSourceContents({
             );
             select(connected.id);
             setProvider(undefined);
+            setProviderIntent(undefined);
             setEditing(undefined);
             onChanged?.();
             if (connected.source_kind === 'knowledge') {
@@ -453,12 +472,13 @@ export function ConnectedSourceContents({
                   <div className="flex min-w-48 flex-1 items-center gap-3">
                     <SourceProviderLogo provider={row.id} />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">
+                      <p className="flex items-center gap-2 text-sm font-medium">
                         {row.id === 'local' ? `Use a folder on ${hostLabel}` : row.name}
+                        <SourceProviderInfo provider={row} />
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {row.id === 'obsidian' ? (
-                          'Local vault or Headless Sync copy'
+                          'Knowledge graphs from linked notes'
                         ) : row.id === 'local' ? (
                           'Choose data already on this machine'
                         ) : row.authentication === 'browser' ? (
@@ -478,6 +498,19 @@ export function ConnectedSourceContents({
                     </div>
                   </div>
                   <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+                    {row.id === 'obsidian' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!workspaceId}
+                        onClick={() => {
+                          setObsidianChoice('new');
+                          setProvider(row);
+                        }}
+                      >
+                        New vault
+                      </Button>
+                    )}
                     {row.authentication === 'browser' &&
                       (row.authenticated ? (
                         <ConnectedAccountActions provider={row} />
@@ -502,7 +535,10 @@ export function ConnectedSourceContents({
                       size="sm"
                       variant="outline"
                       disabled={!workspaceId}
-                      onClick={() => setProvider(row)}
+                      onClick={() => {
+                        setObsidianChoice('existing');
+                        setProvider(row);
+                      }}
                     >
                       Connect
                     </Button>

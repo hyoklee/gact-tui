@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { MemoryRouter, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -12,6 +13,19 @@ import {
 // the persistence test needs the real hook so a seeded draft can be observed across a route
 // change.
 let throwFromAttachments = false;
+
+vi.mock('./command-menu', () => ({
+  ClioCommandMenu: function StatefulSearchHost() {
+    const [draft, setDraft] = useState('');
+    return (
+      <input
+        aria-label="Palette state"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+      />
+    );
+  },
+}));
 
 vi.mock('@/components/ai-elements/prompt-input', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/components/ai-elements/prompt-input')>();
@@ -42,6 +56,9 @@ vi.mock('@/App', () => ({
         </button>
         <button onClick={() => navigate('/settings/appearance')} type="button">
           Go to settings
+        </button>
+        <button onClick={() => navigate('/infrastructure/agent')} type="button">
+          Go to infrastructure
         </button>
         <span data-testid="draft-text">{textInput.value}</span>
         <span data-testid="draft-attachments">{files.length}</span>
@@ -94,6 +111,7 @@ describe('RouteErrorBoundary', () => {
       </MemoryRouter>,
     );
 
+    expect(screen.queryByRole('textbox', { name: 'Palette state' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Seed draft' }));
     expect(screen.getByTestId('draft-text')).toHaveTextContent('draft in progress');
     expect(screen.getByTestId('draft-attachments')).toHaveTextContent('1');
@@ -106,5 +124,21 @@ describe('RouteErrorBoundary', () => {
     // session match to clear on either.
     expect(screen.getByTestId('draft-text')).toHaveTextContent('draft in progress');
     expect(screen.getByTestId('draft-attachments')).toHaveTextContent('1');
+    expect(screen.getAllByRole('textbox', { name: 'Palette state' })).toHaveLength(1);
+  });
+
+  it('keeps global search state above the keyed route reset', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/settings/appearance']}>
+        <RouteErrorBoundary />
+      </MemoryRouter>,
+    );
+
+    await user.type(screen.getByRole('textbox', { name: 'Palette state' }), 'retained search');
+    await user.click(screen.getByRole('button', { name: 'Go to infrastructure' }));
+    expect(screen.getByRole('textbox', { name: 'Palette state' })).toHaveValue('retained search');
+    await user.click(screen.getByRole('button', { name: 'Go to settings' }));
+    expect(screen.getByRole('textbox', { name: 'Palette state' })).toHaveValue('retained search');
   });
 });

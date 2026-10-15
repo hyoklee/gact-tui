@@ -259,7 +259,7 @@ export function ToolResultPresentation({
             checks.push(blocks[i]);
           const removed = checks.filter((check) => check.change === 'removed');
           return (
-            <div key={block.id} className="min-w-0 space-y-1">
+            <div key={block.id} className="min-w-0 space-y-1" data-slot="todo-changes">
               <TodoList
                 items={checks.filter((check) => check.change !== 'removed')}
                 status={(check) => check.state}

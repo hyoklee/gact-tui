@@ -1,21 +1,14 @@
+import { vocab } from '@/lib/brand-vocabulary';
 import { queryKeys } from '@/lib/query-keys';
 import type { Artifact, MemorySearchHit } from '@clio/core/v3';
 import { useQuery } from '@tanstack/react-query';
-import {
-  ActivityIcon,
-  BoxIcon,
-  CableIcon,
-  FileIcon,
-  MessageSquareTextIcon,
-  NetworkIcon,
-} from 'lucide-react';
-import { SettingsIcon } from '@/lib/icon-vocabulary';
-import { useEffect, useMemo, useState } from 'react';
+import { BoxIcon, FileIcon, FolderIcon, MessageSquareTextIcon } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { brand } from '@brand';
 import type { ClioWorkbenchOpenRequest } from '@/components/clio/workbench';
 import {
-  CommandDialog,
+  Command,
   CommandEmpty,
   CommandGroup,
   CommandInput,
@@ -29,6 +22,28 @@ import { SEARCH_DEBOUNCE_MS } from '@/lib/runtime-limits';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { ClioRelativeTime } from './relative-time';
 import { useLiveStore } from '@/store/live-store';
+import { useCommandMenuVisibility } from '@/store/command-menu-visibility';
+import { ClioSearchAssistant } from './search-assistant';
+import { SearchHighlight } from './search-highlight';
+import { messageSearchHash } from '@/lib/search-matches';
+import { projectText } from '@/lib/attention-text';
+import { connectionScope } from '@/lib/connection-scope';
+import { InputGroupButton } from '@/components/ui/input-group';
+import { GlobalSearchResults } from './global-search-results';
+import {
+  returnRouteFromState,
+  workspaceIdFromRoute,
+  sessionIdFromRoute,
+  newConversationRoute,
+} from '@/lib/workspace-route-memory';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 /**
  * How many results each command-menu group shows. Unit: entries per group.
@@ -55,21 +70,51 @@ export function ClioCommandMenu({
   onOpenResource?: (request: ClioWorkbenchOpenRequest) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [aiMode, setAiMode] = useState(false);
   const [query, setQuery] = useState('');
   const [serverQuery, setServerQuery] = useState('');
+  const setVisible = useCommandMenuVisibility((state) => state.setOpen);
+  const changeOpen = useCallback(
+    (value: boolean) => {
+      setVisible(value);
+      setOpen(value);
+      if (!value) {
+        setQuery('');
+        setAiMode(false);
+      }
+    },
+    [setVisible],
+  );
+  useEffect(() => () => setVisible(false), [setVisible]);
+  const searchInput = useRef<HTMLInputElement>(null);
   const [recentThreshold] = useState(() => Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const { workspaceId = '', sessionId = '' } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const repository = useRepository();
-  const { settings } = useConnectionSettings();
+  const { settings, credentialsReady = true, credentialError } = useConnectionSettings();
+  const workspaceRoute = returnRouteFromState(location.state, settings.endpoint);
+  const routeParams = useParams();
+  // Make parser results scalar dependencies so React Compiler preserves the result caches.
+  const currentWorkspaceId = workspaceIdFromRoute(location.pathname);
+  const currentSessionId = sessionIdFromRoute(location.pathname);
+  const workspaceId = String(
+    routeParams.workspaceId ?? currentWorkspaceId ?? workspaceIdFromRoute(workspaceRoute) ?? '',
+  );
+  const sessionId = String(
+    routeParams.sessionId ??
+      currentSessionId ??
+      (currentWorkspaceId ? undefined : sessionIdFromRoute(workspaceRoute)) ??
+      '',
+  );
   const artifacts = useLiveStore((state) => state.entities.artifacts);
   const workspaces = useQuery({
-    queryKey: queryKeys.key('workspaces', settings.endpoint),
+    enabled: open && credentialsReady,
+    queryKey: queryKeys.key('workspaces', settings.endpoint, connectionScope(settings)),
     queryFn: ({ signal }) => repository.workspaces(signal),
   });
   const sessions = useQuery({
-    queryKey: queryKeys.key('sessions', settings.endpoint, 'all'),
+    enabled: open && credentialsReady,
+    queryKey: queryKeys.key('sessions', settings.endpoint, 'all', connectionScope(settings)),
     queryFn: ({ signal }) => repository.allSessions(signal),
   });
   const files = useQuery({
@@ -87,20 +132,27 @@ export function ClioCommandMenu({
       settings.endpoint,
       workspaceId,
       'exclude_service_storage=true',
+      connectionScope(settings),
     ),
     queryFn: ({ signal }) =>
       repository.workspaceFiles(workspaceId, signal, { excludeServiceStorage: true }),
-    enabled: Boolean(workspaceId),
+    enabled: open && credentialsReady && !aiMode && Boolean(workspaceId),
   });
   const memory = useQuery({
-    queryKey: queryKeys.key('workspace-memory-search', settings.endpoint, workspaceId, serverQuery),
+    queryKey: queryKeys.key(
+      'workspace-memory-search',
+      settings.endpoint,
+      'all-workspaces',
+      connectionScope(settings),
+      serverQuery,
+    ),
     queryFn: ({ signal }) =>
       repository.searchMemory(
         serverQuery,
-        { workspaceId, includeCrossSession: true, limit: COMMAND_MENU_LIMITS.memoryHits },
+        { includeCrossSession: true, limit: COMMAND_MENU_LIMITS.memoryHits },
         signal,
       ),
-    enabled: open && serverQuery.length >= 2 && Boolean(workspaceId),
+    enabled: open && credentialsReady && !aiMode && serverQuery.length >= 2,
   });
 
   // 'command-palette' used to also be reachable via the native View menu
@@ -108,11 +160,11 @@ export function ClioCommandMenu({
   // listener below already toggles the palette directly, so no
   // useMenuAction registration is needed.
   useEffect(() => {
-    const openMenu = () => setOpen(true);
+    const openMenu = () => changeOpen(true);
     const handleKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        setOpen((value) => !value);
+        changeOpen(!open);
       }
     };
     window.addEventListener('clio:open-command-menu', openMenu);
@@ -121,13 +173,17 @@ export function ClioCommandMenu({
       window.removeEventListener('clio:open-command-menu', openMenu);
       window.removeEventListener('keydown', handleKey);
     };
-  }, []);
+  }, [open, changeOpen]);
   useEffect(() => {
     const timer = window.setTimeout(() => setServerQuery(query.trim()), SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [query]);
+  useEffect(() => {
+    if (open && !aiMode) searchInput.current?.focus();
+  }, [open, aiMode]);
 
   const normalizedQuery = query.trim().toLocaleLowerCase();
+  const searchWorkspaceId = workspaceId || workspaces.data?.[0]?.id;
   const matchingFiles = useMemo(
     () =>
       normalizedQuery
@@ -184,128 +240,299 @@ export function ClioCommandMenu({
   }, [normalizedQuery, recentThreshold, sessionId, sessions.data, workspaceNames]);
 
   const finish = (action: () => void) => {
-    setOpen(false);
-    setQuery('');
+    changeOpen(false);
     action();
   };
   const openRoute = (path: string) =>
-    finish(() => navigate(path, { state: { from: location.pathname } }));
+    finish(() =>
+      navigate(path, {
+        state: {
+          endpoint: settings.endpoint,
+          from: location.pathname.startsWith('/workspaces/') ? location.pathname : workspaceRoute,
+        },
+      }),
+    );
+  const openWorkspace = (id: string) => {
+    const latest = (sessions.data ?? [])
+      .filter((item) => item.workspace_id === id && !item.archived && isPrimarySession(item))
+      .sort((left, right) =>
+        sessionInteractionAt(right).localeCompare(sessionInteractionAt(left)),
+      )[0];
+    openRoute(
+      latest
+        ? `/workspaces/${encodeURIComponent(id)}/sessions/${encodeURIComponent(latest.id)}`
+        : newConversationRoute(id),
+    );
+  };
   const openMemoryHit = (hit: MemorySearchHit) => {
     const session = sessions.data?.find((candidate) => candidate.id === hit.session_id);
     const targetWorkspace = hit.workspace_id || session?.workspace_id;
     if (!targetWorkspace) return;
     openRoute(
-      `/workspaces/${encodeURIComponent(targetWorkspace)}/sessions/${encodeURIComponent(hit.session_id)}#message-${encodeURIComponent(hit.message_id)}`,
+      `/workspaces/${encodeURIComponent(targetWorkspace)}/sessions/${encodeURIComponent(hit.session_id)}${messageSearchHash(hit.message_id, hit.part_id ?? undefined, query.trim())}`,
     );
   };
-  const openResource = (request: ClioWorkbenchOpenRequest) =>
-    finish(() => onOpenResource?.(request));
+  const openResource = (request: ClioWorkbenchOpenRequest) => {
+    if (onOpenResource) return finish(() => onOpenResource(request));
+    const targetWorkspace =
+      request.kind === 'artifact'
+        ? request.artifact.workspace_id
+        : request.kind === 'workspace-file'
+          ? (request.workspaceId ?? workspaceId)
+          : workspaceId;
+    const target = (sessions.data ?? [])
+      .filter(
+        (item) => item.workspace_id === targetWorkspace && !item.archived && isPrimarySession(item),
+      )
+      .sort(
+        (left, right) =>
+          Number(right.id === sessionId) - Number(left.id === sessionId) ||
+          sessionInteractionAt(right).localeCompare(sessionInteractionAt(left)),
+      )[0];
+    const targetRoute =
+      request.kind === 'workspace-file' &&
+      targetWorkspace &&
+      location.pathname === newConversationRoute(targetWorkspace)
+        ? location.pathname
+        : target
+          ? `/workspaces/${encodeURIComponent(target.workspace_id)}/sessions/${encodeURIComponent(target.id)}`
+          : undefined;
+    if (!targetRoute) {
+      toast.error('Open a conversation in this workspace to view this file.');
+      return;
+    }
+    const snapshot =
+      request.kind === 'artifact'
+        ? { ...request, artifact: { ...request.artifact } }
+        : { ...request };
+    finish(() =>
+      navigate(targetRoute, {
+        state: { globalSearchResource: { scope: connectionScope(settings), request: snapshot } },
+      }),
+    );
+  };
 
   return (
-    <CommandDialog
-      className="top-[10dvh] max-h-[78dvh] translate-y-0 sm:max-w-2xl"
-      description="Search sessions, conversation memory, workspace resources, and actions."
-      onOpenChange={(value) => {
-        setOpen(value);
-        if (!value) setQuery('');
-      }}
-      open={open}
-      title={`${brand.name} command menu`}
-    >
-      <CommandInput
-        onValueChange={setQuery}
-        placeholder="Search work, files, artifacts, or actions…"
-        value={query}
-      />
-      <CommandList className="max-h-[68dvh]">
-        <CommandEmpty>
-          {memory.isFetching ? 'Searching workspace memory…' : 'No matching work or action.'}
-        </CommandEmpty>
-        {memory.data?.hits.length ? (
-          <CommandGroup heading="Conversation memory">
-            {memory.data.hits.map((hit) => (
-              <CommandItem
-                key={`${hit.session_id}:${hit.message_id}:${hit.part_id ?? ''}`}
-                onSelect={() => openMemoryHit(hit)}
-                value={`${hit.session_title} ${hit.text} ${hit.match_terms.join(' ')}`}
-              >
-                <MessageSquareTextIcon aria-hidden="true" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">
-                    {hit.session_title || 'Untitled session'}
-                  </span>
-                  <span className="block truncate text-xs text-muted-foreground">{hit.text}</span>
-                </span>
-                <CommandShortcut>{roleLabel(hit.role)}</CommandShortcut>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        ) : null}
-        {matchingFiles.length ? (
-          <CommandGroup heading="Workspace files">
-            {matchingFiles.map((file) => (
-              <CommandItem
-                key={file.path}
-                onSelect={() => openResource({ kind: 'workspace-file', path: file.path })}
-                value={file.path}
-              >
-                <FileIcon aria-hidden="true" />
-                <span className="truncate">{file.path}</span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        ) : null}
-        {matchingArtifacts.length ? (
-          <CommandGroup heading="Session artifacts">
-            {matchingArtifacts.map((artifact: Artifact) => (
-              <CommandItem
-                key={artifact.id}
-                onSelect={() => openResource({ kind: 'artifact', artifact })}
-                value={`${artifact.name} ${artifact.media_type}`}
-              >
-                <BoxIcon aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate">{artifact.name}</span>
-                <CommandShortcut>{artifact.media_type}</CommandShortcut>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        ) : null}
-        <CommandGroup heading="Sessions">
-          {visibleSessions.map((session) => (
-            <CommandItem
-              key={session.id}
-              onSelect={() =>
-                openRoute(`/workspaces/${session.workspace_id}/sessions/${session.id}`)
+    <Dialog onOpenChange={changeOpen} open={open}>
+      <DialogContent
+        className={`top-[10dvh] max-h-[80dvh] translate-y-0 overflow-hidden p-0 ${aiMode ? 'sm:max-w-3xl' : 'sm:max-w-2xl'}`}
+        showCloseButton={false}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          searchInput.current?.focus();
+        }}
+        onEscapeKeyDown={(event) => {
+          if (aiMode) {
+            event.preventDefault();
+            setAiMode(false);
+          }
+        }}
+      >
+        <DialogHeader className="sr-only">
+          <DialogTitle>{brand.name} search</DialogTitle>
+          <DialogDescription>
+            Search sessions, matching passages, files, or ask the search assistant.
+          </DialogDescription>
+        </DialogHeader>
+        {aiMode && searchWorkspaceId ? (
+          <ClioSearchAssistant
+            key={connectionScope(settings)}
+            workspaceId={searchWorkspaceId}
+            parentSessionId={sessionId || undefined}
+            query={query}
+            onQueryChange={setQuery}
+            onBack={() => setAiMode(false)}
+            onClose={() => finish(() => {})}
+            onOpenResource={openResource}
+          />
+        ) : (
+          <Command shouldFilter={false}>
+            <CommandInput
+              ref={searchInput}
+              autoFocus
+              className="min-w-0"
+              onValueChange={setQuery}
+              placeholder="Search work, files, artifacts, or actions…"
+              value={query}
+              trailing={
+                <InputGroupButton
+                  className="text-xs text-muted-foreground"
+                  disabled={!credentialsReady || !searchWorkspaceId}
+                  onClick={() => setAiMode(true)}
+                >
+                  Ask {vocab.agent} Search{' '}
+                  <kbd className="rounded border px-1 text-[10px]">Tab</kbd>
+                </InputGroupButton>
               }
-              value={`${session.title} ${workspaceNames.get(session.workspace_id) ?? ''}`}
-            >
-              <MessageSquareTextIcon aria-hidden="true" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate">{session.title}</span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {workspaceNames.get(session.workspace_id) ?? 'Workspace unavailable'}
-                </span>
-              </span>
-              <ClioRelativeTime compact timestamp={sessionInteractionAt(session)} />
-            </CommandItem>
-          ))}
-        </CommandGroup>
-        <CommandGroup heading="Navigation">
-          <CommandItem onSelect={() => openRoute('/')}>
-            <CableIcon aria-hidden="true" /> Connections<CommandShortcut>↵</CommandShortcut>
-          </CommandItem>
-          <CommandItem onSelect={() => openRoute('/runs')}>
-            <ActivityIcon aria-hidden="true" /> Runs
-          </CommandItem>
-          <CommandItem onSelect={() => openRoute('/infrastructure')}>
-            <NetworkIcon aria-hidden="true" /> Infrastructure
-          </CommandItem>
-          <CommandItem onSelect={() => openRoute('/settings/general')}>
-            <SettingsIcon aria-hidden="true" /> Settings
-          </CommandItem>
-        </CommandGroup>
-      </CommandList>
-    </CommandDialog>
+              onKeyDown={(event) => {
+                if (
+                  event.key === 'Tab' &&
+                  !event.shiftKey &&
+                  !event.nativeEvent.isComposing &&
+                  credentialsReady &&
+                  searchWorkspaceId
+                ) {
+                  event.preventDefault();
+                  setAiMode(true);
+                }
+              }}
+            />
+            {!credentialsReady && !credentialError ? (
+              <p role="status" className="px-3 py-2 text-xs text-muted-foreground">
+                Waiting for the default backend…
+              </p>
+            ) : null}
+            {credentialError ? (
+              <p role="alert" className="px-3 py-2 text-xs text-destructive">
+                {credentialError}
+              </p>
+            ) : null}
+            <CommandList className="max-h-[68dvh]">
+              <CommandEmpty>
+                {memory.isFetching ? 'Searching conversations…' : 'No matching work or action.'}
+              </CommandEmpty>
+              {visibleSessions.length ? (
+                <CommandGroup heading="Sessions">
+                  {visibleSessions.map((session) => (
+                    <CommandItem
+                      key={session.id}
+                      onSelect={() =>
+                        openRoute(`/workspaces/${session.workspace_id}/sessions/${session.id}`)
+                      }
+                      value={`session:${session.id}`}
+                    >
+                      <MessageSquareTextIcon aria-hidden="true" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">
+                          <SearchHighlight text={session.title} query={query} />
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          <SearchHighlight
+                            text={
+                              workspaceNames.get(session.workspace_id) ?? 'Workspace unavailable'
+                            }
+                            query={query}
+                          />
+                        </span>
+                      </span>
+                      <ClioRelativeTime compact timestamp={sessionInteractionAt(session)} />
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+              {memory.error ? (
+                <p role="alert" className="px-3 py-2 text-xs text-destructive">
+                  Conversation search failed. {memory.error.message}
+                </p>
+              ) : null}
+              {normalizedQuery &&
+              (workspaces.data ?? []).some((item) =>
+                `${item.display_name} ${item.name} ${item.path}`
+                  .toLocaleLowerCase()
+                  .includes(normalizedQuery),
+              ) ? (
+                <CommandGroup heading="Workspaces">
+                  {(workspaces.data ?? [])
+                    .filter((item) =>
+                      `${item.display_name} ${item.name} ${item.path}`
+                        .toLocaleLowerCase()
+                        .includes(normalizedQuery),
+                    )
+                    .slice(0, 20)
+                    .map((item) => (
+                      <CommandItem
+                        key={item.id}
+                        value={`workspace:${item.id}`}
+                        onSelect={() => openWorkspace(item.id)}
+                      >
+                        <FolderIcon aria-hidden="true" />
+                        <span className="min-w-0 flex-1 truncate">
+                          <SearchHighlight text={item.display_name} query={query} />
+                        </span>
+                        <CommandShortcut>Workspace</CommandShortcut>
+                      </CommandItem>
+                    ))}
+                </CommandGroup>
+              ) : null}
+              {serverQuery === query.trim() && memory.data?.hits.length ? (
+                <CommandGroup heading="Matching messages">
+                  {memory.data.hits.map((hit) => (
+                    <CommandItem
+                      key={`${hit.session_id}:${hit.message_id}:${hit.part_id ?? ''}`}
+                      onSelect={() => openMemoryHit(hit)}
+                      value={`message:${hit.session_id}:${hit.message_id}:${hit.part_id ?? ''}`}
+                      className="items-start py-2"
+                    >
+                      <MessageSquareTextIcon aria-hidden="true" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">
+                          <SearchHighlight
+                            text={hit.session_title || 'Untitled session'}
+                            query={query}
+                          />
+                        </span>
+                        <span className="mt-1 line-clamp-3 text-xs leading-5 text-muted-foreground">
+                          <SearchHighlight
+                            text={projectText(hit.text, { source: true }).text}
+                            query={query}
+                            partial
+                          />
+                        </span>
+                        <span className="mt-1 block text-[11px] text-muted-foreground">
+                          {workspaceNames.get(hit.workspace_id) ?? hit.workspace_id} → Open matching
+                          passage
+                        </span>
+                      </span>
+                      <CommandShortcut>{roleLabel(hit.role)}</CommandShortcut>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+              {matchingFiles.length ? (
+                <CommandGroup heading="Workspace files">
+                  {matchingFiles.map((file) => (
+                    <CommandItem
+                      key={file.path}
+                      onSelect={() => openResource({ kind: 'workspace-file', path: file.path })}
+                      value={file.path}
+                    >
+                      <FileIcon aria-hidden="true" />
+                      <span className="truncate">
+                        <SearchHighlight text={file.path} query={query} />
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+              {matchingArtifacts.length ? (
+                <CommandGroup heading="Session artifacts">
+                  {matchingArtifacts.map((artifact: Artifact) => (
+                    <CommandItem
+                      key={artifact.id}
+                      onSelect={() => openResource({ kind: 'artifact', artifact })}
+                      value={`artifact:${artifact.id}`}
+                    >
+                      <BoxIcon aria-hidden="true" />
+                      <span className="min-w-0 flex-1 truncate">
+                        <SearchHighlight text={artifact.name} query={query} />
+                      </span>
+                      <CommandShortcut>{artifact.media_type}</CommandShortcut>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+              {open ? (
+                <GlobalSearchResults
+                  query={query}
+                  onRoute={openRoute}
+                  onFinish={() => finish(() => {})}
+                />
+              ) : null}
+            </CommandList>
+          </Command>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

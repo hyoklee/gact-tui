@@ -22,6 +22,8 @@ export function zoomScrollHint(): string {
 
 export interface ZoomPanProps {
   imageSrc?: string;
+  /** Already sanitized SVG text only, aligned to the same image transform for native text selection. */
+  selectableTextSvg?: string;
   ariaLabel?: string;
   children?: React.ReactNode;
   minScale?: number;
@@ -47,11 +49,15 @@ export interface ZoomPanProps {
   error?: string;
   hitRegions?: readonly { id: string; x: number; y: number; width: number; height: number }[];
   selectedRegionIds?: readonly string[];
-  onRegionClick?: (id: string, modifiers: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
+  onRegionClick?: (
+    id: string,
+    modifiers: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean },
+  ) => void;
 }
 
 export function ZoomPan({
   imageSrc,
+  selectableTextSvg,
   ariaLabel = 'Interactive diagram canvas',
   children,
   minScale = 0.1,
@@ -74,6 +80,7 @@ export function ZoomPan({
   onRegionClick,
 }: ZoomPanProps) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const textLayerRef = React.useRef<HTMLDivElement>(null);
   const stageRef = React.useRef<HTMLDivElement>(null);
   const viewportRef = React.useRef<HTMLDivElement>(null);
   const imageRef = React.useRef<HTMLImageElement | null>(null);
@@ -142,6 +149,11 @@ export function ZoomPan({
     if (!ctx) return;
 
     const { x, y, scale } = currentRef.current;
+    if (textLayerRef.current) {
+      textLayerRef.current.style.width = `${image.naturalWidth}px`;
+      textLayerRef.current.style.height = `${image.naturalHeight}px`;
+      textLayerRef.current.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+    }
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
     // Clear canvas
@@ -324,18 +336,31 @@ export function ZoomPan({
     updateImmediate();
   };
 
-  const selectAt = React.useCallback((clientX: number, clientY: number, modifiers: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !onRegionClickRef.current) return;
-    const rect = canvas.getBoundingClientRect();
-    const { x, y, scale } = currentRef.current;
-    const imageX = (clientX - rect.left - x) / scale;
-    const imageY = (clientY - rect.top - y) / scale;
-    const region = [...(hitRegionsRef.current ?? [])].reverse().find((candidate) =>
-      imageX >= candidate.x && imageX <= candidate.x + candidate.width &&
-      imageY >= candidate.y && imageY <= candidate.y + candidate.height);
-    if (region) onRegionClickRef.current(region.id, modifiers);
-  }, []);
+  const selectAt = React.useCallback(
+    (
+      clientX: number,
+      clientY: number,
+      modifiers: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean },
+    ) => {
+      const canvas = canvasRef.current;
+      if (!canvas || !onRegionClickRef.current) return;
+      const rect = canvas.getBoundingClientRect();
+      const { x, y, scale } = currentRef.current;
+      const imageX = (clientX - rect.left - x) / scale;
+      const imageY = (clientY - rect.top - y) / scale;
+      const region = [...(hitRegionsRef.current ?? [])]
+        .reverse()
+        .find(
+          (candidate) =>
+            imageX >= candidate.x &&
+            imageX <= candidate.x + candidate.width &&
+            imageY >= candidate.y &&
+            imageY <= candidate.y + candidate.height,
+        );
+      if (region) onRegionClickRef.current(region.id, modifiers);
+    },
+    [],
+  );
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLCanvasElement>) => {
     const panStep = event.shiftKey ? 80 : 32;
@@ -407,10 +432,11 @@ export function ZoomPan({
       updateImmediate();
     };
 
-    canvas.addEventListener('wheel', onWheel, { passive: false });
+    const wheelTarget: HTMLElement = viewportRef.current ?? canvas;
+    wheelTarget.addEventListener('wheel', onWheel, { passive: false });
 
     return () => {
-      canvas.removeEventListener('wheel', onWheel);
+      wheelTarget.removeEventListener('wheel', onWheel);
     };
   }, [maxScale, minScale, updateImmediate, wheelZoom]);
 
@@ -429,7 +455,10 @@ export function ZoomPan({
     };
 
     const handleMouseUp = (event: MouseEvent) => {
-      if (isDragging.current && Math.hypot(event.clientX - panStartRef.current.x, event.clientY - panStartRef.current.y) < 5) {
+      if (
+        isDragging.current &&
+        Math.hypot(event.clientX - panStartRef.current.x, event.clientY - panStartRef.current.y) < 5
+      ) {
         selectAt(event.clientX, event.clientY, event);
       }
       isDragging.current = false;
@@ -664,10 +693,23 @@ export function ZoomPan({
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={(event) => {
-              if (!isPinching.current && touchStartRef.current?.touches.length === 1 && event.changedTouches.length === 1) {
+              if (
+                !isPinching.current &&
+                touchStartRef.current?.touches.length === 1 &&
+                event.changedTouches.length === 1
+              ) {
                 const touch = event.changedTouches[0];
-                if (Math.hypot(touch.clientX - touchStartRef.current.touches[0].x, touch.clientY - touchStartRef.current.touches[0].y) < 8) {
-                  selectAt(touch.clientX, touch.clientY, { shiftKey: false, ctrlKey: false, metaKey: false });
+                if (
+                  Math.hypot(
+                    touch.clientX - touchStartRef.current.touches[0].x,
+                    touch.clientY - touchStartRef.current.touches[0].y,
+                  ) < 8
+                ) {
+                  selectAt(touch.clientX, touch.clientY, {
+                    shiftKey: false,
+                    ctrlKey: false,
+                    metaKey: false,
+                  });
                 }
               }
               isDragging.current = false;
@@ -677,6 +719,20 @@ export function ZoomPan({
             role="img"
             tabIndex={0}
           />
+
+          {selectableTextSvg ? (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute left-0 top-0 origin-top-left select-text"
+              data-slot="diagram-text-selection"
+              ref={textLayerRef}
+              onClick={(event) => {
+                if (window.getSelection()?.isCollapsed !== false)
+                  selectAt(event.clientX, event.clientY, event);
+              }}
+              dangerouslySetInnerHTML={{ __html: selectableTextSvg }}
+            />
+          ) : null}
 
           <div
             aria-hidden="true"

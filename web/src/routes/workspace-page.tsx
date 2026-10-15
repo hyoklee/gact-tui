@@ -741,6 +741,7 @@ export function WorkspacePage() {
                       onActionCardAction={actionCard.mutateAsync}
                       onOpenArtifact={openArtifact}
                       onOpenFile={openWorkspaceFile}
+                      onOpenFileReference={openWorkspaceFile}
                       onOpenWork={() => revealWorkbench({ kind: 'resources', section: 'work' })}
                       onOpenResource={openWorkspaceResource}
                       onOpenReference={(reference) => void openComposerReference(reference)}

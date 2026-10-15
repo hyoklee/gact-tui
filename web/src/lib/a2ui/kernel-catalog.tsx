@@ -49,6 +49,7 @@ import { ClioChartCatalogComponent } from '@/components/clio/a2ui-chart-catalog'
 import { ClioDataTableCatalogComponent } from '@/components/clio/a2ui-data-table';
 import { ClioMapCatalogComponent } from '@/components/clio/a2ui-map-catalog';
 import { ClioTabs } from '@/components/clio/a2ui-tabs';
+import { ClioCarousel } from '@/components/clio/a2ui-carousel';
 import { ClioMessageDraftCatalogComponent } from '@/components/clio/a2ui-message-draft';
 import { ClioWeatherCatalogComponent } from '@/components/clio/a2ui-weather';
 import { ClioStepsCatalogComponent } from '@/components/clio/a2ui-steps';
@@ -691,6 +692,7 @@ const KERNEL_COMPONENT_LIST: ReactComponentImplementation[] = [
   List,
   Card,
   ClioTabs,
+  ClioCarousel,
   Modal,
   Divider,
   A2UIButton,

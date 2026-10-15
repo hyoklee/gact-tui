@@ -28,24 +28,20 @@ export function InfrastructureFoundationGroups({
   return (
     <div className="space-y-3">
       {(['errors', 'warnings', 'ready'] as const).map((kind) => {
+        if (!groups[kind].length) return null;
         const label =
           kind === 'ready' ? 'Ready and working' : kind === 'errors' ? 'Errors' : 'Warnings';
         return (
           <details
             key={kind}
             open={kind !== 'ready' && groups[kind].length > 0}
-            className="rounded-lg border"
+            className="border-t"
             aria-label={`${label} (${groups[kind].length})`}
           >
-            <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+            <summary className="cursor-pointer py-3 text-sm font-medium">
               {label} ({groups[kind].length})
             </summary>
-            <div className="divide-y border-t px-4">
-              {groups[kind].map(renderRow)}
-              {!groups[kind].length && (
-                <p className="py-3 text-sm text-muted-foreground">None reported.</p>
-              )}
-            </div>
+            <div className="divide-y">{groups[kind].map(renderRow)}</div>
           </details>
         );
       })}

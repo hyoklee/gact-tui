@@ -69,20 +69,48 @@ export function WorkspaceFileView({
   initialPage?: number;
 }) {
   const detected = mediaType || inferredWorkspaceMediaType(path);
+  const html =
+    detected !== 'application/pdf' && !detected.startsWith('image/') && isHtmlFile(path, detected);
   const preview =
     detected === 'application/pdf' ? (
       <WorkspacePdfView initialPage={initialPage} path={path} workspaceId={workspaceId} />
     ) : detected.startsWith('image/') ? (
       <WorkspaceImageView mediaType={detected} path={path} workspaceId={workspaceId} />
-    ) : isTextMediaType(detected) ? (
-      <WorkspaceTextView path={path} size={size} workspaceId={workspaceId} mediaType={detected} />
+    ) : isTextMediaType(detected) || html ? (
+      <WorkspaceTextView
+        path={path}
+        size={size}
+        workspaceId={workspaceId}
+        mediaType={detected}
+        htmlView={html ? 'preview' : undefined}
+      />
     ) : (
       <WorkspaceBinaryView mediaType={detected} path={path} size={size} workspaceId={workspaceId} />
     );
   return (
     <FileViewerShell
       source={{ kind: 'workspace', workspaceId, path, mediaType: detected, size }}
-      tabs={[{ value: 'preview', label: 'Preview', icon: EyeIcon, content: preview }]}
+      tabs={[
+        { value: 'preview', label: 'Preview', icon: EyeIcon, content: preview },
+        ...(html
+          ? [
+              {
+                value: 'source',
+                label: 'Source',
+                icon: FileCode2Icon,
+                content: (
+                  <WorkspaceTextView
+                    path={path}
+                    size={size}
+                    workspaceId={workspaceId}
+                    mediaType={detected}
+                    htmlView="source"
+                  />
+                ),
+              },
+            ]
+          : []),
+      ]}
     />
   );
 }
@@ -119,11 +147,13 @@ function WorkspaceTextView({
   path,
   size,
   mediaType,
+  htmlView,
 }: {
   workspaceId: string;
   path: string;
   size?: number;
   mediaType?: string;
+  htmlView?: 'preview' | 'source';
 }) {
   const repository = useRepository();
   const { settings } = useConnectionSettings();
@@ -132,6 +162,9 @@ function WorkspaceTextView({
     queryKey: queryKeys.workspaceFile(settings.endpoint, workspaceId, path),
     queryFn: ({ signal }) => repository.readWorkspaceFile(workspaceId, path, signal),
     enabled: canLoad,
+    // Preview and Source are two views of the same loaded file. Switching
+    // between their host tabs must not restart a read of unchanged content.
+    refetchOnMount: htmlView ? false : undefined,
   });
   if (!canLoad) return <LargeResourceNotice name={fileName(path)} size={size} />;
   return (
@@ -140,6 +173,7 @@ function WorkspaceTextView({
       error={content.error?.message}
       path={path}
       mediaType={mediaType}
+      htmlView={htmlView}
     />
   );
 }
@@ -432,11 +466,13 @@ export function TextResourceView({
   content,
   error,
   mediaType,
+  htmlView,
 }: {
   path: string;
   content?: string;
   error?: string;
   mediaType?: string;
+  htmlView?: 'preview' | 'source';
 }) {
   if (content === undefined && !error)
     return <ResourceLoading className="p-4" label={`Loading ${fileName(path)}`} />;
@@ -447,7 +483,7 @@ export function TextResourceView({
       </div>
     );
   if (isHtmlFile(path, mediaType)) {
-    return <HtmlFilePreview name={fileName(path)} content={content ?? ''} />;
+    return <HtmlFilePreview name={fileName(path)} content={content ?? ''} view={htmlView} />;
   }
   if (isMarkdownArtifact('', path)) {
     return <MarkdownFilePreview name={fileName(path)} content={content ?? ''} />;

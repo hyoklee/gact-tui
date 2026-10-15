@@ -6,14 +6,15 @@ import type {
   ToolInvocation,
   WorkspaceResource,
 } from '@clio/core/v3';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { connectionScope } from '@/lib/connection-scope';
 import { KNOWLEDGE_OPEN_EVENT, type KnowledgeOpenRequest } from '@/lib/knowledge-navigation';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import type { SubagentOpenTarget } from '@/components/clio/subagent-card';
 import type { ClioWorkbenchOpenRequest } from '@/components/clio/workbench';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { workspaceFilePath } from '@/lib/workspace-file-path';
+import type { FileSearchLocation } from '@/lib/search-matches';
 import { useLiveStore } from '@/store/live-store';
 
 interface UseWorkbenchNavigationInput {
@@ -30,7 +31,9 @@ interface WorkbenchRequest {
 /** Owns central-versus-canvas navigation for workspace resources and child sessions. */
 export function useWorkbenchNavigation({ allSessions, workspaceId }: UseWorkbenchNavigationInput) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { settings } = useConnectionSettings();
+  const scope = connectionScope(settings);
   const workspacePath = useLiveStore((state) => state.entities.workspaces[workspaceId]?.path);
   const [workbenchRequest, setWorkbenchRequest] = useState<WorkbenchRequest>();
 
@@ -44,6 +47,19 @@ export function useWorkbenchNavigation({ allSessions, workspaceId }: UseWorkbenc
     },
     [settings.endpoint],
   );
+  const searchRequest = useMemo<WorkbenchRequest | undefined>(() => {
+    const pending = location.state?.globalSearchResource;
+    if (!pending || pending.scope !== scope) return;
+    const request = pending.request as ClioWorkbenchOpenRequest | undefined;
+    if (
+      request?.kind === 'workspace-file' &&
+      typeof request.path === 'string' &&
+      (!request.workspaceId || request.workspaceId === workspaceId)
+    )
+      return { endpoint: settings.endpoint, key: `global-search:${location.key}`, request };
+    if (request?.kind === 'artifact' && request.artifact?.workspace_id === workspaceId)
+      return { endpoint: settings.endpoint, key: `global-search:${location.key}`, request };
+  }, [location.key, location.state, scope, workspaceId, settings.endpoint]);
 
   const openSubagent = useCallback(
     (subagent: SubagentRun, target: SubagentOpenTarget) => {
@@ -76,9 +92,18 @@ export function useWorkbenchNavigation({ allSessions, workspaceId }: UseWorkbenc
     [revealWorkbench],
   );
   const openWorkspaceFile = useCallback(
-    (path: string) =>
-      revealWorkbench({ kind: 'workspace-file', path: workspaceFilePath(path, workspacePath) }),
-    [revealWorkbench, workspacePath],
+    (path: string, location: FileSearchLocation = {}) =>
+      revealWorkbench({
+        kind: 'workspace-file',
+        ...location,
+        path: workspaceFilePath(
+          path,
+          location.workspaceId && location.workspaceId !== workspaceId
+            ? useLiveStore.getState().entities.workspaces[location.workspaceId]?.path
+            : workspacePath,
+        ),
+      }),
+    [revealWorkbench, workspacePath, workspaceId],
   );
   const openWorkspaceResource = useCallback(
     (resource: WorkspaceResource, relatedResources?: readonly WorkspaceResource[]) =>
@@ -94,14 +119,19 @@ export function useWorkbenchNavigation({ allSessions, workspaceId }: UseWorkbenc
     [revealWorkbench],
   );
 
-  const openParentSession = useCallback((session: Session) => {
-    if (!session.parent_session_id) return;
-    const parent = allSessions.find((candidate) => candidate.id === session.parent_session_id);
-    navigate(`/workspaces/${encodeURIComponent(parent?.workspace_id ?? workspaceId)}/sessions/${encodeURIComponent(session.parent_session_id)}`);
-  }, [allSessions, navigate, workspaceId]);
+  const openParentSession = useCallback(
+    (session: Session) => {
+      if (!session.parent_session_id) return;
+      const parent = allSessions.find((candidate) => candidate.id === session.parent_session_id);
+      navigate(
+        `/workspaces/${encodeURIComponent(parent?.workspace_id ?? workspaceId)}/sessions/${encodeURIComponent(session.parent_session_id)}`,
+      );
+    },
+    [allSessions, navigate, workspaceId],
+  );
 
   const activeRequest =
-    workbenchRequest?.endpoint === settings.endpoint ? workbenchRequest : undefined;
+    workbenchRequest?.endpoint === settings.endpoint ? workbenchRequest : searchRequest;
 
   return {
     activeRequest,

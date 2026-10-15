@@ -18,6 +18,7 @@ import type {
 } from '@clio/core/v3';
 import type { ConversationDisplayMode } from '@/providers/conversation-display-provider';
 import type { McpAppResponseActivityData } from './mcp-app-surface';
+import type { FileSearchLocation } from '@/lib/search-matches';
 import type { SubagentOpenTarget } from './subagent-card';
 import type { TurnPreparationProps } from './turn-preparation';
 import type { ConversationModelBoundary } from './conversation-model-boundaries';
@@ -70,6 +71,7 @@ export interface ClioConversationProps {
   retryingMessageId?: string;
   onOpenArtifact?: (artifact: Artifact) => void;
   onOpenFile?: (path: string) => void;
+  onOpenFileReference?: (path: string, location: FileSearchLocation) => void;
   onOpenWork?: () => void;
   onOpenResource?: (
     resource: WorkspaceResource,
@@ -102,6 +104,8 @@ export interface ConversationMessageRowProps extends Omit<ClioConversationProps,
   /** Retain the original message anchor without rendering a second injection row. */
   injectionsGrouped?: boolean;
   active?: boolean;
+  /** Canonical first iteration of the latest live activity group, including joined continuations. */
+  liveActivityId?: string;
   responseContinued?: boolean;
   /** A resumed segment of the same response, without a repeated sender header. */
   responseContinuation?: boolean;

@@ -238,6 +238,7 @@ export function A2uiRegionCaptureProvider({
   const start = useCallback(
     (next: CaptureTarget) => {
       if (!allowed) return;
+      window.getSelection()?.removeAllRanges();
       if (target?.element === next.element) {
         setSelecting((active) => !active);
         return;
@@ -547,7 +548,10 @@ export function A2uiRegionCaptureProvider({
                 </button>
                 <Button
                   aria-pressed={selecting}
-                  onClick={() => setSelecting((active) => !active)}
+                  onClick={() => {
+                    window.getSelection()?.removeAllRanges();
+                    setSelecting((active) => !active);
+                  }}
                   size="sm"
                   variant={selecting ? 'secondary' : 'ghost'}
                 >

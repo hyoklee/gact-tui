@@ -1,17 +1,11 @@
 import type { PendingInteraction, PendingInteractionResponse } from '@clio/core/v3';
 import { MessageCircleQuestionIcon } from 'lucide-react';
 import { useState } from 'react';
-import { MessageResponse } from '@/components/ai-elements/message';
+import { QuestionMarkdown } from './question-markdown';
 import { Frame, FrameHeader, FramePanel } from '@/components/reui/frame';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldLabel,
-  FieldTitle,
-} from '@/components/ui/field';
+import { Field, FieldContent, FieldLabel, FieldTitle } from '@/components/ui/field';
 import { CloseIcon, EditIcon } from '@/lib/icon-vocabulary';
 import { vocab } from '@/lib/brand-vocabulary';
 import { inlineQuestionDomId } from '@/lib/inline-question';
@@ -83,7 +77,7 @@ export function InlineQuestionCard({
               ? 'Answer when ready'
               : 'Answer needed to continue'}
           </span>
-          <span className="block break-words">{interaction.prompt ?? interaction.title}</span>
+          <QuestionMarkdown>{interaction.prompt ?? interaction.title}</QuestionMarkdown>
         </span>
       </Button>
     );
@@ -97,7 +91,7 @@ export function InlineQuestionCard({
       dense
       id={inlineQuestionDomId(interaction.source.invocation_id ?? interaction.id)}
       role="group"
-      spacing="sm"
+      spacing="xs"
       tabIndex={-1}
     >
       <FrameHeader className="relative flex-row items-start gap-2 pr-10">
@@ -111,7 +105,7 @@ export function InlineQuestionCard({
             className="clio-scrollbar mt-1 max-h-72 overflow-y-auto pr-1 text-sm text-foreground"
             data-slot="inline-question-prompt"
           >
-            <MessageResponse>{interaction.prompt ?? interaction.title}</MessageResponse>
+            <QuestionMarkdown>{interaction.prompt ?? interaction.title}</QuestionMarkdown>
           </div>
         </div>
         {canCancel ? (
@@ -144,11 +138,11 @@ export function InlineQuestionCard({
                 type="button"
                 variant="outline"
               >
-                <span>{option.label}</span>
+                <QuestionMarkdown>{option.label}</QuestionMarkdown>
                 {option.description ? (
-                  <span className="text-xs font-normal text-muted-foreground">
-                    {option.description}
-                  </span>
+                  <div className="text-xs font-normal text-muted-foreground">
+                    <QuestionMarkdown>{option.description}</QuestionMarkdown>
+                  </div>
                 ) : null}
               </Button>
             ))}
@@ -174,9 +168,13 @@ export function InlineQuestionCard({
                       }
                     />
                     <FieldContent>
-                      <FieldTitle>{option.label}</FieldTitle>
+                      <FieldTitle>
+                        <QuestionMarkdown>{option.label}</QuestionMarkdown>
+                      </FieldTitle>
                       {option.description ? (
-                        <FieldDescription>{option.description}</FieldDescription>
+                        <div className="text-muted-foreground">
+                          <QuestionMarkdown>{option.description}</QuestionMarkdown>
+                        </div>
                       ) : null}
                     </FieldContent>
                   </Field>

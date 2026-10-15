@@ -52,6 +52,8 @@ import { ClioArtifactCard } from './artifact-card';
 import { ArtifactFilters } from './artifact-filters';
 import { ClioInteractiveRow } from './interactive-row';
 import { WorkspaceFileView } from './resource-viewers';
+import { FileSearchPassage } from './file-search-passage';
+import type { FileSearchLocation } from '@/lib/search-matches';
 import { ClioStatus } from './status';
 import { WorkspaceDirectoryTree } from './workspace-directory-tree';
 
@@ -73,6 +75,7 @@ interface FileBrowserProps {
   filesTruncated?: boolean;
   filesNextOffset?: number | null;
   selectedPath?: string;
+  searchLocation?: FileSearchLocation;
   onRefresh?: () => void;
   onSelectedPathChange?: (path: string) => void;
 }
@@ -109,6 +112,7 @@ export function FileBrowser({
   filesTruncated,
   filesNextOffset,
   selectedPath,
+  searchLocation,
   onRefresh,
   onSelectedPathChange,
 }: FileBrowserProps) {
@@ -270,7 +274,13 @@ export function FileBrowser({
         <ResizableHandle aria-label="Resize file tree" withHandle />
         <ResizablePanel id="workspace-file-preview" minSize={stacked ? '180px' : '240px'}>
           <section aria-label="Workspace file preview" className="h-full min-h-0 overflow-hidden">
-            {previewPath ? (
+            {previewPath && searchLocation && previewPath === selectedPath ? (
+              <FileSearchPassage
+                workspaceId={workspaceId}
+                path={previewPath}
+                location={searchLocation}
+              />
+            ) : previewPath ? (
               <Suspense fallback={<ResourceLoading label="Loading file" />}>
                 <WorkspaceFileView
                   key={previewPath}

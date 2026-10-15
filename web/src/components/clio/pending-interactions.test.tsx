@@ -241,6 +241,8 @@ describe('ClioPendingInteractions', () => {
     const onResponse = renderPending([interaction]);
 
     await user.click(screen.getByRole('checkbox', { name: 'Table' }));
+    expect(screen.queryByLabelText('Comment on Table')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add comment on Table' }));
     await user.type(screen.getByLabelText('Comment on Table'), 'Keep sortable columns');
     await user.click(screen.getByRole('checkbox', { name: 'Plot' }));
     await user.click(screen.getByRole('button', { name: 'Send response' }));
@@ -383,13 +385,16 @@ describe('ClioPendingInteractions', () => {
     });
     const onResponse = renderPending([interaction]);
 
-    const title = screen.getByText('Which evidence view should remain primary?');
+    const title = screen
+      .getByText('Which evidence view should remain primary?')
+      .closest('[data-slot="pending-interaction-title"]');
     expect(title).toHaveAttribute('data-slot', 'pending-interaction-title');
-    expect(title).toHaveClass('line-clamp-3');
+    expect(title).toHaveClass('max-h-28');
     expect(title).not.toHaveClass('truncate');
-    expect(title).toHaveAttribute('title', 'Which evidence view should remain primary?');
+    expect(title).not.toHaveAttribute('title');
 
     await user.click(screen.getByRole('radio', { name: 'Station table' }));
+    await user.click(screen.getByRole('button', { name: 'Add comment on Station table' }));
     await user.type(
       screen.getByRole('textbox', { name: 'Comment on Station table' }),
       'Keep the sortable columns visible.',
@@ -405,6 +410,73 @@ describe('ClioPendingInteractions', () => {
       action: 'answer',
       answer: 'Keep the sortable columns visible.',
       selected_options: ['table'],
+    });
+  });
+
+  it('lets the plus control choose an option and submit its clarification', async () => {
+    const user = userEvent.setup();
+    const interaction = pending('question', {
+      prompt: 'Choose a comparison.',
+      actions: ['answer'],
+      payload: {
+        question_kind: 'choice',
+        options: [
+          { label: 'Treatment groups', value: 'treatment' },
+          { label: 'Changes over time', value: 'time' },
+        ],
+        allow_freeform: true,
+      },
+    });
+    const onResponse = renderPending([interaction]);
+
+    expect(screen.getByRole('button', { name: 'Add comment on Treatment groups' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Add comment on Changes over time' }));
+    expect(screen.getByRole('radio', { name: 'Changes over time' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Something else' })).not.toBeChecked();
+    await user.type(
+      screen.getByRole('textbox', { name: 'Comment on Changes over time' }),
+      'Use the last week only.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Send response' }));
+    expect(onResponse).toHaveBeenCalledWith(interaction, {
+      action: 'answer',
+      selected_options: ['time'],
+      answer: 'Use the last week only.',
+    });
+  });
+
+  it('opens comments by keyboard and preserves a hidden draft until submission', async () => {
+    const user = userEvent.setup();
+    const interaction = pending('question', {
+      prompt: 'Choose an output.',
+      actions: ['answer'],
+      payload: {
+        question_kind: 'choice',
+        options: [{ label: 'Table', value: 'table' }],
+      },
+    });
+    const onResponse = renderPending([interaction]);
+
+    await user.click(screen.getByRole('radio', { name: 'Table' }));
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Add comment on Table' })).toHaveFocus();
+    await user.keyboard('{Enter}');
+    await user.tab();
+    expect(screen.getByRole('textbox', { name: 'Comment on Table' })).toHaveFocus();
+    await user.keyboard('Include missing measurements.');
+    await user.click(screen.getByRole('button', { name: 'Hide comment on Table' }));
+    expect(screen.queryByRole('textbox', { name: 'Comment on Table' })).not.toBeInTheDocument();
+    expect(onResponse).not.toHaveBeenCalled();
+
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('textbox', { name: 'Comment on Table' })).toHaveValue(
+      'Include missing measurements.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Send response' }));
+    expect(onResponse).toHaveBeenCalledWith(interaction, {
+      action: 'answer',
+      selected_options: ['table'],
+      answer: 'Include missing measurements.',
     });
   });
 
@@ -588,11 +660,9 @@ describe('ClioPendingInteractions', () => {
     const responses = screen.getByRole('region', { name: 'Agent needs your response' });
     const viewport = screen.getByRole('region', { name: '2 pending responses' });
     expect(responses).toHaveClass('min-h-0', 'shrink');
-    // The panel floats on the composer and reads as one surface with it only
-    // while the Queue's translucent fill survives. Any background of its own
-    // replaces these through tailwind-merge, which is how that continuity was
-    // lost once already.
-    expect(responses).toHaveClass('bg-card/70', 'dark:bg-card/60');
+    // All response kinds share the actual composer tone, with no white layer
+    // extending across the pill's rounded boundary.
+    expect(responses).toHaveClass('bg-composer', 'dark:bg-composer', 'overflow-hidden');
     expect(viewport).toHaveAttribute('tabindex', '0');
     expect(viewport).toHaveClass('pending-interactions-viewport', 'overscroll-contain');
 

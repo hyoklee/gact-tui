@@ -1,6 +1,10 @@
 import type { Message, ToolInvocation } from '@clio/core/v3';
 import { describe, expect, it } from 'vitest';
-import { foldSubagentReturns, placeContinuedActivity } from './conversation-activity-placement';
+import {
+  foldSubagentReturns,
+  placeContinuedActivity,
+  liveActivityIterationId,
+} from './conversation-activity-placement';
 import { conversationTurnPresentation } from './conversation-turn-model';
 
 function assistant(id: string, blocks: Message['blocks']): Message {
@@ -16,6 +20,99 @@ const next = assistant('after', [
   { id: 'run-part', type: 'tool', tool_id: 'run' },
   { id: 'answer', type: 'text', channel: 'answer', text: 'Verification finished.' },
 ]);
+
+describe('following live activity', () => {
+  const options = {
+    activeTurnId: 'live',
+    sessionState: 'running',
+    presentations: new Map(),
+    tools,
+    tasks: {},
+    feedback: new Map(),
+    injections: new Map(),
+  };
+  it('opens finished calls in the current live group, then follows newer public entries', () => {
+    const message = { ...first, run_id: 'live' };
+    expect(liveActivityIterationId({ ...options, messages: [message] })).toBe('before:iteration:0');
+    const update = {
+      id: 'update',
+      type: 'text' as const,
+      channel: 'next_thought' as const,
+      text: 'Inspect the next file.',
+    };
+    expect(
+      liveActivityIterationId({
+        ...options,
+        messages: [{ ...message, blocks: [...message.blocks, update] }],
+      }),
+    ).toBeUndefined();
+    expect(
+      liveActivityIterationId({
+        ...options,
+        messages: [
+          {
+            ...message,
+            blocks: [...message.blocks, update, { id: 'verify', type: 'tool', tool_id: 'verify' }],
+          },
+        ],
+      }),
+    ).toBe('before:iteration:1');
+  });
+  it('folds automatic activity for final text, artifacts, completed runs and unrelated turns', () => {
+    const message = { ...first, run_id: 'live' };
+    for (const block of [
+      {
+        id: 'answer',
+        type: 'text' as const,
+        channel: 'answer' as const,
+        text: 'The result is ready.',
+      },
+      { id: 'artifact', type: 'artifact' as const, artifact_id: 'report' },
+    ])
+      expect(
+        liveActivityIterationId({
+          ...options,
+          messages: [{ ...message, blocks: [...message.blocks, block] }],
+        }),
+      ).toBeUndefined();
+    expect(
+      liveActivityIterationId({ ...options, messages: [message], sessionState: 'idle' }),
+    ).toBeUndefined();
+    expect(
+      liveActivityIterationId({ ...options, messages: [message], activeTurnId: 'other' }),
+    ).toBeUndefined();
+  });
+  it('follows resumed work in its original owner row and folds it when the answer arrives', () => {
+    const resumed = { ...next, run_id: 'live', blocks: next.blocks.slice(0, 2) };
+    const messages = [first, resumed];
+    const presentations = placeContinuedActivity(
+      messages,
+      new Set(['after']),
+      tools,
+      {},
+      new Map(),
+      new Map(),
+    );
+    expect(liveActivityIterationId({ ...options, messages, presentations })).toBe(
+      'before:iteration:0',
+    );
+    const answered = [first, { ...next, run_id: 'live' }];
+    expect(
+      liveActivityIterationId({
+        ...options,
+        messages: answered,
+        presentations: placeContinuedActivity(
+          answered,
+          new Set(['after']),
+          tools,
+          {},
+          new Map(),
+          new Map(),
+        ),
+      }),
+    ).toBeUndefined();
+  });
+});
 
 describe('continued operation placement', () => {
   it('keeps the question, reminder and resumed tools in one disclosure before the answer', () => {

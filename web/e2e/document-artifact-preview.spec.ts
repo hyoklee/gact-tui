@@ -41,8 +41,11 @@ for (const layout of [
 ]) {
   test.describe(layout.name, () => {
     test.use({ viewport: layout.viewport });
-    for (const item of cases) {
-      test(`opens the editable ${item.extension} artifact with its saved PDF preview`, async ({
+    for (const item of cases.flatMap((item) => [
+      { ...item, saved: true },
+      ...(item.extension === 'pptx' ? [{ ...item, saved: false }] : []),
+    ])) {
+      test(`opens the editable ${item.extension} artifact with ${item.saved ? 'its saved' : 'an automatically rendered'} PDF preview`, async ({
         page,
       }, testInfo) => {
         const source = readFileSync(
@@ -60,6 +63,10 @@ for (const layout of [
         const hash = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
         const errors: string[] = [];
         const conversions: string[] = [];
+        let finishConversion!: () => void;
+        const conversionResponse = new Promise<void>((resolve) => {
+          finishConversion = resolve;
+        });
         let holdRefresh = false;
         let finishRefresh!: () => void;
         const refreshResponse = new Promise<void>((resolve) => {
@@ -84,8 +91,20 @@ for (const layout of [
           native_open: true,
           embedded_editors: [],
           rendition_formats: ['pdf'],
-          pdf_rendition_artifact_id: pdfId,
+          pdf_rendition_artifact_id: item.saved ? pdfId : '',
           provenance: {},
+        };
+        const pdfManifest = {
+          ...manifest,
+          artifact_id: pdfId,
+          name: `${name}.v1.pdf`,
+          mime_type: 'application/pdf',
+          sha256: hash(pdf),
+          profile: 'pdf',
+          native_open: false,
+          rendition_formats: [],
+          pdf_rendition_artifact_id: '',
+          content_url: `/v1/artifacts/${pdfId}/document/content`,
         };
         const amendRecord = (record: Record<string, unknown>) => ({
           ...record,
@@ -101,12 +120,23 @@ for (const layout of [
             size_bytes: source.length,
           })),
         });
+        // This fixture never edits either metadata record. Load the original
+        // API envelopes once, then serve them without an idle upstream proxy
+        // socket spanning screenshot and viewer interactions.
+        const artifactResponse = await page.request.get(`${endpoint}/v1/artifacts/${sourceId}`);
+        expect(artifactResponse.ok()).toBe(true);
+        const originalArtifact = await artifactResponse.json();
+        const editableArtifact = amendRecord(originalArtifact.artifact);
+        const artifactsResponse = await page.request.get(
+          `${endpoint}/v1/sessions/${sessionId}/artifacts?include_children=true&include_used=true&limit=200`,
+        );
+        expect(artifactsResponse.ok()).toBe(true);
+        const originalArtifacts = await artifactsResponse.json();
         await page.route('**/v1/**', async (route) => {
           const url = new URL(route.request().url());
           const path = url.pathname;
           if (path === `/v1/sessions/${sessionId}/artifacts`) {
-            const response = await route.fetch();
-            const body = await response.json();
+            const body = structuredClone(originalArtifacts);
             body.artifacts = body.artifacts.map(amendRecord);
             const preview = structuredClone(body.artifacts[0]);
             preview.name = `${name}.v1.pdf`;
@@ -128,13 +158,15 @@ for (const layout of [
             }));
             body.artifacts.push(preview);
             body.count = body.artifacts.length;
-            await route.fulfill({ response, json: body });
+            await route.fulfill({ json: body });
           } else if (path === `/v1/artifacts/${sourceId}`) {
-            const response = await route.fetch();
-            const body = await response.json();
-            body.artifact = amendRecord(body.artifact);
-            body.resolved = body.artifact.versions[0];
-            await route.fulfill({ response, json: body });
+            await route.fulfill({
+              json: {
+                ...originalArtifact,
+                artifact: editableArtifact,
+                resolved: editableArtifact.versions[0],
+              },
+            });
           } else if (path === `/v1/artifacts/${sourceId}/lineage`) {
             await route.fulfill({
               json: {
@@ -175,20 +207,7 @@ for (const layout of [
             if (holdRefresh) await refreshResponse;
             await route.fulfill({ json: manifest });
           } else if (path === `/v1/artifacts/${pdfId}/document`) {
-            await route.fulfill({
-              json: {
-                ...manifest,
-                artifact_id: pdfId,
-                name: `${name}.v1.pdf`,
-                mime_type: 'application/pdf',
-                sha256: hash(pdf),
-                profile: 'pdf',
-                native_open: false,
-                rendition_formats: [],
-                pdf_rendition_artifact_id: '',
-                content_url: `/v1/artifacts/${pdfId}/document/content`,
-              },
-            });
+            await route.fulfill({ json: pdfManifest });
           } else if (path === `/v1/artifacts/${pdfId}/document/content`) {
             await route.fulfill({ contentType: 'application/pdf', body: pdf });
           } else if (path === `/v1/artifacts/${sourceId}/bytes`) {
@@ -197,6 +216,20 @@ for (const layout of [
             await route.fulfill({ json: { reviews: [] } });
           } else if (path.endsWith('/renditions')) {
             conversions.push(path);
+            if (!item.saved) {
+              expect(route.request().method()).toBe('POST');
+              expect(url.searchParams.get('session_id')).toBe(sessionId);
+              await conversionResponse;
+              manifest.pdf_rendition_artifact_id = pdfId;
+              await route.fulfill({
+                json: {
+                  source_artifact_id: sourceId,
+                  converter: 'libreoffice',
+                  artifact: pdfManifest,
+                },
+              });
+              return;
+            }
             await route.fulfill({
               status: 500,
               json: { detail: 'Saved previews must not reconvert.' },
@@ -221,6 +254,11 @@ for (const layout of [
           fullPage: true,
         });
         await canvas.getByRole('button', { name: `Open ${name}`, exact: true }).click();
+        if (!item.saved) {
+          await expect(canvas.getByText('Rendering PDF preview…', { exact: true })).toBeVisible();
+          await expect(canvas.getByText(/remains canonical/u)).toHaveCount(0);
+          finishConversion();
+        }
         const toolbar = canvas.locator('[data-slot="viewer-toolbar"]');
         await expect(toolbar).toHaveCount(1);
         const previewTab = toolbar.getByRole('tab', { name: 'Preview', exact: true });
@@ -290,6 +328,37 @@ for (const layout of [
         await expect(document.getByText(item.text, { exact: true })).toBeVisible();
         await expect(document.locator('.react-pdf__Page__canvas').first()).toBeVisible();
         const pageCanvas = document.locator('.react-pdf__Page__canvas').first();
+        const pdfScroller = document.locator('[data-pdf-scroller]');
+        const fittedPage = document.locator('[data-page]').first();
+        const pageFits = () =>
+          fittedPage.evaluate((element) => {
+            const host = element.closest<HTMLElement>('[data-pdf-scroller]')!;
+            const bounds = element.getBoundingClientRect();
+            return (
+              bounds.width + 24 <= host.clientWidth + 1 &&
+              bounds.height + 24 <= host.clientHeight + 1
+            );
+          });
+        await expect.poll(pageFits).toBe(true);
+        const windowGeometry = await page.evaluate(() => ({
+          width: innerWidth,
+          density: devicePixelRatio,
+        }));
+        await pdfScroller.hover();
+        await page.keyboard.down('Control');
+        await page.mouse.wheel(0, 120);
+        await page.keyboard.up('Control');
+        await expect(canvas.getByRole('button', { name: 'Reset zoom', exact: true })).toHaveText(
+          '85%',
+        );
+        expect(
+          await page.evaluate(() => ({ width: innerWidth, density: devicePixelRatio })),
+        ).toEqual(windowGeometry);
+        await canvas.getByRole('button', { name: 'Reset zoom', exact: true }).click();
+        await expect(canvas.getByRole('button', { name: 'Reset zoom', exact: true })).toHaveText(
+          '100%',
+        );
+        await expect.poll(pageFits).toBe(true);
         await expect
           .poll(async () =>
             pageCanvas.evaluate((canvas) => {
@@ -387,7 +456,7 @@ for (const layout of [
         await expect(
           canvas.getByRole('button', { name: 'Refresh document revision', exact: true }),
         ).toBeEnabled();
-        expect(conversions).toEqual([]);
+        expect(conversions).toEqual(item.saved ? [] : [`/v1/artifacts/${sourceId}/renditions`]);
         expect(errors).toEqual([]);
       });
     }

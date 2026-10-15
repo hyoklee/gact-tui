@@ -25,8 +25,10 @@ import { vocab } from '@/lib/brand-vocabulary';
 export function ProvenanceConnections({
   connect,
   onClose,
+  onBack,
 }: {
   connect?: ProvenanceConnectionInput;
+  onBack?: () => void;
   onClose: () => void;
 }) {
   const { settings } = useConnectionSettings();
@@ -63,6 +65,7 @@ export function ProvenanceConnections({
       {connect ? (
         <ConnectDialog
           key={`${scope}:${connect.service_id}`}
+          onBack={onBack}
           initial={connect}
           onClose={onClose}
           onChanged={refresh}
@@ -182,8 +185,10 @@ function ConnectDialog({
   initial,
   onClose,
   onChanged,
+  onBack,
 }: {
   initial: ProvenanceConnectionInput;
+  onBack?: () => void;
   onClose: () => void;
   onChanged: () => Promise<unknown>;
 }) {
@@ -220,6 +225,11 @@ function ConnectDialog({
             Connection and paths belong to {settings.label || `the connected ${vocab.agent}`}.
           </DialogDescription>
         </DialogHeader>
+        {onBack ? (
+          <Button size="sm" variant="ghost" className="w-fit" onClick={onBack}>
+            Choose another service
+          </Button>
+        ) : null}
         <form
           className="space-y-4"
           onSubmit={(event) => {

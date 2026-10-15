@@ -55,8 +55,10 @@ function toolAttentionBadge(
 }
 
 interface ConversationTurnProps {
-  /** Retained for callers; entry disclosures are now entirely reader-controlled. */
+  /** Retained for callers; live following uses the latest visible activity instead. */
   answerStarted?: boolean;
+  /** Open the last live group until a newer entry arrives, unless the reader chose otherwise. */
+  followLiveActivity?: boolean;
   iterations: readonly ConversationIteration[];
   mode: 'chain' | 'full';
   onOpenSubagent?: (subagent: SubagentRun, target: SubagentOpenTarget) => void;
@@ -76,6 +78,7 @@ interface ConversationTurnProps {
 
 /** Shared Full and Chain projection of the same authoritative iteration objects. */
 export function ConversationTurn({
+  followLiveActivity = false,
   iterations,
   mode,
   onOpenSubagent,
@@ -157,7 +160,7 @@ export function ConversationTurn({
     const activityInteractions = interactions?.filter((item) => !planReviews.includes(item));
     return (
       <div className="flex min-w-0 flex-col gap-4" data-slot="plan-review-sequence">
-        {sections.map((section) =>
+        {sections.map((section, index) =>
           section.kind === 'review' ? (
             <ConversationInteractionActivity
               key={section.interaction.id}
@@ -178,6 +181,7 @@ export function ConversationTurn({
             <ConversationTurn
               key={section.iterations[0].id}
               iterations={section.iterations}
+              followLiveActivity={followLiveActivity && index === sections.length - 1}
               mode={mode}
               subagents={subagents}
               interactions={activityInteractions}
@@ -230,14 +234,17 @@ export function ConversationTurn({
   }
   return (
     <div className="flex min-w-0 flex-col gap-2" data-slot="transcript-entry-sequence">
-      {groups.map((group) => {
+      {groups.map((group, index) => {
         const iteration = group[0];
         const summary = transcriptActivitySummary(group);
         return (
           <Fragment key={iteration.id}>
             <TranscriptIterationText iteration={iteration} showReasoning={false} />
             {group.some((item) => item.activity.length || item.interrupted) ? (
-              <ActivityChain id={iteration.id}>
+              <ActivityChain
+                id={iteration.id}
+                defaultOpen={followLiveActivity && index === groups.length - 1}
+              >
                 <ChainOfThoughtHeader
                   aria-label={`Activity: ${summary.label}`}
                   className="min-h-7 [&>svg:first-child]:hidden"
@@ -253,7 +260,7 @@ export function ConversationTurn({
                   </span>
                 </ChainOfThoughtHeader>
                 <ChainOfThoughtContent
-                  className="ml-1 mt-3 space-y-3 border-l pl-3"
+                  className="ml-1 mt-1 space-y-1 border-l pl-3"
                   data-slot="transcript-activity-timeline"
                 >
                   {group.map((item) => (
@@ -289,11 +296,18 @@ export function ConversationTurn({
 }
 
 /**
- * A recorded iteration's tool group. Only the reader opens it, including while
- * tools stream; a later answer never changes that choice.
+ * Follow the latest live work while retaining explicit reader choices.
  */
-function ActivityChain({ children, id }: { children: ReactNode; id: string }) {
-  const [readerOpen, setReaderOpen] = useTranscriptDisclosure(`activity:${id}`);
+function ActivityChain({
+  children,
+  id,
+  defaultOpen,
+}: {
+  children: ReactNode;
+  id: string;
+  defaultOpen: boolean;
+}) {
+  const [readerOpen, setReaderOpen] = useTranscriptDisclosure(`activity:${id}`, defaultOpen);
   // Only activity boundaries add room; adjacent prose retains its normal gap.
   return (
     <ChainOfThought

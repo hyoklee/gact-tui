@@ -11,6 +11,8 @@ const fixtures = vi.hoisted(() => ({
     searchModels: vi.fn(),
     acquireModel: vi.fn(),
     modelAcquisitionAction: vi.fn(),
+    modelRegistryDetails: vi.fn(),
+    managedServiceCatalog: vi.fn(),
   },
 }));
 vi.mock('@/hooks/use-repository', () => ({ useRepository: () => fixtures.repository }));
@@ -28,6 +30,21 @@ beforeEach(() => {
   });
   fixtures.repository.hostStorageSettings.mockResolvedValue({
     effective: { models: '/data/models' },
+  });
+  fixtures.repository.searchModels.mockResolvedValue({ models: [] });
+  fixtures.repository.managedServiceCatalog.mockResolvedValue({
+    services: [{ id: 'vllm', variants: [{ compatible: true }] }],
+  });
+  fixtures.repository.modelRegistryDetails.mockResolvedValue({
+    repository: 'org/model',
+    metadata_repository: 'org/model',
+    revision: 'f'.repeat(40),
+    hub_tags: ['text-generation'],
+    context_window: 4096,
+    native_tool_calling: null,
+    reasoning: null,
+    card_url: 'https://huggingface.co/org/model',
+    card_markdown: '# Model card',
   });
 });
 afterEach(cleanup);
@@ -75,10 +92,14 @@ describe('host model acquisition', () => {
     mount();
     expect(await screen.findByText('Shared cache')).toBeInTheDocument();
     expect(screen.queryByText('Files verified')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Cache details')).toHaveLength(2);
-    expect(screen.queryByText('Download receipt')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Set up runtime' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for org/shared' }));
+    expect(screen.getByRole('menuitem', { name: 'Delete model files...' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByText(/shared cache is managed outside/iu)).toBeVisible();
   });
   it('downloads an explicitly selected revision on the named host without starting inference', async () => {
     const user = userEvent.setup();
@@ -87,16 +108,24 @@ describe('host model acquisition', () => {
         { repository: 'org/small', revision: 'abcdef', task: 'text-generation', gated: false },
       ],
     });
-    fixtures.repository.acquireModel.mockResolvedValue({ id: 'job' });
+    fixtures.repository.acquireModel.mockResolvedValue({
+      id: 'job',
+      repository: 'org/small',
+      state: 'running',
+      phase: 'Downloading model files',
+      bytes_done: 10,
+      bytes_total: 20,
+    });
     mount();
     await screen.findByText('No downloaded models on this host yet.');
     await user.click(screen.getByRole('button', { name: 'Download model' }));
-    await user.type(screen.getByLabelText('Find on Hugging Face'), 'small');
-    await user.click(screen.getByRole('button', { name: 'Search models' }));
+    expect(fixtures.repository.searchModels).toHaveBeenCalledWith('', expect.any(AbortSignal));
+    await user.type(screen.getByLabelText('Find on Hugging Face'), 'small{Enter}');
     await user.click(await screen.findByRole('button', { name: /org\/small/ }));
+    await user.click(screen.getByText('Advanced download settings', { exact: true }));
     expect(screen.getByLabelText('Revision')).toHaveValue('abcdef');
     await user.type(screen.getByLabelText('Destination on Homelab'), '/data/owned/model');
-    await user.click(screen.getByRole('button', { name: 'Download to host' }));
+    await user.click(screen.getByRole('button', { name: 'Download to Homelab' }));
     await waitFor(() =>
       expect(fixtures.repository.acquireModel).toHaveBeenCalledWith('homelab', {
         repository: 'org/small',
@@ -105,6 +134,13 @@ describe('host model acquisition', () => {
       }),
     );
     expect(fixtures.repository.modelAcquisitionAction).not.toHaveBeenCalled();
+    const progress = await screen.findByRole('progressbar', {
+      name: 'Downloaded bytes for org/small',
+    });
+    expect(progress).toHaveAttribute('value', '10');
+    expect(progress).toHaveAttribute('max', '20');
+    expect(screen.getByText(/50%/u)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Continue in background' })).toBeVisible();
   });
   it('sets the download expectation before it starts, with the size search reported', async () => {
     const user = userEvent.setup();
@@ -126,11 +162,12 @@ describe('host model acquisition', () => {
     expect(screen.getByText(/This can take several minutes/u)).toHaveTextContent(
       'prepares the model files.',
     );
-    await user.type(screen.getByLabelText('Find on Hugging Face'), 'large');
-    await user.click(screen.getByRole('button', { name: 'Search models' }));
+    await user.type(screen.getByLabelText('Find on Hugging Face'), 'large{Enter}');
     await user.click(await screen.findByRole('button', { name: /org\/large/ }));
     const expectation = screen.getByText(/This can take several minutes/u);
-    expect(expectation).toHaveTextContent('prepares org/large. About 16.0 GB to download.');
+    expect(expectation).toHaveTextContent(
+      'prepares org/large. This can take several minutes. About 16.0 GB to download.',
+    );
     expect(expectation).toHaveTextContent('You can leave this page; progress continues.');
   });
   it('scopes cancellation to the recorded host and job', async () => {
@@ -154,7 +191,7 @@ describe('host model acquisition', () => {
     });
     fixtures.repository.modelAcquisitionAction.mockResolvedValue({ id: 'job' });
     mount();
-    await userEvent.click(await screen.findByRole('button', { name: 'Cancel download' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
     await waitFor(() =>
       expect(fixtures.repository.modelAcquisitionAction).toHaveBeenCalledWith(
         'homelab',
