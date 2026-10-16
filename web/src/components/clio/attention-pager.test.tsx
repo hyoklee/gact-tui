@@ -55,6 +55,42 @@ const bundle: PendingInteraction = {
   },
 };
 
+it('treats a question id matching an Object property as an unanswered field', async () => {
+  const onResponse = vi.fn();
+  const interaction: PendingInteraction = {
+    ...question('prototype-name'),
+    payload: {
+      metadata: {
+        question_bundle: {
+          questions: [
+            {
+              id: 'constructor',
+              question: 'Which constructor?',
+              kind: 'freeform',
+              allow_freeform: true,
+              options: [],
+            },
+          ],
+        },
+      },
+    },
+  };
+  render(
+    <ClioPendingInteractions
+      interactions={[interaction]}
+      viewedSessionId="s"
+      onResponse={onResponse}
+    />,
+  );
+  expect(screen.getByRole('button', { name: 'Submit all answers' })).toBeDisabled();
+  await userEvent.type(screen.getByRole('textbox'), 'Default');
+  await userEvent.click(screen.getByRole('button', { name: 'Submit all answers' }));
+  expect(onResponse).toHaveBeenCalledWith(interaction, {
+    action: 'answer',
+    metadata: { answers: { constructor: { answer: 'Default', selected_options: [] } } },
+  });
+});
+
 it('retains bundle page and answers when the responsive composer remounts', async () => {
   const user = userEvent.setup();
   const drafts = createAttentionDraftStore();

@@ -39,9 +39,9 @@ export function QuestionBundleResponse(props: {
   const [sending, setSending] = useState(false);
   const question = questions[index];
   if (!question) return null;
-  const value = answers[question.id] ?? emptyAnswer;
+  const value = Object.hasOwn(answers, question.id) ? answers[question.id]! : emptyAnswer;
   const isComplete = (question: BundleQuestion) => {
-    const answer = answers[question.id];
+    const answer = Object.hasOwn(answers, question.id) ? answers[question.id] : undefined;
     return Boolean(answer && (answer.selected_options.length > 0 || answer.answer.trim()));
   };
   const complete = questions.filter(isComplete).length;
