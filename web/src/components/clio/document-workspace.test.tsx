@@ -103,6 +103,8 @@ function renderWorkspace(
 
 describe('ClioDocumentWorkspace', () => {
   it('renders inline dollar math in a Markdown artifact without converting it to PDF', async () => {
+    // Assert rendering, independently of the real lazy module's cold transform time.
+    await import('../ai-elements/markdown');
     repository.documentManifest.mockResolvedValue(manifest);
     repository.documentContent.mockResolvedValue(
       new TextEncoder().encode(

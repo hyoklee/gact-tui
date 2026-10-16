@@ -1,10 +1,31 @@
 # Interactive HTML previews
 
 Opening a generated HTML artifact runs its JavaScript in a separate frame. Static
-HTML keeps the existing script-free preview. The Source tab always shows the
+HTML is sanitized before a fixed, nonce-authorized sizing/theme script is added;
+authored scripts remain excluded from static content. The Source tab always shows the
 original file. Stop removes the running frame; Restart creates a fresh instance.
 In file and resource viewers, Stop and Restart join the existing Preview/Source
 toolbar. Standalone previews keep their own controls.
+
+Previews grow and shrink with their content, including expanded controls, image
+loads, font loads and updated file content. Scrolling belongs to the containing
+viewer. Full-viewport documents keep their authored layout. Layout messages are
+accepted only from the matching frame and random channel; heights are bounded at
+50,000px, with ordinary scrolling retained for exceptionally large documents.
+
+HTML and SVG can use CLIO's `--background`, `--foreground`, `--primary`, `--muted`,
+`--muted-foreground`, `--border`, `--radius`, `--font-sans`, `--font-mono`, role and
+chart color tokens. Basic HTML controls receive theme defaults. Existing explicit
+author styles take precedence. Switching themes sends the new values into the
+running frame and preserves inputs, controls and simulations; it does not reload
+the document. Canvas renderers can listen for `clio:theme-change` and repaint.
+SVG image previews and existing inline Image surfaces receive the same tokens in
+a display copy, preserving viewer zoom and inline fullscreen state.
+Original file bytes, source, downloads and provenance are unchanged. Hard-coded
+author colors are retained; use tokens or `currentColor` for adaptive visuals.
+
+This extends the existing HTML/SVG viewers. It does not add another widget tool,
+chat-message protocol, hidden prompt bridge or automatic placement rule.
 
 WebGL works in this frame. Three.js 0.180.0 and OrbitControls are supplied offline:
 
@@ -61,4 +82,5 @@ output directory, then run:
 
 ```powershell
 pnpm --filter @clio/workspace exec playwright test -c tests/review/webgl-playwright.config.ts
+pnpm --filter @clio/workspace exec playwright test -c tests/review/html-responsive-playwright.config.ts
 ```

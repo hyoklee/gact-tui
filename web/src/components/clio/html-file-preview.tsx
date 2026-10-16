@@ -7,7 +7,7 @@ import { hasHtmlScripts, interactiveHtmlDocument } from './html-interactive-poli
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { inTauri } from '@/lib/transport/tauri-runtime';
-import { DesktopHtmlFrame } from './desktop-html-frame';
+import { DesktopHtmlFrame, HtmlRendererFrame } from './desktop-html-frame';
 import { FileViewerInformationHost } from './file-viewer-context';
 import { ViewerToolbarContent } from './viewer-toolbar';
 
@@ -81,17 +81,10 @@ export function HtmlPreview({ name, content }: { name: string; content: string }
         </p>
       ) : !preview.html ? (
         <Skeleton aria-label="Loading interactive preview" className="m-3 min-h-32 flex-1" />
-      ) : scripted && inTauri() ? (
+      ) : inTauri() ? (
         <DesktopHtmlFrame key={`${generation}:${content}`} name={name} html={preview.html} />
       ) : (
-        <iframe
-          key={generation}
-          className="min-h-0 w-full flex-1 border-0 bg-white"
-          title={`HTML preview of ${name}`}
-          sandbox={scripted ? 'allow-scripts' : ''}
-          referrerPolicy="no-referrer"
-          srcDoc={preview.html}
-        />
+        <HtmlRendererFrame key={generation} name={name} html={preview.html} />
       )}
     </div>
   );

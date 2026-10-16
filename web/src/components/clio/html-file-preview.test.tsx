@@ -50,7 +50,8 @@ it('retains authored CSS, animation and local SVG references in an isolated disp
   expect(document.head.children[1]).toBe(policy);
   render(<HtmlFilePreview name="cat.html" content={content} />);
   expect(screen.queryByText(/Static preview ·/)).not.toBeInTheDocument();
-  expect(screen.getByTitle('HTML preview of cat.html')).toHaveAttribute('sandbox', '');
+  // Authored static content is sanitized; only the nonce-authorized sizing/theme bridge runs.
+  expect(screen.getByTitle('HTML preview of cat.html')).toHaveAttribute('sandbox', 'allow-scripts');
   expect(screen.getByTitle('HTML preview of cat.html')).toHaveAttribute(
     'referrerpolicy',
     'no-referrer',
