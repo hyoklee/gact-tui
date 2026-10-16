@@ -24,7 +24,10 @@ export function HtmlRendererFrame({
   useEffect(() => {
     const timer = window.setTimeout(() => setFailed(true), 10_000);
     const ready = (event: MessageEvent) => {
-      if (event.source !== frame.current?.contentWindow || event.data?.type !== 'clio.html-preview.ready') return;
+      if (
+        event.source !== frame.current?.contentWindow ||
+        event.data?.type !== 'clio.html-preview.ready'
+      ) return;
       window.clearTimeout(timer);
     };
     window.addEventListener('message', ready);
@@ -33,7 +36,12 @@ export function HtmlRendererFrame({
       window.removeEventListener('message', ready);
     };
   }, []);
-  if (failed) return <ResourceUnavailable label="Interactive preview did not respond" detail="Use Restart to try again, or open the file in your browser. Update the connected CLIO if it does not support interactive previews." />;
+  if (failed) return (
+    <ResourceUnavailable
+      label="Interactive preview did not respond"
+      detail="Use Restart to try again, or open the file in your browser. Update the connected CLIO if it does not support interactive previews."
+    />
+  );
   return (
     <iframe
       ref={frame}
