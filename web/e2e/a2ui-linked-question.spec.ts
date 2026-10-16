@@ -117,7 +117,7 @@ for (const width of [1280, 390]) {
     await input.fill('Retained research draft');
     await expect(page.getByRole('button', { name: 'Go to question' })).toHaveCount(0);
     asked = true;
-    const notice = page.getByRole('region', { name: 'Agent needs your response' });
+    const notice = page.getByRole('region', { name: 'Agent needs your attention' });
     await expect(notice.getByRole('button', { name: 'Go to question' })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toHaveAttribute(
       'data-state',

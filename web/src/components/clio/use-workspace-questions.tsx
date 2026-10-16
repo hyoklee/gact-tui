@@ -4,10 +4,12 @@ import type {
   PendingInteractionResponse,
   ToolInvocation,
 } from '@clio/core/v3';
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { AttentionDraftContext, createAttentionDraftStore } from './attention-drafts';
 import type { SessionSendInput } from '@/hooks/use-session-mutations';
 import { ClioPendingInteractions, type ClioPendingInteractionsProps } from './pending-interactions';
 import { AgentQuestionDialog } from './agent-question-dialog';
+import { revealPendingInteraction } from './interaction-control';
 import { useQuestionAnswering } from './use-question-answering';
 import * as workspaceRouteState from './workspace-route-state';
 import {
@@ -59,6 +61,7 @@ export function useWorkspaceQuestions({
   pendingInteractionsPanel: ReactNode;
 } {
   const sessionId = tray.viewedSessionId;
+  const drafts = useMemo(() => createAttentionDraftStore(sessionId), [sessionId]);
   const [openedId, setOpenedId] = useState<string>();
   const [surfaceTarget, setSurfaceTarget] = useState<SurfaceQuestionTarget>();
   const openSurfaceQuestion = useCallback(
@@ -101,8 +104,8 @@ export function useWorkspaceQuestions({
     new Set(tools.map((tool) => tool.id)),
   );
   const pendingInteractionsPanel = (
-    <>
-      {questionAnswering.notice}
+    <AttentionDraftContext.Provider value={drafts}>
+      {questionAnswering.context.answeringId ? questionAnswering.notice : null}
       <AgentQuestionDialog
         interaction={interactions.find((row) => row.id === openedId && row.status === 'pending')}
         onClose={() => setOpenedId(undefined)}
@@ -114,7 +117,7 @@ export function useWorkspaceQuestions({
         onResponse={handleInteractionResponse}
         onOpenSurfaceQuestion={openSurfaceQuestion}
       />
-    </>
+    </AttentionDraftContext.Provider>
   );
   return {
     handleInteractionResponse,
@@ -126,6 +129,8 @@ export function useWorkspaceQuestions({
         openQuestion: (interaction: PendingInteraction) => {
           if (interaction.source.surface_id && !embedsQuestionSurface(interaction))
             openSurfaceQuestion(interaction);
+          else if (trayInteractions.some((row) => row.id === interaction.id))
+            revealPendingInteraction(interaction.id);
           else setOpenedId(interaction.id);
         },
         openSurfaceQuestion,

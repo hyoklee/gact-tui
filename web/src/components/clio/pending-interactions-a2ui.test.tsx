@@ -161,8 +161,11 @@ describe('ClioPendingInteractions explicitly inline A2UI kind', () => {
     // Each kind's own reader-visible content, not the private data-interaction-kind
     // attribute the branching logic happens to stamp on its wrapper.
     expect(screen.getByText('Question')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Next request' }));
     expect(screen.getByText('Permission')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Next request' }));
     expect(screen.getByText('Select task input')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Next request' }));
     expect(await screen.findByRole('button', { name: 'Submit selection' })).toBeVisible();
     expect(screen.getAllByText('Evidence specialist')).toHaveLength(4);
     expect(repository.a2uiAction).not.toHaveBeenCalled();

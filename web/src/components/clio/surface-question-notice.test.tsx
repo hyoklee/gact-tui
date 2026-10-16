@@ -62,7 +62,7 @@ describe('A2UI response notices', () => {
   it('does not count an offered action as requiring a human response', () => {
     mount(pending({ requires_human_response: false }));
     expect(
-      screen.queryByRole('region', { name: 'Agent needs your response' }),
+      screen.queryByRole('region', { name: 'Agent needs your attention' }),
     ).not.toBeInTheDocument();
   });
   it('does not navigate to another owner with the same surface id', () => {

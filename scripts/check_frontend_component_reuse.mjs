@@ -81,7 +81,18 @@ const requiredImports = {
   ],
   'web/src/components/clio/resource-viewers.tsx': ['@/components/ai-elements/code-block'],
   'web/src/components/clio/subagent-card.tsx': ['@/components/theokit/sub-agent-dispatch'],
-  'web/src/components/clio/pending-interactions.tsx': ['@/components/ai-elements/confirmation'],
+  // October 16 attention redesign: Queue owns the shared pager boundary. The
+  // extracted permission decision composes the existing Button/Select rather
+  // than another nested Alert. Reviewed in light/dark and narrow browser cases;
+  // see docs/design/attention-panel.md. Preserve the complete sourced chain.
+  'web/src/components/clio/pending-interactions.tsx': [
+    '@/components/ai-elements/queue',
+    './permission-response',
+  ],
+  'web/src/components/clio/permission-response.tsx': [
+    '@/components/ui/button',
+    '@/components/ui/select',
+  ],
   'web/src/components/clio/workbench.tsx': ['@/components/ui/tabs', './workbench-resource-browser'],
   'web/src/components/clio/workbench-resource-browser.tsx': [
     '@/components/ai-elements/file-tree',

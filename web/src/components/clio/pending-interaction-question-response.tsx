@@ -1,3 +1,4 @@
+import { useAttentionDraft } from './attention-drafts';
 import type { PendingInteraction, PendingInteractionResponse } from '@clio/core/v3';
 import { useState, type ReactNode } from 'react';
 import { MinusIcon } from 'lucide-react';
@@ -17,6 +18,8 @@ import { QuestionMarkdown } from './question-markdown';
 import { StructuredQuestionResponse, UrlConsentResponse } from './question-interaction-forms';
 import { embedsQuestionSurface } from '@/lib/a2ui/question-navigation';
 import { SurfaceQuestionNotice } from './surface-question-notice';
+import { QuestionBundleResponse } from './question-bundle-response';
+import { bundleQuestions } from './question-bundle';
 
 /**
  * Split out of `pending-interactions.tsx` purely for file size (the 800-line
@@ -43,10 +46,28 @@ export function QuestionResponse({
   showOwner: boolean;
   showFullPrompt?: boolean;
 }) {
-  const [answer, setAnswer] = useState('');
-  const [selection, setSelection] = useState('');
-  const [multiSelection, setMultiSelection] = useState<string[]>([]);
-  const [optionComments, setOptionComments] = useState<Record<string, string>>({});
+  const [answer, setAnswer] = useAttentionDraft(`${interaction.id}:answer`, '');
+  const [selection, setSelection] = useAttentionDraft(`${interaction.id}:selection`, '');
+  const [multiSelection, setMultiSelection] = useAttentionDraft<string[]>(
+    `${interaction.id}:multi`,
+    () => [],
+  );
+  const [optionComments, setOptionComments] = useAttentionDraft<Record<string, string>>(
+    `${interaction.id}:comments`,
+    () => ({}),
+  );
+  if (bundleQuestions(interaction).length) {
+    return (
+      <QuestionBundleResponse
+        interaction={interaction}
+        disabled={disabled}
+        onResponse={onResponse}
+        ownerLabel={ownerLabel}
+        responseError={responseError}
+        showOwner={showOwner}
+      />
+    );
+  }
   if (interaction.source.surface_id && !embedsQuestionSurface(interaction)) {
     return (
       <SurfaceQuestionNotice
