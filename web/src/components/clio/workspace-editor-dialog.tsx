@@ -1,6 +1,6 @@
 import type { Workspace } from '@clio/core/v3';
 import { FolderIcon } from 'lucide-react';
-import { AddIcon, DeleteIcon } from '@/lib/icon-vocabulary';
+import { AddIcon, RemoveIcon } from '@/lib/icon-vocabulary';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,9 +11,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
+import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { vocab } from '@/lib/brand-vocabulary';
+import { InfoTip } from './info-tip';
 import { ClioPathPicker } from './path-picker';
 
 export interface WorkspaceEditorActions {
@@ -98,8 +99,8 @@ export function WorkspaceEditorDialog({
       <DialogContent className="max-h-[calc(100dvh-2rem)] min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Edit workspace</DialogTitle>
-          <DialogDescription>
-            Change its name and the folders this workspace is allowed to use.
+          <DialogDescription className="sr-only">
+            Edit this workspace's name and folder access.
           </DialogDescription>
         </DialogHeader>
         <div className="grid min-w-0 gap-5 overflow-y-auto pr-1">
@@ -114,7 +115,13 @@ export function WorkspaceEditorDialog({
             />
           </Field>
           <Field className="min-w-0">
-            <FieldLabel>Primary folder</FieldLabel>
+            <div className="flex items-center gap-2">
+              <FieldLabel>Primary folder</FieldLabel>
+              <InfoTip label="About the primary folder">
+                Choose its new location if you moved the folder. Conversations stay in this
+                workspace; files are not moved. Finish running conversations before changing it.
+              </InfoTip>
+            </div>
             <ClioPathPicker
               disabled={pending}
               inputLabel="Primary folder path"
@@ -122,63 +129,63 @@ export function WorkspaceEditorDialog({
               onChange={setPrimaryPath}
               value={primaryPath}
             />
-            <FieldDescription>
-              Choose the new location if you moved this folder. Your conversations stay in this
-              workspace. {vocab.product} does not move your files. Finish running conversations
-              before changing it.
-            </FieldDescription>
           </Field>
           <Field className="min-w-0">
-            <div className="flex items-center justify-between gap-3">
-              <FieldLabel>Additional permitted folders</FieldLabel>
-              <span className="text-xs text-muted-foreground">{additional.length} added</span>
-            </div>
-            <div className="min-w-0 overflow-hidden rounded-xl border bg-muted/15">
-              {additional.map((path) => (
-                <FolderRow
-                  key={path}
-                  name={folderName(path)}
-                  onRemove={
-                    pending
-                      ? undefined
-                      : () => {
-                          setAdded((current) => current.filter((candidate) => candidate !== path));
-                          setRemoved((current) => [...new Set([...current, path])]);
-                        }
-                  }
-                  path={path}
-                />
-              ))}
-              <div className="grid gap-2 border-t p-2">
-                <ClioPathPicker
-                  disabled={pending}
-                  inputLabel="Additional folder path"
-                  knownFolders={initialFolders.map((folder) => ({
-                    name: folder.name,
-                    path: folder.path,
-                    detail: folder.primary ? 'Primary workspace folder' : 'Permitted folder',
-                  }))}
-                  onChange={setNewFolder}
-                  placeholder="Choose another permitted folder"
-                  value={newFolder}
-                />
-                <Button
-                  className="w-fit"
-                  disabled={pending || !newFolder.trim()}
-                  onClick={addFolder}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  <AddIcon aria-hidden="true" /> Add permitted folder
-                </Button>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <FieldLabel>Additional folders</FieldLabel>
+                <InfoTip label="About folder access">
+                  {vocab.product} can read and write in these folders. Save also includes a path
+                  entered below. Removing a folder revokes its additional access without deleting
+                  files. Running tools pick up access changes after they finish.
+                </InfoTip>
               </div>
+              <span className="text-xs text-muted-foreground">Read &amp; write access</span>
             </div>
-            <FieldDescription>
-              {vocab.product} can read and write in these folders too. Save includes the folder
-              entered above. Removing a folder withdraws its additional access grant; it does not
-              delete files. Running tools pick up access changes after they finish.
-            </FieldDescription>
+            {additional.length ? (
+              <ul aria-label="Additional permitted folders" className="grid min-w-0 gap-1">
+                {additional.map((path) => (
+                  <FolderRow
+                    key={path}
+                    name={folderName(path)}
+                    onRemove={
+                      pending
+                        ? undefined
+                        : () => {
+                            setAdded((current) =>
+                              current.filter((candidate) => candidate !== path),
+                            );
+                            setRemoved((current) => [...new Set([...current, path])]);
+                          }
+                    }
+                    path={path}
+                  />
+                ))}
+              </ul>
+            ) : null}
+            <ClioPathPicker
+              disabled={pending}
+              inputLabel="Additional folder path"
+              knownFolders={initialFolders.map((folder) => ({
+                name: folder.name,
+                path: folder.path,
+                detail: folder.primary ? 'Primary workspace folder' : 'Permitted folder',
+              }))}
+              onChange={setNewFolder}
+              placeholder="Type, paste, or browse for a folder"
+              value={newFolder}
+            />
+            <div className="flex">
+              <Button
+                disabled={pending || !newFolder.trim()}
+                onClick={addFolder}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                <AddIcon aria-hidden="true" /> Add folder
+              </Button>
+            </div>
           </Field>
           {error ? (
             <p className="text-sm text-destructive" role="alert">
@@ -213,11 +220,11 @@ function FolderRow({
   path: string;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-3 border-b px-3 py-2.5 last:border-b-0">
+    <li className="flex min-w-0 items-center gap-3 py-2">
       <FolderIcon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{name}</p>
-        <p className="truncate font-mono text-[0.625rem] text-muted-foreground" title={path}>
+        <p className="truncate text-xs text-muted-foreground" title={path}>
           {path}
         </p>
       </div>
@@ -225,13 +232,13 @@ function FolderRow({
         aria-label={`Remove folder ${name}`}
         disabled={!onRemove}
         onClick={onRemove}
-        size="icon-xs"
+        size="icon-sm"
         type="button"
         variant="ghost"
       >
-        <DeleteIcon aria-hidden="true" />
+        <RemoveIcon aria-hidden="true" />
       </Button>
-    </div>
+    </li>
   );
 }
 

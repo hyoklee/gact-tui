@@ -72,7 +72,7 @@ it('merges incoming grants with a draft addition and an explicit draft removal',
   );
   await user.click(screen.getByRole('button', { name: 'Remove folder Old' }));
   await user.type(screen.getByRole('textbox', { name: 'Additional folder path' }), 'C:\\Draft');
-  await user.click(screen.getByRole('button', { name: 'Add permitted folder' }));
+  await user.click(screen.getByRole('button', { name: 'Add folder' }));
   view.rerender(
     <WorkspaceEditorDialog
       actions={handlers}
@@ -190,7 +190,7 @@ it('does not duplicate a folder after Add and refuses a blank primary path', asy
   const handlers = actions();
   render(<WorkspaceEditorDialog actions={handlers} workspace={workspace} onClose={vi.fn()} />);
   await user.type(screen.getByRole('textbox', { name: 'Additional folder path' }), 'C:\\Shared');
-  await user.click(screen.getByRole('button', { name: 'Add permitted folder' }));
+  await user.click(screen.getByRole('button', { name: 'Add folder' }));
   await user.type(screen.getByRole('textbox', { name: 'Additional folder path' }), 'C:\\Shared');
   await user.click(screen.getByRole('button', { name: 'Save workspace' }));
   expect(handlers.grantWorkspaceFolder).toHaveBeenCalledTimes(1);

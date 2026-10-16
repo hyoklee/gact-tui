@@ -8,6 +8,17 @@ import { WorkspaceEditorDialog } from '../../src/components/clio/workspace-edito
 
 function WorkspaceEditorReview() {
   const [outcome, setOutcome] = useState('');
+  const folders = new URLSearchParams(location.search).get('folders');
+  const additionalFolders =
+    folders === 'empty'
+      ? []
+      : folders === 'many'
+        ? Array.from({ length: 12 }, (_, index) => ({
+            name: `Source ${index + 1}`,
+            path: `D:\\Research\\Shared data\\A very long folder name for experiment ${index + 1}\\Measurements`,
+            primary: false,
+          }))
+        : [{ name: 'Sources', path: 'D:\\Sources', primary: false }];
   return (
     <main className="p-6">
       <p>UI review with simulated workspace folders. No files are changed.</p>
@@ -24,7 +35,7 @@ function WorkspaceEditorReview() {
             pinned: false,
             source_folders: [
               { name: 'Research', path: 'C:\\Users\\Alice\\Documents\\Research', primary: true },
-              { name: 'Sources', path: 'D:\\Sources', primary: false },
+              ...additionalFolders,
             ],
           }}
           actions={{
@@ -112,7 +123,11 @@ function Review() {
 }
 
 createRoot(document.getElementById('root')!).render(
-  <ThemeProvider attribute="class" forcedTheme="light" enableSystem={false}>
+  <ThemeProvider
+    attribute="class"
+    forcedTheme={new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light'}
+    enableSystem={false}
+  >
     {new URLSearchParams(location.search).get('view') === 'workspace' ? (
       <WorkspaceEditorReview />
     ) : (
