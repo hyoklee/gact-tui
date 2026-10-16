@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { ResourceUnavailable } from './resource-states';
+import { vocab } from '@/lib/brand-vocabulary';
 
 /** A network document has its own policy; srcdoc would inherit Desktop's CSP. */
 export function DesktopHtmlFrame({ name, html }: { name: string; html: string }) {
@@ -39,7 +40,7 @@ export function HtmlRendererFrame({
   if (failed) return (
     <ResourceUnavailable
       label="Interactive preview did not respond"
-      detail="Use Restart to try again, or open the file in your browser. Update the connected CLIO if it does not support interactive previews."
+      detail={`Use Restart to try again, or open the file in your browser. Update the connected ${vocab.product} if it does not support interactive previews.`}
     />
   );
   return (
