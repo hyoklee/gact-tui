@@ -272,6 +272,7 @@ export function WorkspacePage() {
       tools,
       messages: transcript.data?.messages ?? [],
       sessionId,
+      endpoint: settings.endpoint,
       focusComposer: focusComposerForAnswer,
       respondInteraction: respondInteraction.mutateAsync,
       send: send.mutateAsync,
