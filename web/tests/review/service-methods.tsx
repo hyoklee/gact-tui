@@ -20,7 +20,7 @@ const repository = {
   },
 };
 function Review() {
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(Number(new URLSearchParams(location.search).get('host') || 0));
   const [selected, setSelected] = useState('');
   const [deploying, setDeploying] = useState(true);
   const [variants, setVariants] = useState<Record<string, string>>({});
@@ -86,7 +86,13 @@ createRoot(document.getElementById('root')!).render(
   <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
     <ArchiveConnectionProvider>
       <RepositoryOverride.Provider value={repository}>
-        <ThemeProvider attribute="class" forcedTheme="light" enableSystem={false}>
+        <ThemeProvider
+          attribute="class"
+          forcedTheme={
+            new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light'
+          }
+          enableSystem={false}
+        >
           <AppearanceProvider>
             <MemoryRouter>
               <Review />
