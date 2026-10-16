@@ -35,6 +35,7 @@ import { ClioModelPicker } from './model-picker';
 import { useComposerModelSelection } from './use-composer-model-selection';
 import { useSpotterAvailability } from '@/hooks/use-spotter-availability';
 import { cn } from '@/lib/utils';
+import { COMPOSER_ATTACHMENT_MAX_BYTES } from '@/lib/composer-paste';
 import { ClioComposerAttachments, type ResourceUploadFailure } from './composer-attachments';
 import { ClioComposerQueue, type ComposerQueueControls } from './composer-queue';
 import { ClioComposerBehaviorControls } from './composer-behavior-controls';
@@ -519,7 +520,7 @@ export function ClioComposer({
         data-evidence-composer
         data-slot="clio-composer"
         className="mx-auto max-w-4xl shrink-0 rounded-2xl bg-composer shadow-sm"
-        maxFileSize={250 * 1024 * 1024}
+        maxFileSize={COMPOSER_ATTACHMENT_MAX_BYTES}
         multiple
         onError={(error) => toast.error('Attachment was not added', { description: error.message })}
         onSubmit={async ({ files, text }) => {
@@ -639,6 +640,7 @@ export function ClioComposer({
           onRemove={(gone) => onAnnotationsChange?.(annotations.filter((item) => item !== gone))}
         />
         <ComposerInlineReferenceEditor
+          attachmentsEnabled={attachments}
           activeOptionId={composerReferences.activeOptionId}
           disabled={disabled}
           expanded={popoverOpen}
