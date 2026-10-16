@@ -54,9 +54,11 @@ it('uses one bounded active-work read and retains empty-page continuation', asyn
     await act(async () => {
       await result.current.workPages.loadMore();
     });
-    expect(result.current.processes.data?.pages.flatMap((page) => page.items)).toEqual([
-      { handle: 'child-handle' },
-    ]);
+    await waitFor(() =>
+      expect(result.current.processes.data?.pages.flatMap((page) => page.items)).toEqual([
+        { handle: 'child-handle' },
+      ]),
+    );
     expect(result.current.processes.hasNextPage).toBe(false);
     expect(repository.asyncProcessesPage).toHaveBeenCalledTimes(2);
     expect(repository.asyncProcessesPage).toHaveBeenLastCalledWith(

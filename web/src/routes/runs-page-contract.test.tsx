@@ -137,7 +137,7 @@ it('continues an empty sparse page and labels an unknown total without inventing
   show();
   expect(await screen.findByText(/0 tasks loaded/)).toBeVisible();
   expect(screen.queryByText(/Showing .* of 0 tasks/)).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole('button', { name: 'Load more tasks' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Load more tasks' }));
   expect(await screen.findByText(/1 tasks loaded/)).toBeVisible();
   expect(repository.queryTasks).toHaveBeenCalledWith(
     expect.objectContaining({ cursor: 'sparse-continuation' }),
