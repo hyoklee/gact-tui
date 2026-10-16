@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { CodeBlock, CodeBlockCopyButton } from '@/components/ai-elements/code-block';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ResourceUnavailable } from './resource-states';
@@ -8,9 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { inTauri } from '@/lib/transport/tauri-runtime';
 import { DesktopHtmlFrame } from './desktop-html-frame';
+import { FileViewerInformationHost } from './file-viewer-context';
+import { ViewerToolbarContent } from './viewer-toolbar';
 
 /** Render authored HTML and WebGL in an opaque frame with no native app bridge. */
 export function HtmlPreview({ name, content }: { name: string; content: string }) {
+  const sharedToolbar = useContext(FileViewerInformationHost) !== undefined;
   const scripted = useMemo(() => hasHtmlScripts(content), [content]);
   const [interactive, setInteractive] = useState<{
     content: string;
@@ -52,21 +55,25 @@ export function HtmlPreview({ name, content }: { name: string; content: string }
   return (
     <div className="flex h-full min-h-0 flex-col">
       {scripted ? (
-        <div className="flex shrink-0 justify-end gap-2 border-b px-3 py-1">
-          <Button variant="ghost" size="sm" disabled={stopped} onClick={() => setStopped(true)}>
-            Stop
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setStopped(false);
-              setGeneration((value) => value + 1);
-            }}
+        <ViewerToolbarContent>
+          <div
+            className={`flex shrink-0 justify-end gap-2 ${sharedToolbar ? '' : 'border-b px-3 py-1'}`}
           >
-            Restart
-          </Button>
-        </div>
+            <Button variant="ghost" size="sm" disabled={stopped} onClick={() => setStopped(true)}>
+              Stop
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setStopped(false);
+                setGeneration((value) => value + 1);
+              }}
+            >
+              Restart
+            </Button>
+          </div>
+        </ViewerToolbarContent>
       ) : null}
       {stopped ? (
         <p role="status" className="p-4 text-sm text-muted-foreground">

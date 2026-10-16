@@ -1,10 +1,37 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { useState } from 'react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it } from 'vitest';
 import { HtmlFilePreview } from './html-file-preview';
 import { htmlPreviewDocument } from './html-preview-policy';
+import { ViewerToolbarHost } from './viewer-toolbar-context';
+import { FileViewerInformationHost } from './file-viewer-context';
 
 afterEach(cleanup);
+
+it('contributes Stop and Restart to the shared viewer toolbar', async () => {
+  function SharedViewer() {
+    const [host, setHost] = useState<HTMLDivElement | null>(null);
+    return (
+      <FileViewerInformationHost.Provider value={null}>
+        <ViewerToolbarHost.Provider value={host}>
+          <div aria-label="Shared toolbar" ref={setHost} />
+          <HtmlFilePreview
+            name="interactive.html"
+            content="<script>window.ready=true;</script>"
+            view="preview"
+          />
+        </ViewerToolbarHost.Provider>
+      </FileViewerInformationHost.Provider>
+    );
+  }
+  render(<SharedViewer />);
+  await waitFor(() => expect(screen.getByTitle('HTML preview of interactive.html')).toBeVisible());
+  const toolbar = screen.getByLabelText('Shared toolbar');
+  expect(within(toolbar).getByRole('button', { name: 'Stop' })).toBeVisible();
+  expect(within(toolbar).getByRole('button', { name: 'Restart' })).toBeVisible();
+  expect(screen.getAllByRole('button', { name: 'Stop' })).toHaveLength(1);
+});
 
 it('retains authored CSS, animation and local SVG references in an isolated display copy', () => {
   const content = `<!doctype html><html><head><title>Cat</title><style>

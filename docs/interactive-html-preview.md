@@ -3,6 +3,8 @@
 Opening a generated HTML artifact runs its JavaScript in a separate frame. Static
 HTML keeps the existing script-free preview. The Source tab always shows the
 original file. Stop removes the running frame; Restart creates a fresh instance.
+In file and resource viewers, Stop and Restart join the existing Preview/Source
+toolbar. Standalone previews keep their own controls.
 
 WebGL works in this frame. Three.js 0.180.0 and OrbitControls are supplied offline:
 
