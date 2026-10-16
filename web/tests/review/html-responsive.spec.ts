@@ -1,5 +1,53 @@
 import { expect, test } from '@playwright/test';
 
+test('full-viewport authored layout with default margins does not ratchet its height', async ({
+  page,
+}) => {
+  await page.goto('/tests/review/html-responsive.html?viewport-case');
+  await page.locator('#full-viewport iframe').scrollIntoViewIfNeeded();
+  const frame = page.frameLocator('#full-viewport iframe');
+  await expect(
+    frame.getByText('Full viewport with default margins', { exact: true }),
+  ).toBeVisible();
+  await frame.locator('body').evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        let frames = 0;
+        const next = () => {
+          if (++frames === 20) resolve();
+          else requestAnimationFrame(next);
+        };
+        requestAnimationFrame(next);
+      }),
+  );
+  expect(
+    await page.locator('#full-viewport iframe').evaluate((element) => element.clientHeight),
+  ).toBe(318);
+  const bodyFrame = page.frameLocator('#body-viewport iframe');
+  await page.locator('#body-viewport iframe').scrollIntoViewIfNeeded();
+  await expect(bodyFrame.getByText('Body viewport height', { exact: true })).toBeVisible();
+  await bodyFrame.locator('body').evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        let frames = 0;
+        const next = () => {
+          if (++frames === 20) resolve();
+          else requestAnimationFrame(next);
+        };
+        requestAnimationFrame(next);
+      }),
+  );
+  expect(
+    await page.locator('#body-viewport iframe').evaluate((element) => element.clientHeight),
+  ).toBe(336);
+  await page.locator('#natural-viewport iframe').scrollIntoViewIfNeeded();
+  await expect
+    .poll(() =>
+      page.locator('#natural-viewport iframe').evaluate((element) => element.clientHeight),
+    )
+    .toBe(166);
+});
+
 for (const desktop of [false, true]) {
   test(`HTML fits growing and shrinking content; theme updates preserve state${desktop ? ' under Desktop CSP' : ''}`, async ({
     page,

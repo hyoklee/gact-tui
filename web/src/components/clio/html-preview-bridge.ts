@@ -44,7 +44,7 @@ export function htmlPreviewHostDocument(
 function bridgeScript(channel: string): string {
   return `(() => {
     const channel = ${JSON.stringify(channel).replace(/</gu, '\\u003c')};
-    let queued = false, previous = 0;
+    let queued = false, previous = 0, lastViewport = 0, lastBody = 0, viewportLayout = false;
     const measure = () => {
       queued = false;
       const body = document.body;
@@ -52,7 +52,16 @@ function bridgeScript(channel: string): string {
       const box = body.getBoundingClientRect(), css = getComputedStyle(body);
       let bottom = box.bottom;
       for (const child of body.children) bottom = Math.max(bottom, child.getBoundingClientRect().bottom);
-      const height = Math.ceil(Math.max(box.height, bottom - box.top) + (parseFloat(css.marginTop) || 0) + (parseFloat(css.marginBottom) || 0));
+      // A full-viewport body plus default margins must not add those margins to
+      // the iframe forever. Preserve an explicitly viewport-sized document.
+      const followsViewport = lastViewport > 0 && innerHeight !== lastViewport &&
+        Math.abs(box.height - innerHeight) < 1 &&
+        Math.abs((box.height - lastBody) - (innerHeight - lastViewport)) < 1;
+      viewportLayout = viewportLayout || followsViewport;
+      lastViewport = innerHeight; lastBody = box.height;
+      const viewport = (viewportLayout && Math.abs(box.height - innerHeight) < 1) ||
+        (document.documentElement.getBoundingClientRect().height <= innerHeight + 1 && box.height >= innerHeight - 1);
+      const height = viewport ? innerHeight : Math.ceil(Math.max(box.height, bottom - box.top) + (parseFloat(css.marginTop) || 0) + (parseFloat(css.marginBottom) || 0));
       if (height > 0 && height !== previous) {
         previous = height;
         parent.postMessage({type: 'clio.html-preview.height', channel, height}, '*');

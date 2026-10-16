@@ -140,6 +140,28 @@ function Review() {
                 </ArchiveConnectionProvider>
               </QueryClientProvider>
             </section>
+            {location.search.includes('viewport-case') ? (
+              <>
+                <section id="full-viewport" className="h-80 rounded-lg border">
+                  <HtmlPreview
+                    name="viewport.html"
+                    content="<style>html,body{height:100%}</style><p>Full viewport with default margins</p>"
+                  />
+                </section>
+                <div id="body-viewport" className="h-80">
+                  <HtmlPreview
+                    name="body-viewport.html"
+                    content="<style>body{height:100vh}</style><p>Body viewport height</p>"
+                  />
+                </div>
+                <div id="natural-viewport" className="h-[150px]">
+                  <HtmlPreview
+                    name="natural-viewport.html"
+                    content="<div style='height:150px'>Natural content height</div>"
+                  />
+                </div>
+              </>
+            ) : null}
           </>
         ) : null}
       </div>
