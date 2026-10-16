@@ -104,11 +104,7 @@ export function mergeConfig(base, overlay, path = []) {
 
 export function resolveNativeBrandOverlay(configPath) {
   const { profile, brandingRoot } = resolveBrandConfig(configPath);
-  const productOverlay = resolve(
-    brandingRoot,
-    profile,
-    `tauri.${profile}.conf.json`,
-  );
+  const productOverlay = resolve(brandingRoot, profile, `tauri.${profile}.conf.json`);
   if (existsSync(productOverlay)) return productOverlay;
 
   const workspaceOverlay = resolve(tauriDir, `tauri.${profile}.conf.json`);
@@ -192,6 +188,16 @@ export function resolveOverlayPaths({ extraOverlayPaths, platform, brandConfigPa
   );
 }
 
+/** Forward Cargo flags after Tauri's separator, keeping native config before it. */
+export function tauriCommandArgs(tauriArgs, configArgs) {
+  if (tauriArgs[0] !== 'build') return [...tauriArgs, ...configArgs];
+  const separator = tauriArgs.indexOf('--');
+  const cliArgs = separator < 0 ? tauriArgs : tauriArgs.slice(0, separator);
+  const cargoArgs = separator < 0 ? [] : tauriArgs.slice(separator + 1);
+  if (!cargoArgs.includes('--locked')) cargoArgs.push('--locked');
+  return [...cliArgs, ...configArgs, '--', ...cargoArgs];
+}
+
 function main(argv) {
   const { tauriArgs, extraOverlayPaths } = parseArgv(argv);
   const overlays = resolveOverlayPaths({ extraOverlayPaths, platform: process.platform });
@@ -207,11 +213,15 @@ function main(argv) {
   }
 
   const tauriCli = resolve(dirname(require.resolve('@tauri-apps/cli')), 'tauri.js');
-  const result = spawnSync(process.execPath, [tauriCli, ...tauriArgs, ...configArgs], {
-    cwd: desktopDir,
-    env: process.env,
-    stdio: 'inherit',
-  });
+  const result = spawnSync(
+    process.execPath,
+    [tauriCli, ...tauriCommandArgs(tauriArgs, configArgs)],
+    {
+      cwd: desktopDir,
+      env: process.env,
+      stdio: 'inherit',
+    },
+  );
   if (result.error) throw result.error;
   process.exitCode = result.status ?? 1;
 }
