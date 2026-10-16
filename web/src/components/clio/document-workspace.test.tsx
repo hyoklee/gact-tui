@@ -102,6 +102,22 @@ function renderWorkspace(
 }
 
 describe('ClioDocumentWorkspace', () => {
+  it('renders inline dollar math in a Markdown artifact without converting it to PDF', async () => {
+    repository.documentManifest.mockResolvedValue(manifest);
+    repository.documentContent.mockResolvedValue(
+      new TextEncoder().encode(
+        String.raw`# Collatz ($1 \le n \le 1{,}000{,}000$)
+
+The stopping time is $\sigma_{\infty}(n)$.`,
+      ),
+    );
+    repository.artifactReviews.mockResolvedValue([]);
+    const { container } = renderWorkspace();
+    await waitFor(() => expect(container.querySelectorAll('.katex')).toHaveLength(2));
+    expect(container.querySelector('h1 .katex')).not.toBeNull();
+    expect(repository.createDocumentRendition).not.toHaveBeenCalled();
+  });
+
   it.each(['ooxml-word', 'ooxml-slides', 'ooxml-sheet'] as const)(
     'automatically renders a missing PDF preview for %s',
     async (profile) => {
@@ -174,13 +190,9 @@ describe('ClioDocumentWorkspace', () => {
     renderWorkspace();
     expect(await screen.findByText('PDF preview')).toBeVisible();
     expect(repository.createDocumentRendition).toHaveBeenCalledTimes(1);
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Refresh document revision' }),
-    );
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh document revision' }));
     await waitFor(() =>
-      expect(
-        screen.getByRole('button', { name: 'Refresh document revision' }),
-      ).toBeEnabled(),
+      expect(screen.getByRole('button', { name: 'Refresh document revision' })).toBeEnabled(),
     );
     expect(repository.documentContent).toHaveBeenCalledTimes(2);
     expect(repository.createDocumentRendition).toHaveBeenCalledTimes(1);

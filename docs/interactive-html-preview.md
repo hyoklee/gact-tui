@@ -44,6 +44,15 @@ frames. Prepared facts are cached for reopening, and startup queries warm the
 provider catalog and selected model list. Refreshing does not clear the current
 query or filters.
 
+# Inline math in Markdown
+
+Conversation text, Markdown files and artifact documents render `$...$` as inline
+math and `$$...$$` as display math. The existing `\(...\)` and `\[...\]`
+delimiters also work. Single-dollar delimiters touch the formula without padding
+spaces; a closing dollar cannot be followed by a digit, so prices such as
+`$20 and $30` and `$20–$30` stay plain text. Backticks and escaped dollars remain
+literal. Source views keep the original LaTeX.
+
 For browser acceptance, start the owned Vite development server on port 5198 and
 the real backend renderer on port 8198, set `CLIO_REVIEW_EVIDENCE` to an owned
 output directory, then run:
