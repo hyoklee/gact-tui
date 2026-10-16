@@ -93,9 +93,11 @@ export function SessionWorkSummary({
     current?.state === 'active'
       ? current.phase === 'waiting'
         ? 'waiting'
-        : current.phase === 'needs_input'
-          ? 'needs input'
-          : 'active'
+        : current.phase === 'judging'
+          ? 'checking completion'
+          : current.phase === 'needs_input'
+            ? 'needs input'
+            : 'active'
       : current?.state;
   if (!includeTodos && !current && !scheduledCount) return null;
   return (
@@ -167,7 +169,10 @@ function WorkRecordRow({
           ? CirclePauseIcon
           : CircleDotIcon;
   const phase = record.state === 'active' && record.phase ? record.phase : record.state;
-  const state = phase.charAt(0).toUpperCase() + phase.slice(1).replaceAll('_', ' ');
+  const state =
+    phase === 'judging'
+      ? 'Checking goal completion'
+      : phase.charAt(0).toUpperCase() + phase.slice(1).replaceAll('_', ' ');
   return (
     <li className="flex min-w-0 flex-col gap-0.5 py-1.5">
       <div className="flex flex-wrap items-center gap-x-2 text-muted-foreground">

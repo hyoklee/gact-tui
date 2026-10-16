@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it } from 'vitest';
 import { HtmlFilePreview } from './html-file-preview';
@@ -63,7 +63,13 @@ it('removes active content, navigation and external media while retaining embedd
 it('opens HTML source without sanitizing the original bytes shown or copied', async () => {
   const content = '<h1>Original</h1>\n<script>window.original = true;</script>\n';
   const { container } = render(<HtmlFilePreview name="report.htm" content={content} />);
-  expect(screen.getByTitle('HTML preview of report.htm').getAttribute('srcdoc')).not.toContain(
+  await waitFor(() =>
+    expect(screen.getByTitle('HTML preview of report.htm')).toHaveAttribute(
+      'sandbox',
+      'allow-scripts',
+    ),
+  );
+  expect(screen.getByTitle('HTML preview of report.htm').getAttribute('srcdoc')).toContain(
     'window.original',
   );
   await userEvent.click(screen.getByRole('tab', { name: 'Source' }));
@@ -73,4 +79,17 @@ it('opens HTML source without sanitizing the original bytes shown or copied', as
   expect(screen.getByRole('button', { name: 'Copy report.htm' })).toBeVisible();
   await userEvent.click(screen.getByRole('tab', { name: 'Preview' }));
   expect(screen.getByTitle('HTML preview of report.htm')).toBeVisible();
+});
+
+it('stops a scripted frame and creates a fresh execution on restart', async () => {
+  render(
+    <HtmlFilePreview name="simulation.html" content="<script>window.simulation = 1;</script>" />,
+  );
+  await waitFor(() => expect(screen.getByTitle('HTML preview of simulation.html')).toBeVisible());
+  const original = screen.getByTitle('HTML preview of simulation.html');
+  await userEvent.click(screen.getByRole('button', { name: 'Stop' }));
+  expect(screen.queryByTitle('HTML preview of simulation.html')).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('Preview stopped');
+  await userEvent.click(screen.getByRole('button', { name: 'Restart' }));
+  expect(screen.getByTitle('HTML preview of simulation.html')).not.toBe(original);
 });

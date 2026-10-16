@@ -65,7 +65,11 @@ export function Review() {
       const skeleton = dialog.querySelector<HTMLElement>('[aria-busy="true"]');
       if (skeleton && !sawSkeleton) {
         sawSkeleton = true;
-        log('skeleton-commit', { label: skeleton.textContent?.trim() });
+        log('skeleton-commit', {
+          label: skeleton.textContent?.trim(),
+          providerVisible: dialog.textContent?.includes('AmSC Model Access Gateway'),
+          searchVisible: Boolean(dialog.querySelector('[data-slot="cascader-input"]')),
+        });
         requestAnimationFrame((frame) => {
           log('first-frame', {
             frame,

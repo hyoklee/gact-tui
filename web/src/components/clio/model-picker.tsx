@@ -16,7 +16,6 @@ import { cn } from '@/lib/utils';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { ModelPickerCatalog } from './model-picker-catalog';
 import { RefreshButton } from './refresh-button';
-import { useModelPickerPreparation } from './use-model-picker-preparation';
 
 interface ClioModelPickerProps {
   catalogStatus?: 'error' | 'loading' | 'ready';
@@ -55,18 +54,23 @@ export function ClioModelPicker({
   });
   const presetsData = configuration.data?.presets;
   const presets = useMemo(() => presetsData ?? [], [presetsData]);
-  const { preparing, catalogOptions, resetPreparation } = useModelPickerPreparation(
-    open,
-    options,
-    catalogStatus,
-  );
-  const loading = catalogStatus === 'loading' || preparing;
+  const catalogOptions =
+    catalogStatus !== 'error' && (catalogStatus === 'ready' || options.length || presets.length)
+      ? options
+      : undefined;
+  const loading = catalogStatus === 'loading';
   useEffect(() => {
-    if (!open || catalogStatus !== 'ready' || preparing) return;
-    catalogContent.current
-      ?.querySelector<HTMLInputElement>('[data-slot="cascader-input"]')
-      ?.focus({ preventScroll: true });
-  }, [open, catalogStatus, preparing]);
+    if (!open || catalogStatus !== 'ready') return;
+    const frame = requestAnimationFrame(() => {
+      const input = catalogContent.current?.querySelector<HTMLInputElement>(
+        '[data-slot="cascader-input"]',
+      );
+      if (document.activeElement instanceof HTMLInputElement && document.activeElement !== input)
+        return;
+      input?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, catalogStatus, options]);
   const loadingLabel = provider
     ? `Loading ${providerDisplayName(
         presets.find((preset) => preset.id === provider),
@@ -76,7 +80,6 @@ export function ClioModelPicker({
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean): void => {
-      resetPreparation();
       setFacetsOpen(false);
       setOpen(nextOpen);
       if (nextOpen) {
@@ -84,7 +87,7 @@ export function ClioModelPicker({
         setActiveProvider(provider);
       }
     },
-    [provider, resetPreparation],
+    [provider],
   );
   const close = useCallback(() => handleOpenChange(false), [handleOpenChange]);
   const openSettings = useCallback(() => {
@@ -111,16 +114,11 @@ export function ClioModelPicker({
       >
         {open && catalogStatus === 'error' ? (
           <ModelCatalogError onRetry={() => onRetryCatalog?.(activeProvider)} />
-        ) : open && loading ? (
+        ) : open && loading && !catalogOptions ? (
           <ModelCatalogSkeleton columns={showColumns} label={loadingLabel} />
         ) : null}
         {open && catalogOptions ? (
-          <div
-            ref={catalogContent}
-            className={catalogStatus === 'ready' && !loading ? 'contents' : 'hidden'}
-            inert={catalogStatus !== 'ready' || loading}
-            aria-hidden={catalogStatus !== 'ready' || loading}
-          >
+          <div ref={catalogContent} className="contents">
             <ModelPickerCatalog
               model={model}
               onChange={onChange}
@@ -128,6 +126,7 @@ export function ClioModelPicker({
               onOpenSettings={openSettings}
               onProviderChange={setActiveProvider}
               options={catalogOptions}
+              loading={loading}
               presets={presets}
               provider={provider}
               showColumns={showColumns}

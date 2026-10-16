@@ -16,6 +16,8 @@ import {
 } from '@/components/reui/cascader/cascader-virtual';
 import type { CascaderNode } from '@/components/reui/cascader/cascader-types';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useProgressiveModelCatalog } from './use-progressive-model-catalog';
 import { useHiddenProviders } from '@/hooks/use-hidden-providers';
 import type { ClioModelOption } from '@/lib/model-options';
 import { cn } from '@/lib/utils';
@@ -50,6 +52,7 @@ import { useModelPickerFacets } from './use-model-picker-facets';
 import { useModelPickerSearchView } from './use-model-picker-search-view';
 
 interface ModelPickerCatalogProps {
+  loading?: boolean;
   model?: string;
   onChange: (choice: ClioModelOption) => void;
   onClose: () => void;
@@ -75,6 +78,7 @@ const PICKER_COLUMN_WIDTH = 'calc(50% - .5px)';
 
 /** Mount only when the open dialog is ready to prepare its catalog. */
 export const ModelPickerCatalog = memo(function ModelPickerCatalog({
+  loading = false,
   model,
   onChange,
   onClose,
@@ -101,9 +105,12 @@ export const ModelPickerCatalog = memo(function ModelPickerCatalog({
   const providers = useMemo(() => {
     const reported = new Set(options.map((option) => option.providerId));
     return providerGroupsFromOptions(options, presets, true).filter(
-      (group) => reported.has(group.id) || isAlcfServer(group.id),
+      (group) =>
+        reported.has(group.id) ||
+        isAlcfServer(group.id) ||
+        (loading && presets.some((preset) => preset.id === group.id && preset.is_authenticated)),
     );
-  }, [options, presets]);
+  }, [options, presets, loading]);
   const sortedProviders = useMemo(
     () => (managingVisibility ? providerGroupsFromOptions(options, presets, true) : providers),
     [managingVisibility, options, presets, providers],
@@ -122,8 +129,19 @@ export const ModelPickerCatalog = memo(function ModelPickerCatalog({
   );
   const [tokens, setTokens] = useState<ModelFilterToken[]>(() => [...DEFAULT_FILTER_TOKENS]);
   const [notice, setNotice] = useState<string>();
-  const tree = useModelPickerTree(visibleProviders, tokens);
   const activeGroup = sortedProviders.find((item) => providerNodeValue(item.id) === path[0]);
+  const prepared = useProgressiveModelCatalog(visibleProviders, activeGroup?.id);
+  const tree = useModelPickerTree(visibleProviders, tokens, prepared);
+  const loadingModels =
+    activeGroup && (!prepared.has(activeGroup.id) || (loading && !activeGroup.choices.length));
+  const loadingPanel = (
+    <div role="status" aria-busy="true" aria-label="Loading available models" className="space-y-3 p-3">
+      <p className="text-sm text-muted-foreground">Loading {activeGroup?.name} models…</p>
+      {Array.from({ length: 6 }, (_, index) => (
+        <Skeleton key={index} className="h-9 w-full" />
+      ))}
+    </div>
+  );
   useEffect(() => onProviderChange(activeGroup?.id), [activeGroup?.id, onProviderChange]);
   // Provider rows live only at depth 0, and the tree is exactly two levels
   // (provider -> model), so once a provider is drilled into, the ROOT column
@@ -278,7 +296,9 @@ export const ModelPickerCatalog = memo(function ModelPickerCatalog({
           }
           eyeAsStaticElement={providerRowsAreTrailButtons}
           filterCount={
-            node.data?.kind === 'provider' ? tree.counts.get(node.data.group.id) : undefined
+            node.data?.kind === 'provider' && prepared.has(node.data.group.id)
+              ? tree.counts.get(node.data.group.id)
+              : undefined
           }
           search={
             search.searching && node.data?.kind === 'provider'
@@ -359,7 +379,9 @@ export const ModelPickerCatalog = memo(function ModelPickerCatalog({
               return (
                 <CascaderVirtualColumn
                   column={column}
-                  empty={providerColumn ? panel.column.empty : undefined}
+                  empty={
+                    providerColumn ? (loadingModels ? loadingPanel : panel.column.empty) : undefined
+                  }
                   footer={providerColumn ? panel.column.footer : undefined}
                   key={column.depth}
                 />
@@ -373,13 +395,22 @@ export const ModelPickerCatalog = memo(function ModelPickerCatalog({
             </CascaderList>
             {path.length ? (
               <>
-                {panel.column.empty}
+                {loadingModels ? loadingPanel : panel.column.empty}
                 {panel.column.footer}
               </>
             ) : null}
           </>
         )}
         <CascaderFooter className="min-h-11 flex-row items-center justify-between gap-1 px-2">
+          {prepared.size < visibleProviders.length ? (
+            <span
+              role="status"
+              aria-label={search.searching ? 'Loading available models' : undefined}
+              className="text-xs text-muted-foreground"
+            >
+              Loading remaining models…
+            </span>
+          ) : null}
           <div className="flex min-w-0 items-center gap-1">
             <Button
               aria-pressed={managingVisibility}

@@ -17,6 +17,7 @@ import { DeferredA2UISurface } from './conversation-message-blocks';
 import { ClioCompactionProgress } from './conversation-summarization';
 import { ClioTurnPreparation } from './turn-preparation';
 import { ClioTurnWaitFeedback } from './turn-wait-feedback';
+import { SessionResponseFeedback } from './goal-check-feedback';
 import { placeCompactions } from './conversation-compaction-placement';
 import { conversationModelBoundaries } from './conversation-model-boundaries';
 import { ConversationForkCheckpoint } from './conversation-fork-checkpoint';
@@ -671,13 +672,15 @@ function ConversationBody({
             ref={autoscroll.observeContent}
           >
             <ClioTurnPreparation {...preparation} messages={sourceMessages} />
-            <ClioTurnWaitFeedback
-              {...preparation}
-              messages={sourceMessages}
-              tools={entities.tools}
-              tasks={entities.tasks}
-              subagents={entities.subagents}
-            />
+            <SessionResponseFeedback sessionId={entities.sessionId}>
+              <ClioTurnWaitFeedback
+                {...preparation}
+                messages={sourceMessages}
+                tools={entities.tools}
+                tasks={entities.tasks}
+                subagents={entities.subagents}
+              />
+            </SessionResponseFeedback>
           </div>
         ) : null}
         {compactionPlacement.trailing.length > 0 ? (

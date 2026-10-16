@@ -13,10 +13,22 @@ import { ClioMotionProvider } from '../../src/components/clio/motion';
 import { Button } from '../../src/components/ui/button';
 import { ClioComposer } from '../../src/components/clio/composer';
 
+const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+
 function Review() {
   const [phase, setPhase] = useState<
-    'initial' | 'wait' | 'reasoning' | 'tool' | 'complete' | 'paused'
+    'initial' | 'wait' | 'reasoning' | 'tool' | 'judging' | 'complete' | 'paused'
   >('wait');
+  const changePhase = (next: typeof phase) => {
+    client.setQueryData(['session-work', 'https://archive.invalid', 'model-wait', 0], {
+      goal: next === 'judging' ? {
+        state: 'active', phase: 'judging', title: 'Verify the four Collatz phases',
+        details: { judge_started_at: new Date().toISOString() },
+      } : null,
+      loop: null, todos: [], schedules: [],
+    });
+    setPhase(next);
+  };
   const tool: ToolInvocation = {
     id: 'read',
     session_id: 'model-wait',
@@ -70,11 +82,11 @@ function Review() {
       <div className="flex h-dvh min-w-0 flex-col bg-background text-foreground">
         <header className="flex shrink-0 flex-wrap items-center gap-2 border-b px-5 py-3 text-xs text-muted-foreground">
           <p className="w-full">
-            Simulated MAG waiting states using the production renderer. No inference.
+            Simulated provider and goal-check states using the production renderer. No inference.
           </p>
-          {(['initial', 'wait', 'reasoning', 'tool', 'complete', 'paused'] as const).map(
+          {(['initial', 'wait', 'reasoning', 'tool', 'judging', 'complete', 'paused'] as const).map(
             (state) => (
-              <Button key={state} size="sm" variant="outline" onClick={() => setPhase(state)}>
+              <Button key={state} size="sm" variant="outline" onClick={() => changePhase(state)}>
                 {state}
               </Button>
             ),
@@ -126,7 +138,7 @@ function Review() {
 }
 
 createRoot(document.getElementById('root')!).render(
-  <QueryClientProvider client={new QueryClient()}>
+  <QueryClientProvider client={client}>
     <ArchiveConnectionProvider>
       <ThemeProvider attribute="class" forcedTheme="light" enableSystem={false}>
         <AppearanceProvider>

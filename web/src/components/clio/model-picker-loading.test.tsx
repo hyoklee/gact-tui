@@ -25,11 +25,12 @@ const frames = new Map<number, FrameRequestCallback>();
 let nextFrame = 0;
 let tags = vi.spyOn(modelTags, 'modelCapabilityTagsFromOption');
 const amsc = { providerId: 'amsc_mag', providerName: 'AmSC Model Access Gateway' };
-const large = Array.from({ length: 250 }, (_, index) =>
+let large = Array.from({ length: 250 }, (_, index) =>
   capabilityRow(`acme/model-${index}`, {}, amsc),
 );
 
 beforeEach(() => {
+  large = Array.from({ length: 250 }, (_, index) => capabilityRow(`acme/model-${index}`, {}, amsc));
   tags = vi.spyOn(modelTags, 'modelCapabilityTagsFromOption');
   setWideViewport(true);
   // jsdom has no layout; give the unchanged virtualizer a real scroll window.
@@ -65,6 +66,41 @@ const search = () => screen.getByRole('combobox', { name: 'Search providers and 
 const skeleton = () => screen.getByRole('status', { name: 'Loading available models' });
 
 describe('model picker catalog preparation', () => {
+  it('prepares the selected provider first, warms the rest later and reopens from cache', async () => {
+    const user = userEvent.setup();
+    const other = large.map((row) => ({
+      ...row,
+      providerId: 'openrouter',
+      providerName: 'OpenRouter',
+    }));
+    renderPicker(
+      <ClioModelPicker
+        options={[...other, ...large]}
+        provider="amsc_mag"
+        onChange={vi.fn()}
+        trigger={<Button>Models</Button>}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Models' }));
+    expect(search()).toBeVisible();
+    expect(screen.getByText('OpenRouter', { exact: true })).toBeVisible();
+    expect(tags).not.toHaveBeenCalled();
+    await paintFrame();
+    await paintFrame();
+    expect(new Set(tags.mock.calls.map(([choice]) => choice))).toEqual(new Set(large));
+    expect(screen.queryByRole('status', { name: 'Loading available models' })).toBeNull();
+    await paintFrame();
+    expect(new Set(tags.mock.calls.map(([choice]) => choice))).toEqual(
+      new Set([...large, ...other]),
+    );
+    await user.keyboard('{Escape}');
+    tags.mockClear();
+    await user.click(screen.getByRole('button', { name: 'Models' }));
+    expect(search()).toBeVisible();
+    expect(screen.queryByRole('status', { name: 'Loading available models' })).toBeNull();
+    expect(tags).not.toHaveBeenCalled();
+  });
+
   it('opens with a provider-labelled skeleton before doing any large catalog work', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
@@ -79,6 +115,7 @@ describe('model picker catalog preparation', () => {
     expect(tags).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Models' }));
     expect(screen.getByRole('dialog', { name: 'Choose a model' })).toBeVisible();
+    expect(search()).toBeVisible();
     expect(skeleton()).toBeVisible();
     expect(screen.getByText('Loading AmSC Model Access Gateway models…')).toBeVisible();
     expect(tags).not.toHaveBeenCalled();
@@ -101,7 +138,12 @@ describe('model picker catalog preparation', () => {
     async (afterFrame) => {
       const user = userEvent.setup();
       renderPicker(
-        <ClioModelPicker options={large} onChange={vi.fn()} trigger={<Button>Models</Button>} />,
+        <ClioModelPicker
+          options={large}
+          provider="amsc_mag"
+          onChange={vi.fn()}
+          trigger={<Button>Models</Button>}
+        />,
       );
       await user.click(screen.getByRole('button', { name: 'Models' }));
       if (afterFrame) await paintFrame();
@@ -128,7 +170,12 @@ describe('model picker catalog preparation', () => {
           <Button onClick={() => setOptions([...large, capabilityRow('acme/model-new', {}, amsc)])}>
             Refresh catalog
           </Button>
-          <ClioModelPicker options={options} onChange={vi.fn()} trigger={<Button>Models</Button>} />
+          <ClioModelPicker
+            options={options}
+            provider="amsc_mag"
+            onChange={vi.fn()}
+            trigger={<Button>Models</Button>}
+          />
         </>
       );
     }
@@ -163,6 +210,7 @@ describe('model picker catalog preparation', () => {
           <Button onClick={() => setOptions(replacement)}>Replace catalog</Button>
           <ClioModelPicker
             options={options}
+            provider="amsc_mag"
             onChange={onChange}
             trigger={<Button>Models</Button>}
           />

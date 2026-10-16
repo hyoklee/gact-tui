@@ -373,8 +373,8 @@ describe('ClioDocumentWorkspace', () => {
     repository.artifactReviews.mockResolvedValue([]);
     const { container } = renderWorkspace({ name: 'cat.html', media_type: 'text/html' });
     const frame = await screen.findByTitle('HTML preview of cat.html');
-    expect(frame).toHaveAttribute('sandbox', '');
-    expect(frame.getAttribute('srcdoc')).not.toContain('window.original');
+    expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
+    expect(frame).toHaveAttribute('src', 'http://127.0.0.1:8790/v1/html-renderer');
     const user = userEvent.setup();
     await user.click(screen.getByRole('tab', { name: 'HTML source' }));
     expect(container.querySelector('[data-language="html"]')).toHaveTextContent(
