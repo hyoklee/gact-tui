@@ -409,8 +409,8 @@ export function parametersForVariant(
     ? 'cuda'
     : variant.startsWith('native-xpu')
       ? 'xpu'
-      : variant === 'native-windows-cpu'
-        ? 'cpu'
+      : /^native-(windows|linux|macos)-/u.test(variant)
+        ? variant.split('-').at(-1) || variant
         : variant;
   return parameters.filter(
     (row) => !row.variants.length || row.variants.includes(effectiveVariant),

@@ -106,7 +106,9 @@ export function ManagedServiceCard({
   };
   const installing = activeAction === 'install' || activeAction === 'reinstall';
   const expectation = { thing: service.label, lastSeconds: lastInstallSeconds };
-  const native = variant.startsWith('native-cuda') || variant.startsWith('native-xpu');
+  const native = service.variants.some(
+    (row) => row.id === variant && row.install_type === 'native_uv',
+  );
   const monitoring = service.category === 'monitoring';
   const llama = service.id === 'llama_cpp' || service.id.startsWith('llama_cpp@');
   const retainsData = native || monitoring;
@@ -120,7 +122,7 @@ export function ManagedServiceCard({
     (field) => !field.variants?.length || field.variants.includes(variant),
   );
   const modelProblem = llama
-    ? variant === 'native-windows-cpu'
+    ? variant === 'native-windows-cpu' && !native
       ? !configuration.model_path?.trim()
         ? 'Choose a GGUF model file on this computer.'
         : undefined
@@ -130,12 +132,17 @@ export function ManagedServiceCard({
     : undefined;
   const missing =
     fields.some((field) => field.required && !configuration[field.id]?.trim()) ||
+    (native &&
+      monitoring &&
+      configuration.database_mode === 'site' &&
+      !configuration.database_settings_path?.trim()) ||
     Boolean(modelProblem);
-  const missingInstallation = llama
+  const modelPackageOnly = llama || (native && service.id === 'ollama');
+  const missingInstallation = modelPackageOnly
     ? fields.some(
         (field) =>
           field.required &&
-          !['model_path', 'hf_model'].includes(field.id) &&
+          !['model', 'model_path', 'hf_model'].includes(field.id) &&
           !configuration[field.id]?.trim(),
       )
     : missing;
@@ -207,7 +214,7 @@ export function ManagedServiceCard({
       onConfiguration={onConfiguration}
       targetId={targetId}
       hostLabel={hostLabel}
-      installationOnly={llama && editing}
+      installationOnly={modelPackageOnly && editing}
       showIntroduction={!llama || editing}
       showMethod={!editing}
     />

@@ -1,4 +1,5 @@
 import type { ManagedServiceDefinition } from '@clio/core/v3';
+import { vocab } from '@/lib/brand-vocabulary';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
@@ -47,8 +48,14 @@ export function ManagedServiceForm({
   const fields = service.configuration_fields.filter(
     (field) =>
       (!field.variants?.length || field.variants.includes(variant)) &&
+      (field.id !== 'database_settings_path' || configuration.database_mode === 'site') &&
+      (field.id !== 'grobid_url' || configuration.documents?.startsWith('on')) &&
       (!installationOnly || (field.id === 'container_runtime' && !variant.startsWith('native'))) &&
-      !(variant === 'native-windows-cpu' && field.id === 'hf_model'),
+      !(
+        variant === 'native-windows-cpu' &&
+        !service.variants.some((row) => row.id === variant && row.install_type === 'native_uv') &&
+        field.id === 'hf_model'
+      ),
   );
   const path = configuration['storage.service_directory'] || '';
   const storageOwned = Boolean(
@@ -56,7 +63,9 @@ export function ManagedServiceForm({
   );
   const basic = fields.filter(
     (field) =>
-      ['model', 'model_path', 'hf_model'].includes(field.id) ||
+      ['model', 'model_path', 'hf_model', 'database_mode', 'database_settings_path'].includes(
+        field.id,
+      ) ||
       (field.required && !['container_runtime', 'port'].includes(field.id)),
   );
   const advanced = fields.filter(
@@ -103,7 +112,10 @@ export function ManagedServiceForm({
               >
                 {field.id === 'safe_search'
                   ? { '0': 'Off', '1': 'Moderate', '2': 'Strict' }[option] || option
-                  : option}
+                  : field.id === 'database_mode'
+                    ? { managed: `Managed by ${vocab.product}`, site: 'Site-provided' }[option] ||
+                      option
+                    : option}
               </SelectItem>
             ))}
           </SelectContent>
@@ -125,8 +137,7 @@ export function ManagedServiceForm({
   );
   const storage =
     service.category === 'monitoring' ||
-    variant.startsWith('native-cuda') ||
-    variant.startsWith('native-xpu') ? (
+    service.variants.some((row) => row.id === variant && row.install_type === 'native_uv') ? (
       <Field>
         <div className="flex items-center gap-2">
           <FieldLabel>Service data</FieldLabel>
@@ -191,7 +202,7 @@ export function ManagedServiceForm({
           <details className="border-t pt-4">
             <summary className="cursor-pointer text-sm font-medium">Advanced settings</summary>
             <div className="mt-4 space-y-5">
-              {service.id === 'searxng' ? (
+              {fields.some((field) => field.id === 'engines') ? (
                 <SearchEnginePicker
                   value={configuration.engines || ''}
                   defaults={fields.find((field) => field.id === 'engines')?.placeholder || ''}
