@@ -70,7 +70,7 @@ const asyncProcessSchema = z
     kind: z.enum(['agent', 'mcp-task', 'mcp', 'question']),
     id: z.string(),
     title: z.string(),
-    live_state: operationalRunStateSchema,
+    live_state: z.string(),
     status: z.string(),
     root_session_id: z.string().optional(),
     owner_session_id: z.string().optional(),
@@ -97,7 +97,11 @@ const asyncProcessSchema = z
       .transform((value) => value ?? undefined),
   })
   .passthrough()
-  .transform((process) => ({ ...process, metadata: process as Record<string, unknown> }));
+  .transform((process) => ({
+    ...process,
+    live_state: operationalRunStateSchema.parse(process.live_state),
+    metadata: process as Record<string, unknown>,
+  }));
 
 const effectiveToolSchema = z.object({
   name: z.string(),
