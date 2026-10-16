@@ -298,7 +298,7 @@ describe('ClioRepository session operation contracts', () => {
             kind: 'agent',
             id: 'task_watcher',
             title: 'Spotter watcher',
-            live_state: 'waiting',
+            live_state: 'future_backend_state',
             status: 'running',
           },
         ],
@@ -308,7 +308,11 @@ describe('ClioRepository session operation contracts', () => {
 
     const processes = await repository.asyncProcesses('sess 1');
 
-    expect(processes[0]).toMatchObject({ id: 'task_watcher', live_state: 'unknown' });
+    expect(processes[0]).toMatchObject({
+      id: 'task_watcher',
+      live_state: 'unknown',
+      metadata: { live_state: 'future_backend_state' },
+    });
   });
 
   it('reads the newest recorded effective agent toolset without reconstructing it', async () => {
