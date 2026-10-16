@@ -4,7 +4,7 @@ version = "0.7.3"
 description = "CLIO Desktop — Tauri shell"
 authors = ["IOWarp / gact-tui contributors"]
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.77"
 
 [lib]
 name = "clio_desktop_lib"
@@ -20,9 +20,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 # Auto-update: checks the GitHub-releases latest.json marker, verifies the
 # minisign signature against the configured pubkey, downloads + installs.
-# 2.12 uses maintained zip 4; older resolutions can select yanked zip 2.
-# Keep the updater on the stable line supporting the declared Rust floor.
-tauri-plugin-updater = "~2.12.0"
+tauri-plugin-updater = "2"
 # Relaunch the app after an in-place update installs (the updater leaves the
 # running process in place on macOS/Linux; `relaunch()` boots the new binary).
 tauri-plugin-process = "2"
