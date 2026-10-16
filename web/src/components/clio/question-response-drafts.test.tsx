@@ -1,9 +1,11 @@
 import type { PendingInteraction } from '@clio/core/v3';
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QuestionResponse } from './pending-interaction-question-response';
 import { QuestionAnswerContext, useQuestionDrafts } from './question-answer-context';
+
+afterEach(cleanup);
 
 function question(id = 'q1', payload: PendingInteraction['payload'] = {}): PendingInteraction {
   return {
