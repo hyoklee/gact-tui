@@ -80,6 +80,23 @@ export function useHtmlPreviewTheme(): HtmlPreviewTheme {
 export function themedSvgBytes(bytes: Uint8Array, theme: HtmlPreviewTheme): Uint8Array {
   const doc = new DOMParser().parseFromString(new TextDecoder().decode(bytes), 'image/svg+xml');
   if (doc.querySelector('parsererror') || doc.documentElement.localName !== 'svg') return bytes;
+  // An SVG image has no themed parent. Honor root inheritance as inheritance
+  // from CLIO, rather than the browser's default black; keep explicit colors.
+  const root = doc.documentElement;
+  const inherit = /^(currentcolor|inherit|unset)$/iu;
+  if (inherit.test(root.getAttribute('color')?.trim() ?? '')) {
+    root.setAttribute('color', 'var(--foreground, currentColor)');
+  }
+  const inline = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  inline.setAttribute('style', root.getAttribute('style') ?? '');
+  if (inherit.test(inline.style.getPropertyValue('color').trim())) {
+    inline.style.setProperty(
+      'color',
+      'var(--foreground, currentColor)',
+      inline.style.getPropertyPriority('color'),
+    );
+    root.setAttribute('style', inline.getAttribute('style')!);
+  }
   // SVG images otherwise default to a tiny 300px intrinsic width, even with a large viewBox.
   const viewBox = doc.documentElement
     .getAttribute('viewBox')

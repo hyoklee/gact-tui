@@ -12,6 +12,8 @@ import {
 } from '@/tauri/documents';
 import { downloadBytes } from './surface-export';
 import { vocab } from '@/lib/brand-vocabulary';
+// Load the real lazy renderer during collection, outside the rendering test's timer.
+import '../ai-elements/markdown';
 
 const host = vi.hoisted(() => ({ native: true }));
 vi.mock('@/lib/transport/tauri-runtime', () => ({ inTauri: () => host.native }));
@@ -103,8 +105,6 @@ function renderWorkspace(
 
 describe('ClioDocumentWorkspace', () => {
   it('renders inline dollar math in a Markdown artifact without converting it to PDF', async () => {
-    // Assert rendering, independently of the real lazy module's cold transform time.
-    await import('../ai-elements/markdown');
     repository.documentManifest.mockResolvedValue(manifest);
     repository.documentContent.mockResolvedValue(
       new TextEncoder().encode(

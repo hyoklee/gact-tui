@@ -48,4 +48,15 @@ it('themes a standalone SVG display copy while retaining authored colors and sou
   expect(fixedDoc.documentElement.hasAttribute('height')).toBe(false);
   expect(fixedDoc.documentElement.getAttribute('fill')).toBe('red');
   expect(fixedDoc.documentElement.getAttribute('color')).toBe('blue');
+  const inherited = new TextEncoder().encode(
+    '<svg xmlns="http://www.w3.org/2000/svg" style="color:currentColor;background:var(--background)" color="inherit"><text fill="currentColor">Read me</text></svg>',
+  );
+  const adaptive = new DOMParser().parseFromString(
+    new TextDecoder().decode(themedSvgBytes(inherited, theme)),
+    'image/svg+xml',
+  );
+  expect(adaptive.documentElement.style.color).toBe('var(--foreground, currentColor)');
+  expect(adaptive.documentElement.getAttribute('color')).toBe('var(--foreground, currentColor)');
+  expect(adaptive.documentElement.style.background).toBe('var(--background)');
+  expect(new TextDecoder().decode(inherited)).toContain('color:currentColor');
 });

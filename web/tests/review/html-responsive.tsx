@@ -13,12 +13,15 @@ import { A2uiMedia } from '../../src/components/clio/a2ui-media';
 import { queryKeys } from '../../src/lib/query-keys';
 import { RepositoryOverride } from '../../src/providers/repository-override-context';
 import { createRepository } from '../../src/lib/connection';
+import type { A2UISurface } from '@clio/core/v3';
+import { ClioA2UISurface } from '../../src/components/clio/a2ui-surface';
+import { A2uiSessionRegistryOwner } from '../../src/test-fixtures/a2ui/v0_9_1/test-harness';
 
 declare global {
   interface Window {
     clioHtmlSvgLive?: {
       endpoint: string;
-      runs: { model: string; session_id: string; artifact_id: string }[];
+      runs: { model: string; session_id: string; artifact_id: string; surface: A2UISurface }[];
     };
   }
 }
@@ -177,14 +180,9 @@ function Review() {
                     className="rounded-lg border bg-card p-4"
                   >
                     <h2 className="mb-4 text-lg">Actual agent SVG · {run.model}</h2>
-                    <A2uiReferenceSessionProvider value={run.session_id}>
-                      <A2uiMedia
-                        componentId={run.session_id}
-                        kind="image"
-                        label={`Ocean waves from ${run.model}`}
-                        url={run.artifact_id}
-                      />
-                    </A2uiReferenceSessionProvider>
+                    <A2uiSessionRegistryOwner sessionId={run.session_id}>
+                      <ClioA2UISurface surface={run.surface} />
+                    </A2uiSessionRegistryOwner>
                   </section>
                 ))}
               </div>
