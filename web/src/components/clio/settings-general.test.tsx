@@ -5,17 +5,42 @@ import { AppearanceProvider } from '@/providers/appearance-provider';
 import { ConversationDisplayProvider } from '@/providers/conversation-display-provider';
 import { useUpdateFlowStore } from '@/store/update-flow-store';
 import { GeneralSettings } from './settings-general';
+import { vocab } from '@/lib/brand-vocabulary';
+import type { DesktopUpdateSnapshot } from '@/tauri/desktop-updater';
 
 const native = vi.hoisted(() => ({
   active: false,
   check: vi.fn(async () => null),
   installing: false,
+  snapshot: { status: 'unknown' } as DesktopUpdateSnapshot,
+  listeners: new Set<() => void>(),
 }));
 vi.mock('@/lib/transport/tauri-runtime', () => ({ inTauri: () => native.active }));
 vi.mock('@/tauri/desktop-updater', () => ({
-  checkForDesktopUpdate: native.check,
+  checkForDesktopUpdate: async () => {
+    native.snapshot = { status: 'checking' };
+    native.listeners.forEach((notify) => notify());
+    try {
+      const result = await native.check();
+      native.snapshot = { status: 'current' };
+      native.listeners.forEach((notify) => notify());
+      return result;
+    } catch (error) {
+      native.snapshot = {
+        status: 'error',
+        message: String((error as Error).message),
+        reason: 'unreachable',
+      };
+      native.listeners.forEach((notify) => notify());
+      throw error;
+    }
+  },
   isDesktopUpdateInstalling: () => native.installing,
-  subscribeDesktopUpdate: () => () => undefined,
+  getDesktopUpdateSnapshot: () => native.snapshot,
+  subscribeDesktopUpdate: (notify: () => void) => {
+    native.listeners.add(notify);
+    return () => native.listeners.delete(notify);
+  },
   describeUpdateError: (error: Error) => error.message,
   DESKTOP_UPDATE_TOAST_ID: 'desktop-update-available',
   installDesktopUpdate: vi.fn(),
@@ -34,6 +59,8 @@ function renderSettings() {
 beforeEach(() => {
   native.active = false;
   native.installing = false;
+  native.snapshot = { status: 'unknown' };
+  native.listeners.clear();
   native.check.mockReset().mockResolvedValue(null);
   useUpdateFlowStore.getState().reset();
   localStorage.clear();
@@ -58,7 +85,7 @@ it('shows shared preferences in the browser and preserves their existing saved v
   ).not.toBeInTheDocument();
   expect(screen.queryByRole('switch', { name: 'Enable beta updates' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Check for updates' })).not.toBeInTheDocument();
-  expect(screen.queryByText('App updates')).not.toBeInTheDocument();
+  expect(screen.queryByText(`${vocab.agent} updates`)).not.toBeInTheDocument();
   expect(screen.queryByText('Installed app only')).not.toBeInTheDocument();
   expect(native.check).not.toHaveBeenCalled();
   expect(getUpdateChannel()).toBe('beta');
@@ -69,6 +96,20 @@ it('shows shared preferences in the browser and preserves their existing saved v
   });
 });
 
+it('lets the user configure large pastes and disable conversion across restarts', () => {
+  const view = renderSettings();
+  const threshold = screen.getByRole('spinbutton', { name: 'Paste as source after' });
+  expect(threshold).toHaveValue(4000);
+  fireEvent.change(threshold, { target: { value: '8000' } });
+  expect(JSON.parse(localStorage.getItem('clio.appearance.v1')!)).toMatchObject({
+    pasteSourceThreshold: 8000,
+  });
+  fireEvent.change(threshold, { target: { value: '0' } });
+  view.unmount();
+  renderSettings();
+  expect(screen.getByRole('spinbutton', { name: 'Paste as source after' })).toHaveValue(0);
+});
+
 it('offers native updates in General and preserves opt-in and opt-out across remounts', async () => {
   native.active = true;
   const view = renderSettings();
@@ -76,14 +117,14 @@ it('offers native updates in General and preserves opt-in and opt-out across rem
   expect(toggle).not.toBeChecked();
   expect(toggle).toHaveAccessibleDescription(/Beta releases may be unstable/);
   fireEvent.click(toggle);
-  await waitFor(() => expect(screen.getByText('This app is up to date')).toBeVisible());
+  await waitFor(() => expect(screen.getByText(`${vocab.agent} is up to date`)).toBeVisible());
   expect(getUpdateChannel()).toBe('beta');
   expect(native.check).toHaveBeenCalledTimes(1);
   view.unmount();
   renderSettings();
   expect(screen.getByRole('switch', { name: 'Enable beta updates' })).toBeChecked();
   fireEvent.click(screen.getByRole('switch', { name: 'Enable beta updates' }));
-  await waitFor(() => expect(screen.getByText('This app is up to date')).toBeVisible());
+  await waitFor(() => expect(screen.getByText(`${vocab.agent} is up to date`)).toBeVisible());
   expect(getUpdateChannel()).toBe('stable');
   expect(native.check).toHaveBeenCalledTimes(2);
   expect(screen.getByRole('button', { name: 'Check for updates' })).toBeEnabled();

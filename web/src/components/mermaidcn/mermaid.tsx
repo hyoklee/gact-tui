@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { mermaidThemes, type MermaidCustomTheme } from '@/lib/mermaid-themes';
+import { renderPeleDiagram } from '@/components/clio/diagram-renderer';
 
 /* -------------------------------------------------------------------------------------------------
  * Types
@@ -14,6 +15,7 @@ export type MermaidTheme = MermaidBuiltinTheme | MermaidCustomTheme;
 const BUILTIN_THEMES = new Set<string>(['default', 'dark', 'forest', 'neutral', 'base']);
 
 export interface MermaidConfig {
+  maxWidth?: number;
   theme?: MermaidTheme;
   darkMode?: boolean;
   htmlLabels?: boolean;
@@ -94,12 +96,22 @@ function useMermaid({
       setError(null);
 
       try {
+        const parsedConfig: MermaidConfig = JSON.parse(configString);
+        const peleSvg = await renderPeleDiagram(
+          debouncedChart.trim(),
+          `diagram-${id}`,
+          parsedConfig.maxWidth,
+        );
+        if (isCancelled) return;
+        if (peleSvg) {
+          setSvg(peleSvg);
+          setStatus('success');
+          return;
+        }
         // Dynamic import to keep bundle size small
         const mermaid = (await import('mermaid')).default;
 
         if (isCancelled) return;
-
-        const parsedConfig: MermaidConfig = JSON.parse(configString);
 
         // Resolve Theme
         const isCustomTheme = parsedConfig.theme && !BUILTIN_THEMES.has(parsedConfig.theme);
@@ -221,6 +233,7 @@ export function Mermaid({
     config,
     debounceTime,
   });
+  const renderedHtml = React.useMemo(() => ({ __html: svg ?? '' }), [svg]);
 
   // Propagate events to parent
   React.useEffect(() => {
@@ -234,7 +247,7 @@ export function Mermaid({
       {status === 'success' && svg && (
         <div
           className="flex items-center justify-center w-full h-full overflow-auto animate-in fade-in duration-300 [&_svg]:max-w-full [&_svg]:h-auto"
-          dangerouslySetInnerHTML={{ __html: svg }}
+          dangerouslySetInnerHTML={renderedHtml}
           role="img"
           aria-label="Mermaid diagram"
         />

@@ -16,6 +16,7 @@ import { useConnectionSettings } from '@/providers/connection-provider';
 import { workspaceFilePath } from '@/lib/workspace-file-path';
 import type { FileSearchLocation } from '@/lib/search-matches';
 import { useLiveStore } from '@/store/live-store';
+import { toast } from 'sonner';
 
 interface UseWorkbenchNavigationInput {
   allSessions: readonly Session[];
@@ -76,6 +77,28 @@ export function useWorkbenchNavigation({ allSessions, workspaceId }: UseWorkbenc
     [allSessions, navigate, revealWorkbench, workspaceId],
   );
 
+  const revealSurfaceOwner = useCallback(
+    (ownerSessionId: string) => {
+      const child = Object.values(useLiveStore.getState().entities.subagents).find(
+        (item) => item.child_session_id === ownerSessionId,
+      );
+      if (child) {
+        openSubagent(child, 'canvas');
+        return true;
+      }
+      const owner = allSessions.find((item) => item.id === ownerSessionId);
+      if (owner) {
+        void navigate(
+          `/workspaces/${encodeURIComponent(owner.workspace_id ?? workspaceId)}/sessions/${encodeURIComponent(ownerSessionId)}`,
+        );
+        return true;
+      }
+      toast.error('The linked conversation is not available yet. Try again.');
+      return false;
+    },
+    [allSessions, navigate, openSubagent, workspaceId],
+  );
+
   useEffect(() => {
     const open = (event: Event) => {
       const request = (event as CustomEvent<KnowledgeOpenRequest>).detail;
@@ -105,6 +128,10 @@ export function useWorkbenchNavigation({ allSessions, workspaceId }: UseWorkbenc
       }),
     [revealWorkbench, workspacePath, workspaceId],
   );
+  const openWorkspaceFolder = useCallback(
+    (path: string) => revealWorkbench({ kind: 'workspace-folder', path }),
+    [revealWorkbench],
+  );
   const openWorkspaceResource = useCallback(
     (resource: WorkspaceResource, relatedResources?: readonly WorkspaceResource[]) =>
       revealWorkbench({ kind: 'resource', relatedResources, resource }),
@@ -133,15 +160,29 @@ export function useWorkbenchNavigation({ allSessions, workspaceId }: UseWorkbenc
   const activeRequest =
     workbenchRequest?.endpoint === settings.endpoint ? workbenchRequest : searchRequest;
 
+  const conversationNavigation = useMemo(
+    () => ({
+      onOpenArtifact: openArtifact,
+      onOpenFile: openWorkspaceFile,
+      onOpenFileReference: openWorkspaceFile,
+      onOpenFolder: openWorkspaceFolder,
+      onOpenResource: openWorkspaceResource,
+    }),
+    [openArtifact, openWorkspaceFile, openWorkspaceFolder, openWorkspaceResource],
+  );
+
   return {
     activeRequest,
+    conversationNavigation,
     openArtifact,
     openDiff,
     openParentSession,
     openSubagent,
     openWorkflow,
     openWorkspaceFile,
+    openWorkspaceFolder,
     openWorkspaceResource,
     revealWorkbench,
+    revealSurfaceOwner,
   };
 }

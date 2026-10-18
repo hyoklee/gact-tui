@@ -308,7 +308,10 @@ fn complete_web_search_at(root: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static NEXT_TEST_ROOT: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn schema5_native_search_and_individual_provider_choices_are_preserved() {
@@ -327,7 +330,11 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("clock")
             .as_nanos();
-        std::env::temp_dir().join(format!("clio-installer-options-{suffix}"))
+        let sequence = NEXT_TEST_ROOT.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!(
+            "clio-installer-options-{}-{suffix}-{sequence}",
+            std::process::id()
+        ))
     }
 
     #[test]

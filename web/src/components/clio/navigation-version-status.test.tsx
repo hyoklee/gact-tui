@@ -1,3 +1,4 @@
+import { vocab } from '@/lib/brand-vocabulary';
 import { brand } from '@brand';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -34,6 +35,9 @@ vi.mock('@/lib/github-releases', () => ({ latestPublishedRelease }));
 vi.mock('@tauri-apps/api/app', () => ({ getVersion }));
 vi.mock('@/lib/transport/tauri-runtime', () => ({ inTauri: () => runtime.desktopShell }));
 vi.mock('@/hooks/use-repository', () => ({ useRepository: () => repository }));
+vi.mock('@/tauri/clio-update-verification', () => ({
+  managedClioVersion: async () => (await repository.capabilities()).service?.version,
+}));
 vi.mock('@/providers/connection-provider', () => ({
   useConnectionSettings: () => ({
     credentialsReady: true,
@@ -116,138 +120,85 @@ afterEach(() => {
 });
 
 describe('SystemVersionStatus', () => {
-  it('offers the next beta Agent and passes its exact tag to the installer', async () => {
+  it('uses one signed release target in beta, without an independent agent update', async () => {
     setUpdateChannel('beta');
-    repository.capabilities.mockResolvedValue({ service: { version: '0.9.5b1' } });
+    desktop.snapshot = {
+      status: 'available',
+      update: { currentVersion: '0.9.4.3', version: '0.9.5-beta.2' },
+    };
     renderStatus();
     fireEvent.click(await screen.findByRole('button', { name: 'Software update available' }));
-    const row = within(await screen.findByTestId('version-row-agent'));
-    fireEvent.click(row.getByRole('button', { name: /Update/ }));
-    await waitFor(() =>
-      expect(updateManagedClio).toHaveBeenCalledWith(
-        'v0.9.5-beta.2',
-        expect.objectContaining({ restartApp: true }),
-      ),
-    );
-    expect(latestPublishedRelease).toHaveBeenCalledWith(
-      brand.agentReleaseUrl,
-      'beta',
-      expect.any(AbortSignal),
-    );
-    expect(repository.latestRelease).not.toHaveBeenCalled();
-  });
-
-  it('keeps an explicit stable opt-out even when the installed Agent is beta', async () => {
-    repository.capabilities.mockResolvedValue({ service: { version: '0.9.5b1' } });
-    getVersion.mockResolvedValue('0.9.5-1');
-    renderStatus();
-    await screen.findByRole('button', {
-      name: `${brand.productName} and ${brand.agentName} are up to date`,
-    });
+    fireEvent.click(await screen.findByRole('button', { name: `Update ${vocab.agent}` }));
+    await waitFor(() => expect(desktop.install).toHaveBeenCalledOnce());
+    expect(updateManagedClio).not.toHaveBeenCalled();
     expect(latestPublishedRelease).not.toHaveBeenCalled();
   });
 
-  it('shows one compact version control and two branded software rows', async () => {
+  it('keeps an explicit stable opt-out when the installed agent is beta', async () => {
+    repository.capabilities.mockResolvedValue({ service: { version: '0.9.5b1' } });
     renderStatus();
-
-    const trigger = await screen.findByRole('button', {
-      name: `${brand.productName} and ${brand.agentName} are up to date`,
-    });
-    expect(trigger).toHaveTextContent('v0.9.4.3');
-    fireEvent.click(trigger);
-
-    expect(desktop.check).toHaveBeenCalledOnce();
-    expect(await screen.findByText('System Version')).toBeVisible();
-    expect(await screen.findByText(brand.productName)).toBeVisible();
-    expect(screen.getByText(brand.agentName)).toBeVisible();
-    expect(screen.getAllByText('v0.9.4.3')).toHaveLength(3);
-    expect(screen.queryByText(/protocol/iu)).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Update options' })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /up to date|available/ }));
+    await waitFor(() => expect(desktop.check).toHaveBeenCalled());
+    expect(latestPublishedRelease).not.toHaveBeenCalled();
   });
 
-  it('offers independent updates and a single combined path', async () => {
-    desktop.snapshot = {
-      status: 'available',
-      update: { currentVersion: '0.9.4+2', version: '0.9.4+3' },
-    };
-    getVersion.mockResolvedValue('0.9.4+2');
-    repository.capabilities.mockResolvedValue({
-      service: { name: 'clio-agent-gact', version: '0.9.4.2' },
-    });
+  it('shows one compact control and read-only component version rows', async () => {
     renderStatus();
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Software update available' }));
-    expect(await screen.findByRole('button', { name: 'Update all' })).toBeVisible();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Update all' }));
-    await waitFor(() =>
-      expect(updateManagedClio).toHaveBeenCalledWith('v0.9.4.3', {
-        restartApp: false,
-        onProgress: expect.any(Function),
-      }),
-    );
-    expect(desktop.install).toHaveBeenCalledOnce();
+    fireEvent.click(await screen.findByRole('button', { name: /are up to date/ }));
+    expect(await screen.findByTestId('version-row-agent')).toBeVisible();
+    expect(screen.getByTestId('version-row-desktop')).toBeVisible();
+    expect(
+      within(screen.getByTestId('version-row-agent')).queryByRole('button'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('version-row-desktop')).queryByRole('button'),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Up to date' })).toHaveLength(1);
   });
 
-  it('disables both rows and the header action while any update is in flight', async () => {
+  it('never picks a newer backend feed instead of the signed app release', async () => {
+    repository.latestRelease.mockResolvedValue({ version: '99.0.0' });
     desktop.snapshot = {
       status: 'available',
-      update: { currentVersion: '0.9.4+2', version: '0.9.4+3' },
+      update: { currentVersion: '0.9.4.3', version: '0.9.4.4' },
     };
-    getVersion.mockResolvedValue('0.9.4+2');
-    repository.capabilities.mockResolvedValue({
-      service: { name: 'clio-agent-gact', version: '0.9.4.2' },
-    });
-    // Resolves only once instructed, so the update stays "in flight" long
-    // enough to assert every action is locked -- not just the row that
-    // started it (the bug this behavior replaces).
-    let resolveUpdate: () => void = () => undefined;
-    updateManagedClio.mockImplementationOnce(
-      () =>
-        new Promise<undefined>((resolve) => {
-          resolveUpdate = () => resolve(undefined);
-        }),
-    );
     renderStatus();
-
     fireEvent.click(await screen.findByRole('button', { name: 'Software update available' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Update all' }));
-
-    await waitFor(() => expect(updateManagedClio).toHaveBeenCalled());
-    const agentRow = within(await screen.findByTestId('version-row-agent'));
-    const desktopRow = within(screen.getByTestId('version-row-desktop'));
-    expect(agentRow.getByRole('button')).toBeDisabled();
-    expect(desktopRow.getByRole('button')).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Update all' })).toBeDisabled();
-
-    resolveUpdate();
+    fireEvent.click(screen.getByRole('button', { name: `Update ${vocab.agent}` }));
     await waitFor(() => expect(desktop.install).toHaveBeenCalledOnce());
+    expect(repository.latestRelease).not.toHaveBeenCalled();
+    expect(updateManagedClio).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Update' })).not.toBeInTheDocument();
   });
 
-  it('shows the typed failure reason instead of silently dropping it', async () => {
-    desktop.snapshot = { status: 'current' };
-    repository.capabilities.mockResolvedValue({
-      service: { name: 'clio-agent-gact', version: '0.9.4.2' },
-    });
-    repository.latestRelease.mockResolvedValue({
-      version: '0.9.4.3',
-      source: 'https://github.com/iowarp/clio-agent/releases/latest/download/latest-lite.json',
-      checked_at: '2026-09-24T00:00:00Z',
-      degradation: null,
-    });
-    updateManagedClio.mockRejectedValueOnce(new Error('The signature verification failed.'));
+  it('locks the single action throughout an update', async () => {
+    useUpdateFlowStore.getState().start('both', '0.9.4.4');
+    desktop.snapshot = {
+      status: 'available',
+      update: { currentVersion: '0.9.4.3', version: '0.9.4.4' },
+    };
     renderStatus();
-
     fireEvent.click(await screen.findByRole('button', { name: 'Software update available' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Update all' }));
+    expect(await screen.findByRole('button', { name: `Update ${vocab.agent}` })).toBeDisabled();
+    expect(
+      within(screen.getByTestId('version-row-agent')).queryByRole('button'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('version-row-desktop')).queryByRole('button'),
+    ).not.toBeInTheDocument();
+  });
 
-    // The full-screen presentation of this failure is `UpdateRestartOverlay`
-    // (covered by its own tests) -- this asserts the state machine itself
-    // never drops the reason, and that the backend-only recovery restart
-    // still runs after a failed 'both' attempt.
+  it('retains an incomplete-update failure instead of reporting success', async () => {
+    desktop.snapshot = {
+      status: 'available',
+      update: { currentVersion: '0.9.4.3', version: '0.9.4.4' },
+    };
+    desktop.install.mockRejectedValueOnce(new Error('The signature verification failed.'));
+    renderStatus();
+    fireEvent.click(await screen.findByRole('button', { name: 'Software update available' }));
+    fireEvent.click(screen.getByRole('button', { name: `Update ${vocab.agent}` }));
     await waitFor(() => expect(useUpdateFlowStore.getState().step).toBe('failed'));
     expect(useUpdateFlowStore.getState().reason).toBe('The signature verification failed.');
-    expect(restartClio).toHaveBeenCalledOnce();
   });
 
   it('renders a mid-check desktop status as "Checking…", never as current', async () => {
@@ -314,6 +265,8 @@ describe('SystemVersionStatus', () => {
   });
 
   it('says why the CLIO check could not complete instead of "Not checked"', async () => {
+    runtime.desktopShell = false;
+    vi.stubEnv('VITE_CLIO_WORKSPACE_VERSION', '0.9.4.3');
     repository.latestRelease.mockResolvedValue({
       version: null,
       source: 'https://github.com/iowarp/clio-agent/releases/latest/download/latest-lite.json',
@@ -338,10 +291,12 @@ describe('SystemVersionStatus', () => {
     expect(agentRow.queryByText('Up to date')).not.toBeInTheDocument();
     // The desktop row itself has a real, current check -- untouched by the
     // agent row's missing release feed.
-    expect(within(screen.getByTestId('version-row-desktop')).getByText('Up to date')).toBeVisible();
+    expect(within(screen.getByTestId('version-row-desktop')).getByText('Web build')).toBeVisible();
   });
 
   it('says the release server could not be reached for any other failure', async () => {
+    runtime.desktopShell = false;
+    vi.stubEnv('VITE_CLIO_WORKSPACE_VERSION', '0.9.4.3');
     repository.latestRelease.mockResolvedValue({
       version: null,
       source: 'https://github.com/iowarp/clio-agent/releases/latest/download/latest-lite.json',
@@ -418,21 +373,20 @@ describe('SystemVersionStatus in a plain browser', () => {
     expect(screen.queryByRole('button', { name: 'Checking versions' })).not.toBeInTheDocument();
   });
 
-  it('offers an agent update from the browser without a desktop install', async () => {
-    repository.capabilities.mockResolvedValue({
-      service: { name: 'clio-agent-gact', version: '0.11.2.24' },
-    });
+  it('does not invoke native installers from a plain browser', async () => {
+    repository.capabilities.mockResolvedValue({ service: { version: '0.11.2.24' } });
     renderStatus();
-
     fireEvent.click(await screen.findByRole('button', { name: 'Software update available' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Update all' }));
-
-    await waitFor(() =>
-      expect(updateManagedClio).toHaveBeenCalledWith('v0.11.2.25', {
-        restartApp: true,
-        onProgress: expect.any(Function),
-      }),
+    fireEvent.click(await screen.findByRole('button', { name: `Update ${vocab.agent}` }));
+    expect(await screen.findByRole('heading', { name: `Update ${vocab.agent}` })).toBeVisible();
+    expect(
+      screen.getByText(/runtime and browser interface come from the same release/),
+    ).toBeVisible();
+    expect(screen.getByRole('link', { name: `Open ${vocab.agent} 0.11.2.25` })).toHaveAttribute(
+      'href',
+      expect.stringContaining('/tag/v0.11.2.25'),
     );
+    expect(updateManagedClio).not.toHaveBeenCalled();
     expect(desktop.install).not.toHaveBeenCalled();
   });
 });

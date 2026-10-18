@@ -1,6 +1,7 @@
 import type { DownloadEvent, Update } from '@tauri-apps/plugin-updater';
 import { toast } from 'sonner';
 import { brand } from '@brand';
+import { vocab } from '@/lib/brand-vocabulary';
 import { latestPublishedRelease } from '@/lib/github-releases';
 import {
   getUpdateChannel,
@@ -15,6 +16,20 @@ import {
 } from '@/lib/runtime-limits';
 import { formatBytes } from '@/lib/format';
 import { inTauri } from '@/lib/transport/tauri-runtime';
+import { compareReleaseVersions, displayReleaseVersion, releaseTag } from '@/lib/release-version';
+import {
+  hasManagedRuntime,
+  managedRuntimeUpdateMode,
+  restartClio,
+  updateManagedClio,
+} from './managed-backend';
+import { managedClioVersion } from './clio-update-verification';
+import {
+  clearPendingUpdateMarker,
+  isUpdateInFlight,
+  useUpdateFlowStore,
+  writePendingUpdateMarker,
+} from '@/store/update-flow-store';
 
 /**
  * Stable id for the background "an update is available" toast, shared with
@@ -30,6 +45,8 @@ export interface DesktopUpdateInfo {
   version: string;
   date?: string;
   body?: string;
+  /** Repair the owned runtime to the installed app when no shell update is needed. */
+  repair?: boolean;
 }
 
 export interface DesktopUpdateProgress {
@@ -40,6 +57,7 @@ export interface DesktopUpdateProgress {
 
 /** Why a desktop update check failed (see {@link classifyUpdateError}). */
 export type DesktopUpdateFailure =
+  | 'version_mismatch'
   | 'manifest_not_published'
   | 'platform_not_published'
   | 'signature_mismatch'
@@ -52,6 +70,8 @@ export type DesktopUpdateSnapshot =
 
 let availableUpdate: Update | null = null;
 let installingUpdate: Update | null = null;
+let installingProduct = false;
+let runtimeRepair: DesktopUpdateInfo | null = null;
 let availableChannel: UpdateChannel = 'stable';
 let checkGeneration = 0;
 let updateSnapshot: DesktopUpdateSnapshot = { status: 'unknown' };
@@ -69,7 +89,7 @@ export function getDesktopUpdateSnapshot(): DesktopUpdateSnapshot {
 
 /** Keep channel controls locked during installs started from any UI entry point. */
 export function isDesktopUpdateInstalling(): boolean {
-  return installingUpdate !== null;
+  return installingProduct;
 }
 
 /** Subscribe without causing an additional network request. */
@@ -91,6 +111,7 @@ subscribeUpdateChannel(() => {
   checkGeneration += 1;
   const previous = availableUpdate;
   availableUpdate = null;
+  runtimeRepair = null;
   if (previous && previous !== installingUpdate) void previous.close().catch(() => undefined);
   publishUpdateSnapshot({ status: 'unknown' });
   toast.dismiss(DESKTOP_UPDATE_TOAST_ID);
@@ -123,6 +144,9 @@ export function classifyUpdateError(error: unknown): {
 } {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = message.toLowerCase();
+  if (normalized.startsWith('components differ:')) {
+    return { reason: 'version_mismatch', message };
+  }
   if (normalized.includes('could not fetch a valid release json')) {
     return { reason: 'manifest_not_published', message: 'No update manifest published yet' };
   }
@@ -176,20 +200,23 @@ function writeLastCheckedAt(value: number): void {
  */
 export async function checkForDesktopUpdate(): Promise<DesktopUpdateInfo | null> {
   if (!inTauri()) throw new Error('App updates are available only in the installed desktop app.');
-  if (installingUpdate) throw new Error('An app update is already being installed.');
+  if (installingProduct || isUpdateInFlight(useUpdateFlowStore.getState().step))
+    throw new Error('An update is already in progress.');
   const { getVersion } = await import('@tauri-apps/api/app');
-  initializeUpdateChannel(await getVersion());
-  if (installingUpdate) throw new Error('An app update is already being installed.');
+  const currentVersion = await getVersion();
+  initializeUpdateChannel(currentVersion);
+  if (installingProduct) throw new Error('An update is already in progress.');
   const channel = getUpdateChannel();
   const generation = ++checkGeneration;
   writeLastCheckedAt(Date.now());
   publishUpdateSnapshot({ status: 'checking' });
+  let candidate: Update | null = null;
   try {
     const previous = availableUpdate;
     availableUpdate = null;
+    runtimeRepair = null;
     if (previous) await previous.close();
     const { check, Update } = await import('@tauri-apps/plugin-updater');
-    let candidate: Update | null;
     if (channel === 'beta') {
       if (!brand.desktopReleaseUrl) throw new Error('No beta release feed is configured.');
       const release = await latestPublishedRelease(brand.desktopReleaseUrl, channel);
@@ -206,19 +233,67 @@ export async function checkForDesktopUpdate(): Promise<DesktopUpdateInfo | null>
       await candidate?.close();
       return null;
     }
-    availableUpdate = candidate;
-    availableChannel = channel;
-    const update = availableUpdate
-      ? {
-          currentVersion: availableUpdate.currentVersion,
-          version: availableUpdate.version,
-          date: availableUpdate.date,
-          body: availableUpdate.body,
+    let repair: DesktopUpdateInfo | null = null;
+    if (await hasManagedRuntime()) {
+      let runtime: string | undefined;
+      try {
+        runtime = await managedClioVersion();
+      } catch (error) {
+        console.warn(
+          'The owned runtime is unavailable; the selected release will repair it:',
+          describeUpdateError(error),
+        );
+      }
+      const target = candidate?.version ?? currentVersion;
+      const difference = runtime ? compareReleaseVersions(runtime, target) : -1;
+      if (difference > 0) {
+        throw new Error(
+          `Components differ: runtime ${runtime}, app target ${displayReleaseVersion(target)}. A matching signed app release is required; the runtime will not be downgraded automatically.`,
+        );
+      }
+      if (!candidate && difference < 0) {
+        repair = {
+          currentVersion,
+          version: currentVersion,
+          repair: true,
+          body: runtime
+            ? `The runtime is ${runtime}. Restore the app and runtime to the same release.`
+            : 'The local runtime is unavailable. Restore the app and runtime to the same release.',
+        };
+        if ((await managedRuntimeUpdateMode()) === 'bundled') {
+          const { invoke } = await import('@tauri-apps/api/core');
+          const metadata = await invoke<ConstructorParameters<typeof Update>[0] | null>(
+            'check_release_update',
+            { tag: releaseTag(currentVersion), repair: true },
+          );
+          if (!metadata)
+            throw new Error('The signed installer for this app version is unavailable.');
+          candidate = new Update(metadata);
         }
-      : null;
+      }
+    }
+    if (generation !== checkGeneration || channel !== getUpdateChannel()) {
+      await candidate?.close();
+      return null;
+    }
+    availableUpdate = candidate;
+    runtimeRepair = repair;
+    availableChannel = channel;
+    const update = candidate
+      ? {
+          currentVersion: candidate.currentVersion,
+          version: candidate.version,
+          date: candidate.date,
+          body: candidate.body,
+          repair: repair?.repair,
+        }
+      : repair;
     publishUpdateSnapshot(update ? { status: 'available', update } : { status: 'current' });
     return update;
   } catch (error) {
+    await candidate
+      ?.close()
+      .catch((closeError: unknown) => console.warn('Could not close update check', closeError));
     if (generation === checkGeneration) {
       publishUpdateSnapshot({ status: 'error', ...classifyUpdateError(error) });
     }
@@ -230,36 +305,112 @@ export async function checkForDesktopUpdate(): Promise<DesktopUpdateInfo | null>
 export async function installDesktopUpdate(
   onProgress: (progress: DesktopUpdateProgress) => void,
 ): Promise<void> {
-  if (installingUpdate) throw new Error('An app update is already being installed.');
-  if (!availableUpdate) throw new Error('Check for an available update before installing.');
+  if (installingProduct || isUpdateInFlight(useUpdateFlowStore.getState().step)) {
+    throw new Error('An update is already in progress.');
+  }
+  if (!availableUpdate && !runtimeRepair)
+    throw new Error('Check for an available update before installing.');
   if (availableChannel !== getUpdateChannel())
     throw new Error('The update channel changed. Check for updates again.');
   const update = availableUpdate;
+  const version = displayReleaseVersion(update?.version ?? runtimeRepair?.version);
+  if (!version) throw new Error('The release target is missing. Check for updates again.');
+  installingProduct = true;
   installingUpdate = update;
   checkGeneration += 1;
   publishUpdateSnapshot({ ...updateSnapshot });
+  let runtimeUpdateStarted = false;
+  let desktopInstallStarted = false;
   try {
+    const runtimeMode = await managedRuntimeUpdateMode();
+    const ownsRuntime = runtimeMode !== 'external';
+    let currentRuntime: string | undefined;
+    let runtimeIssue: string | undefined;
+    if (ownsRuntime) {
+      try {
+        currentRuntime = await managedClioVersion();
+      } catch (error) {
+        runtimeIssue = describeUpdateError(error);
+        console.warn('Repairing an unavailable owned runtime:', runtimeIssue);
+      }
+    }
+    if (currentRuntime && compareReleaseVersions(currentRuntime, version) > 0) {
+      throw new Error(
+        'The local runtime is newer than the selected app release. Check for a matching app update.',
+      );
+    }
+    const action = ownsRuntime ? 'both' : 'desktop';
+    useUpdateFlowStore.getState().start(action, version);
+    if (runtimeIssue)
+      useUpdateFlowStore.getState().appendLine(`Local runtime unavailable: ${runtimeIssue}`);
+    writePendingUpdateMarker({ action, version, startedAt: Date.now() });
+    useUpdateFlowStore.getState().setStep(update ? 'downloading' : 'installing');
     let downloadedBytes = 0;
     let totalBytes: number | undefined;
-    await update.downloadAndInstall((event: DownloadEvent) => {
+    await update?.download((event: DownloadEvent) => {
+      const publishProgress = (progress: DesktopUpdateProgress) => {
+        useUpdateFlowStore.getState().setProgress(progress);
+        onProgress(progress);
+      };
       if (event.event === 'Started') {
         totalBytes = event.data.contentLength;
-        onProgress({ downloadedBytes, totalBytes, finished: false });
+        publishProgress({ downloadedBytes, totalBytes, finished: false });
         return;
       }
       if (event.event === 'Progress') {
         downloadedBytes += event.data.chunkLength;
-        onProgress({ downloadedBytes, totalBytes, finished: false });
+        publishProgress({ downloadedBytes, totalBytes, finished: false });
         return;
       }
-      onProgress({ downloadedBytes, totalBytes, finished: true });
+      publishProgress({ downloadedBytes, totalBytes, finished: true });
     });
-    await update.close();
+    // Finish the signed download before stopping or changing the runtime.
+    if (
+      ownsRuntime &&
+      !(update && runtimeMode === 'bundled') &&
+      (!currentRuntime || compareReleaseVersions(currentRuntime, version) !== 0)
+    ) {
+      useUpdateFlowStore.getState().setStep('installing');
+      runtimeUpdateStarted = true;
+      await updateManagedClio(releaseTag(version), {
+        restartApp: false,
+        onProgress: (line) => useUpdateFlowStore.getState().appendLine(line),
+      });
+    }
+    desktopInstallStarted = update !== null;
+    if (update) useUpdateFlowStore.getState().setStep('installing');
+    await update?.install();
+    await update?.close();
     if (availableUpdate === update) availableUpdate = null;
-    const { relaunch } = await import('@tauri-apps/plugin-process');
-    await relaunch();
+    runtimeRepair = null;
+    useUpdateFlowStore.getState().setStep('restarting');
+    if (update) {
+      const { relaunch } = await import('@tauri-apps/plugin-process');
+      await relaunch();
+    } else {
+      await restartClio();
+    }
+  } catch (error) {
+    useUpdateFlowStore.getState().fail(describeUpdateError(error));
+    if (availableUpdate === update) availableUpdate = null;
+    runtimeRepair = null;
+    await update
+      ?.close()
+      .catch((closeError: unknown) => console.warn('Could not close failed update', closeError));
+    publishUpdateSnapshot({ status: 'error', ...classifyUpdateError(error) });
+    if (runtimeUpdateStarted) {
+      // Retain the target across recovery; a reconnect must never erase a
+      // partially applied update or claim success without checking versions.
+      await restartClio().catch((restartError: unknown) =>
+        console.warn('Could not restart the runtime after a failed update', restartError),
+      );
+    } else if (!desktopInstallStarted) {
+      clearPendingUpdateMarker();
+    }
+    throw error;
   } finally {
     installingUpdate = null;
+    installingProduct = false;
     publishUpdateSnapshot({ ...updateSnapshot });
   }
 }
@@ -318,7 +469,7 @@ async function restartToUpdate(): Promise<void> {
  * point production code calls.
  */
 export async function runBackgroundUpdateCheck(now: number = Date.now()): Promise<void> {
-  if (!inTauri()) return;
+  if (!inTauri() || isUpdateInFlight(useUpdateFlowStore.getState().step)) return;
   const lastCheckedAt = readLastCheckedAt();
   const elapsedMs = lastCheckedAt > now ? Number.POSITIVE_INFINITY : now - lastCheckedAt;
   if (elapsedMs < BACKGROUND_UPDATE_CHECK_MIN_INTERVAL_MS) return;
@@ -332,15 +483,20 @@ export async function runBackgroundUpdateCheck(now: number = Date.now()): Promis
     return;
   }
   if (!update) return;
-  toast(`Version ${update.version} is available`, {
-    id: DESKTOP_UPDATE_TOAST_ID,
-    description: 'Restart to install the signed update.',
-    duration: Number.POSITIVE_INFINITY,
-    action: {
-      label: 'Restart to update',
-      onClick: () => void restartToUpdate(),
+  toast(
+    update.repair
+      ? 'The local installation needs repair'
+      : `Version ${displayReleaseVersion(update.version)} is available`,
+    {
+      id: DESKTOP_UPDATE_TOAST_ID,
+      description: 'Restart to install the signed update.',
+      duration: Number.POSITIVE_INFINITY,
+      action: {
+        label: `Update ${vocab.agent}`,
+        onClick: () => void restartToUpdate(),
+      },
     },
-  });
+  );
 }
 
 /**

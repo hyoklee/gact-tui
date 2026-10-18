@@ -15,3 +15,10 @@ integration. Guidance: https://brand.github.com/foundations/logo.
 `obsidian.svg` is the unmodified purple mark from
 https://obsidian.md/images/obsidian-logo-gradient.svg, used to identify Obsidian
 vaults and the official Sync client. Guidance: https://obsidian.md/brand.
+
+`ndp-light.png` and `ndp-dark.png` are the unmodified 650 × 114 horizontal
+National Data Platform artwork used by its official navigation and footer,
+retrieved on 2026-10-18 from:
+https://nationaldataplatform.org/wagtail/media/original_images/National_Data_Platform_horiz_stacked.png
+and https://nationaldataplatform.org/wagtail/media/original_images/National_Data_Platform_horiz_stacked_wt.png.
+They identify the NDP integration and retain the original colors and aspect ratio.

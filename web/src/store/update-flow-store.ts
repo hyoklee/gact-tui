@@ -28,6 +28,7 @@ export type UpdateStep =
   | 'installing'
   | 'restarting'
   | 'reconnecting'
+  | 'verifying'
   | 'done'
   | 'failed';
 
@@ -114,6 +115,7 @@ export const UPDATE_IN_FLIGHT_STEPS: ReadonlySet<UpdateStep> = new Set([
   'installing',
   'restarting',
   'reconnecting',
+  'verifying',
 ]);
 
 export function isUpdateInFlight(step: UpdateStep): boolean {
@@ -143,7 +145,9 @@ export function readPendingUpdateMarker(): PendingUpdateMarker | undefined {
     if (!parsed || typeof parsed !== 'object') return undefined;
     const candidate = parsed as Record<string, unknown>;
     if (
-      (candidate.action !== 'agent' && candidate.action !== 'desktop' && candidate.action !== 'both') ||
+      (candidate.action !== 'agent' &&
+        candidate.action !== 'desktop' &&
+        candidate.action !== 'both') ||
       typeof candidate.startedAt !== 'number'
     ) {
       return undefined;
@@ -162,9 +166,9 @@ export function writePendingUpdateMarker(marker: PendingUpdateMarker): void {
   try {
     localStorage.setItem(PENDING_UPDATE_MARKER_KEY, JSON.stringify(marker));
   } catch {
-    // Best-effort only, matching desktop-updater.ts's own last-checked clock:
-    // a blocked store just means a cold reconnect cannot be distinguished
-    // from a fresh boot, not a crash.
+    throw new Error(
+      'The app cannot retain the update target across restart. Enable local storage before updating.',
+    );
   }
 }
 

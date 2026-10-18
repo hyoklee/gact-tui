@@ -180,8 +180,10 @@ export function WorkspacePage() {
     openSubagent,
     openWorkflow,
     openWorkspaceFile,
+    conversationNavigation,
     openWorkspaceResource,
     revealWorkbench,
+    revealSurfaceOwner,
   } = useWorkbenchNavigation({ allSessions: allSessions.data ?? [], workspaceId });
   const { openObservability, requestedView } = useObservabilityNavigation(sessionId, () =>
     revealWorkbench({ kind: 'session' }),
@@ -274,10 +276,10 @@ export function WorkspacePage() {
       interactions,
       tools,
       messages: transcript.data?.messages ?? [],
-      sessionId,
       focusComposer: focusComposerForAnswer,
       respondInteraction: respondInteraction.mutateAsync,
       send: send.mutateAsync,
+      revealSurfaceOwner,
       tray: {
         actionLifecycles: entities.a2ui_action_lifecycles,
         capabilityError: interactionCapabilityError ?? undefined,
@@ -740,11 +742,8 @@ export function WorkspacePage() {
                       error={transcriptError}
                       loading={transcript.isFetching}
                       onActionCardAction={actionCard.mutateAsync}
-                      onOpenArtifact={openArtifact}
-                      onOpenFile={openWorkspaceFile}
-                      onOpenFileReference={openWorkspaceFile}
+                      {...conversationNavigation}
                       onOpenWork={() => revealWorkbench({ kind: 'resources', section: 'work' })}
-                      onOpenResource={openWorkspaceResource}
                       onOpenReference={(reference) => void openComposerReference(reference)}
                       onInteractionResponse={handleInteractionResponse}
                       forkingMessageId={

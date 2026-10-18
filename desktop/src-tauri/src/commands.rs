@@ -22,6 +22,18 @@ pub fn get_backend(state: tauri::State<'_, Mutex<Supervisor>>) -> BackendHandle 
     lock_recover(&state).snapshot()
 }
 
+/// Whether this Desktop owns the bundled or legacy runtime it can update.
+#[tauri::command]
+pub fn has_managed_runtime(state: tauri::State<'_, Mutex<Supervisor>>) -> bool {
+    lock_recover(&state).owns_runtime()
+}
+
+/// Determine which parts of one CLIO release the signed app installer supplies.
+#[tauri::command]
+pub fn managed_runtime_update_mode(state: tauri::State<'_, Mutex<Supervisor>>) -> String {
+    lock_recover(&state).runtime_update_mode().to_string()
+}
+
 /// Retry a failed managed-backend boot without restarting the desktop shell.
 ///
 /// A killed or stalled child leaves the supervisor in a typed Error state.
@@ -45,16 +57,16 @@ pub async fn retry_backend(app: tauri::AppHandle) -> Result<(), String> {
 /// which runs the upstream clio-agent installer and streams progress back
 /// as Tauri events.
 #[tauri::command]
-pub fn install_clio(app: tauri::AppHandle) {
-    run_installer(app, false);
+pub fn install_clio(app: tauri::AppHandle) -> Result<(), String> {
+    run_installer(app, false)
 }
 
 /// Repair / reinstall the clio-agent runtime. Distinct from `install_clio`
 /// and from the splash "Retry": this re-runs the upstream installer with a
 /// force flag (`CLIO_FORCE=1`).
 #[tauri::command]
-pub fn repair_clio(app: tauri::AppHandle) {
-    run_installer(app, true);
+pub fn repair_clio(app: tauri::AppHandle) -> Result<(), String> {
+    run_installer(app, true)
 }
 
 /// Update the exact CLIO runtime owned by this desktop installation.
@@ -70,7 +82,28 @@ pub async fn update_clio(
 ) -> Result<(), String> {
     // Stopping the managed runtime waits for it to exit; never on the main thread.
     off_main(move || {
-        update_clio_blocking(app, target_version, restart_app);
+        let target = target_version
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or("Select an exact CLIO release before updating.")?;
+        crate::package_version::python_package_version(target)?;
+        let lease = crate::update_lease::UpdateLease::acquire()?;
+        let mode = app
+            .try_state::<Mutex<Supervisor>>()
+            .map(|state| lock_recover(&state).runtime_update_mode())
+            .unwrap_or("external");
+        if mode == "external" {
+            return Err(
+                "This CLIO service is not owned by Desktop; use its installation's update action."
+                    .into(),
+            );
+        }
+        if mode == "bundled" {
+            return Err(
+                "Use the signed app installer to update or repair this bundled runtime.".into(),
+            );
+        }
+        update_clio_blocking(app, target_version, restart_app, lease);
         Ok(())
     })
     .await
@@ -80,6 +113,7 @@ fn update_clio_blocking(
     app: tauri::AppHandle,
     target_version: Option<String>,
     restart_app: Option<bool>,
+    lease: crate::update_lease::UpdateLease,
 ) {
     let target = target_version.filter(|v| !v.trim().is_empty());
     let runtime = app
@@ -89,6 +123,7 @@ fn update_clio_blocking(
         lock_recover(&state).shutdown();
     }
     std::thread::spawn(move || {
+        let _lease = lease;
         let after_update = {
             let app = app.clone();
             move || {
@@ -113,8 +148,10 @@ fn update_clio_blocking(
     });
 }
 
-fn run_installer(app: tauri::AppHandle, force: bool) {
+fn run_installer(app: tauri::AppHandle, force: bool) -> Result<(), String> {
+    let lease = crate::update_lease::UpdateLease::acquire()?;
     std::thread::spawn(move || {
+        let _lease = lease;
         let restart_app = app.clone();
         supervisor_installer::install_clio(app, force, move || {
             if let Some(state) = restart_app.try_state::<Mutex<Supervisor>>() {
@@ -122,6 +159,7 @@ fn run_installer(app: tauri::AppHandle, force: bool) {
             }
         });
     });
+    Ok(())
 }
 
 /// Reveal the persisted boot log in the OS file manager so the user can

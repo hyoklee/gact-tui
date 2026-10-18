@@ -34,6 +34,13 @@ interface ManagedBackendOptions {
   prepareTimeoutMs?: number;
 }
 
+/** Bundled apps replace their runtime with the signed payload; lightweight apps install it. */
+export async function managedRuntimeUpdateMode(): Promise<
+  'bundled' | 'writable' | 'bootstrap' | 'external'
+> {
+  return invokeManagedBackend('managed_runtime_update_mode');
+}
+
 async function invokeManagedBackend<T>(
   command: string,
   args?: Record<string, unknown>,
@@ -62,6 +69,11 @@ async function invokeManagedBackend<T>(
 
 export async function getManagedBackend(): Promise<ManagedBackendHandle> {
   return invokeManagedBackend<ManagedBackendHandle>('get_backend');
+}
+
+/** Only a Desktop-owned runtime may be changed as part of a Desktop update. */
+export async function hasManagedRuntime(): Promise<boolean> {
+  return invokeManagedBackend<boolean>('has_managed_runtime');
 }
 
 /** Re-run the owned backend spawn pipeline after a typed startup failure. */

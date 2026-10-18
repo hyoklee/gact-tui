@@ -5,6 +5,60 @@ import { ZoomPan, zoomScrollHint } from './zoom-pan';
 
 afterEach(cleanup);
 
+it('keeps capture geometry stable when a parent replaces an interaction callback', async () => {
+  const images: Array<{ onload?: () => void }> = [];
+  vi.stubGlobal(
+    'Image',
+    class {
+      naturalWidth = 600;
+      naturalHeight = 200;
+      onload?: () => void;
+      constructor() {
+        images.push(this);
+      }
+    },
+  );
+  const context = {
+    clearRect: vi.fn(),
+    save: vi.fn(),
+    scale: vi.fn(),
+    translate: vi.fn(),
+    drawImage: vi.fn(),
+    restore: vi.fn(),
+  };
+  const width = vi.spyOn(HTMLCanvasElement.prototype, 'clientWidth', 'get').mockReturnValue(600);
+  const height = vi.spyOn(HTMLCanvasElement.prototype, 'clientHeight', 'get').mockReturnValue(200);
+  const getContext = vi
+    .spyOn(HTMLCanvasElement.prototype, 'getContext')
+    .mockReturnValue(context as unknown as CanvasRenderingContext2D);
+  const props = { imageSrc: 'diagram.svg', selectableTextSvg: '<svg><text>Stage</text></svg>' };
+  try {
+    const view = render(<ZoomPan {...props} onRegionClick={vi.fn()} />);
+    await act(async () => images[0]!.onload?.());
+    await flushZoomFrame();
+    const layer = view.container.querySelector('[data-slot="diagram-text-selection"]')!;
+    const mutations: MutationRecord[] = [];
+    const observer = new MutationObserver((records) => mutations.push(...records));
+    observer.observe(layer, { attributes: true, childList: true, subtree: true });
+    view.rerender(<ZoomPan {...props} onRegionClick={vi.fn()} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect([...mutations, ...observer.takeRecords()]).toHaveLength(0);
+    // A real geometry change must still be visible to the capture observer.
+    fireEvent.keyDown(screen.getByRole('img'), { key: '+' });
+    await flushZoomFrame();
+    expect(context.drawImage).toHaveBeenCalled();
+    expect(mutations.length + observer.takeRecords().length).toBeGreaterThan(0);
+    observer.disconnect();
+  } finally {
+    width.mockRestore();
+    height.mockRestore();
+    getContext.mockRestore();
+    vi.unstubAllGlobals();
+  }
+});
+
 it('refits a replacement image even when its aspect ratio does not resize the viewport', async () => {
   const images: Array<{ naturalWidth: number; naturalHeight: number; onload?: () => void }> = [];
   vi.stubGlobal(

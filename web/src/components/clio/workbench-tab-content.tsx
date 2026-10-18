@@ -137,6 +137,9 @@ export function WorkbenchTabContent({
     case 'files':
       return (
         <FileBrowser
+          key={`${tab.workspaceId ?? workspaceId}:${tab.directory ?? ''}`}
+          directory={tab.directory}
+          onClearDirectory={() => onReplaceTab(tab.id, { ...tab, directory: '', path: undefined })}
           sessionId={sessionId}
           files={files}
           filesError={filesError}
@@ -147,7 +150,7 @@ export function WorkbenchTabContent({
           onRefresh={onRefreshFiles}
           onSelectedPathChange={(path) => onSelectFilesPath(tab.id, path)}
           selectedPath={tab.path}
-          workspaceId={workspaceId}
+          workspaceId={tab.workspaceId ?? workspaceId}
         />
       );
     case 'artifacts':

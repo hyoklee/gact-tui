@@ -106,7 +106,7 @@ for (const theme of ['dark', 'light'] as const) {
     await page.goto('/workspaces/ws_flat_ndp/sessions/sess_flat_ndp');
     const composer = page.locator('[data-slot="clio-composer-stack"]');
     const input = composer.locator('form > [data-slot="input-group"]');
-    const question = page.locator('[data-slot="pending-question-notice"]');
+    const question = page.getByRole('region', { name: 'Agent needs your attention', exact: true });
     await expect(question).toBeVisible();
     const background = await input.evaluate((node) => getComputedStyle(node).backgroundColor);
     await expect

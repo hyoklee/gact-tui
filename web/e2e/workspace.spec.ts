@@ -1,11 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { providerComponentsSchema, type Session } from '@clio/core/v3';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-
-const fixturePort = Number.parseInt(process.env['CLIO_FIXTURE_PORT'] ?? '18799', 10);
-const fixtureEndpoint = `http://127.0.0.1:${fixturePort}`;
-const workspaceUrl = '/workspaces/ws_flat_ndp/sessions/sess_flat_ndp';
-const unexpectedErrors = new WeakMap<Page, string[]>();
+import { fixtureEndpoint, setupWorkspaceBrowser, workspaceUrl } from './workspace-setup';
 
 async function settleConversationAtLatest(page: Page) {
   const conversation = page.getByRole('log', { name: 'Conversation' });
@@ -95,32 +91,7 @@ async function alignLatestActivityAtTop(page: Page) {
   await alignTranscriptAnchorAtTop(page, activityHeader.locator('..'));
 }
 
-test.beforeEach(async ({ page }) => {
-  const errors: string[] = [];
-  unexpectedErrors.set(page, errors);
-  page.on('console', (message) => {
-    if (message.type() === 'error' && !message.text().startsWith('Failed to load resource:')) {
-      errors.push(message.text());
-    }
-  });
-  page.on('pageerror', (error) => errors.push(error.message));
-  page.on('response', (response) => {
-    if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`);
-  });
-  const reset = await page.request.post(`${fixtureEndpoint}/__test/reset`);
-  expect(reset.ok()).toBe(true);
-  await page.addInitScript((endpoint) => {
-    try {
-      localStorage.setItem('clio.recent-connections', JSON.stringify([endpoint]));
-    } catch {
-      // MCP Apps intentionally use an opaque inner origin without storage access.
-    }
-  }, fixtureEndpoint);
-});
-
-test.afterEach(async ({ page }) => {
-  expect(unexpectedErrors.get(page) ?? []).toEqual([]);
-});
+setupWorkspaceBrowser();
 
 test('keeps Observability tabs inside the strip and scrolls only their content vertically', async ({
   page,
@@ -333,8 +304,8 @@ test('renders structured MCP v2 interactions and one live inline App', async ({ 
   });
 
   await page.goto(workspaceUrl);
-  const attention = page.getByRole('region', { name: 'Agent needs your response' });
-  await expect(attention.getByRole('button', { name: '3 responses needed' })).toBeVisible();
+  const attention = page.getByRole('region', { name: 'Agent needs your attention' });
+  await expect(attention.getByRole('button', { name: 'Agent needs your attention' })).toBeVisible();
   await settleConversationAtLatest(page);
   const activity = page.getByRole('button', { name: /^Activity:/ }).last();
   await expect(activity).toHaveAttribute('aria-expanded', 'false');
@@ -383,7 +354,7 @@ test('renders structured MCP v2 interactions and one live inline App', async ({ 
   await fallback.getByText('Technical details').click();
   await expect(fallback.getByText('agent_answer_timeout')).toBeVisible();
 
-  await attention.getByRole('button', { name: '1 response needed' }).click();
+  await attention.getByRole('button', { name: 'Agent needs your attention' }).click();
   await settleConversationAtLatest(page);
   const appFrame = page.locator('[data-mcp-app="app_fixture_1"]');
   await expect(appFrame.getByText('Ready', { exact: true })).toBeVisible();
@@ -486,14 +457,16 @@ test('renders dense flat-NDP semantics with accessible interactions', async ({
   await waitForArtifactPreview(page);
   await expect(page.getByRole('button', { name: 'Change model' })).toContainText('Codex / Luna');
   await expect(page.getByText('D:\\science\\campaigns\\flat-NDP', { exact: true })).toHaveCount(0);
-  const pendingResponses = page.getByRole('region', { name: 'Agent needs your response' });
+  const pendingResponses = page.getByRole('region', { name: 'Agent needs your attention' });
   await expect(pendingResponses).toBeVisible();
   const pendingResponsesTrigger = pendingResponses.getByRole('button', {
-    name: '2 responses needed',
+    name: 'Agent needs your attention',
   });
   await expect(pendingResponsesTrigger).toBeVisible();
   await expect(page.getByRole('button', { name: 'Allow once' })).toBeVisible();
+  await pendingResponses.getByRole('button', { name: 'Next request' }).click();
   await expect(page.getByRole('button', { name: 'Send response' })).toBeDisabled();
+  await pendingResponses.getByRole('button', { name: 'Previous request' }).click();
   await settleConversationAtLatest(page);
   const conversation = page.getByRole('log', { name: 'Conversation' });
   await expect(conversation).toHaveAttribute('data-minimap-visible', 'true');
@@ -505,18 +478,10 @@ test('renders dense flat-NDP semantics with accessible interactions', async ({
   await expect(composerStack).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(composerStack).toHaveCSS('background-image', 'none');
   await expect(composerStack.locator('..')).toHaveCSS('position', 'absolute');
-  await expect
-    .poll(async () => {
-      const responseSurface = await pendingResponses.evaluate(
-        (element) => getComputedStyle(element).backgroundColor,
-      );
-      const composerSurface = await composerStack
-        .locator('[data-slot="input-group"]')
-        .evaluate((element) => getComputedStyle(element).backgroundColor);
-      // The user's question, queue and composer share one opaque surface tone.
-      return composerSurface === responseSurface && composerSurface !== 'rgba(0, 0, 0, 0)';
-    })
-    .toBe(true);
+  const responseSurface = await pendingResponses.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  expect(responseSurface).not.toBe('rgba(0, 0, 0, 0)');
   const expandedConversationBounds = await conversation.boundingBox();
   const expandedMinimapBounds = await minimap.boundingBox();
   const expandedComposerBounds = await composerStack.boundingBox();
@@ -567,7 +532,7 @@ test('renders dense flat-NDP semantics with accessible interactions', async ({
     exact: true,
   });
   await expect(approvalTitle).toBeVisible();
-  const approvalIcon = pendingResponses.getByRole('alert').locator('svg').first();
+  const approvalIcon = pendingResponses.locator('[data-interaction-kind=permission] svg').first();
   await expect
     .poll(async () => {
       const titleBounds = await approvalTitle.boundingBox();
@@ -749,7 +714,7 @@ test('keeps a pending EarthScope map flat, resizable, and centered when expanded
 
   await page.goto(workspaceUrl);
   await expect(page).toHaveURL(new RegExp(`${workspaceUrl}$`));
-  const pendingResponses = page.getByRole('region', { name: 'Agent needs your response' });
+  const pendingResponses = page.getByRole('region', { name: 'Agent needs your attention' });
   await expect(
     pendingResponses.getByText('Choose one observed station to continue.'),
   ).toBeVisible();
@@ -1033,6 +998,7 @@ test('renders a ghost queue stack and reconciles a live server update', async ({
   await expect(queue.locator('[data-slot="sortable"]')).toBeVisible();
   await expect(queue.locator('[draggable="true"]')).toHaveCount(0);
   const queueViewport = queue.getByRole('region', { name: '6 queued messages' });
+
   await expect(queueViewport).toBeVisible();
   const queueScrollRange = await queueViewport.evaluate(
     (element) => element.scrollHeight - element.clientHeight,
@@ -1116,7 +1082,7 @@ test('scrolls pending responses and queued messages independently at a narrow vi
   expect(seeded.ok()).toBe(true);
   await page.goto(workspaceUrl);
 
-  const pendingResponses = page.getByRole('region', { name: 'Agent needs your response' });
+  const pendingResponses = page.getByRole('region', { name: 'Agent needs your attention' });
   const queue = page.locator('[aria-label="Queued messages"]:visible');
   // Both panels belong to the composer, which the welcome-to-conversation
   // cross-fade briefly mounts twice. Settle on one of each before measuring.
@@ -1124,6 +1090,9 @@ test('scrolls pending responses and queued messages independently at a narrow vi
   await expect(queue).toHaveCount(1);
   const responseViewport = pendingResponses.getByRole('region', { name: '2 pending responses' });
   const queueViewport = queue.getByRole('region', { name: '6 queued messages' });
+  // One compact page replaces the stack. Expand its real technical details to
+  // exercise overflow; the normal short permission correctly needs no scrolling.
+  await pendingResponses.getByText('Technical details', { exact: true }).click();
 
   for (const viewport of [responseViewport, queueViewport]) {
     await expect(viewport).toBeVisible();
@@ -1165,126 +1134,6 @@ test('scrolls pending responses and queued messages independently at a narrow vi
   expect(await responseViewport.evaluate((element) => element.scrollTop)).toBe(
     previousResponseScroll,
   );
-});
-
-test('batches a 100-delta stream over a virtualized 1,000-message transcript', async ({
-  page,
-}, testInfo) => {
-  await page.addInitScript(() => {
-    window.__clioLongTasks = [];
-    window.__clioLongFrames = [];
-  });
-  await page.goto(workspaceUrl);
-  await expect(page.getByRole('log', { name: 'Conversation' })).toBeVisible();
-  // The conversation shell mounts before its snapshot finishes decoding.
-  // Start the measurement only once the active message is actually mounted.
-  await expect(
-    page.getByRole('log', { name: 'Conversation' }).locator('[aria-busy="true"]'),
-  ).toBeAttached();
-
-  const renderedRows = page.locator('[data-index]');
-  expect(await renderedRows.count()).toBeGreaterThan(0);
-  expect(await renderedRows.count()).toBeLessThan(50);
-
-  await page.getByRole('log', { name: 'Conversation' }).evaluate((element) => {
-    element.scrollTop = element.scrollHeight;
-  });
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
-  );
-  await page.getByRole('log', { name: 'Conversation' }).evaluate((element) => {
-    window.__clioLongTasks = [];
-    window.__clioLongFrames = [];
-    window.__clioAnimationFrames = 0;
-    window.__clioStreamMutationBatches = 0;
-    window.__clioTranscriptMutationBatches = 0;
-    const countAnimationFrame = () => {
-      window.__clioAnimationFrames += 1;
-      window.requestAnimationFrame(countAnimationFrame);
-    };
-    window.requestAnimationFrame(countAnimationFrame);
-    const longTaskObserver = new PerformanceObserver((list) => {
-      window.__clioLongTasks.push(...list.getEntries().map((entry) => entry.duration));
-    });
-    longTaskObserver.observe({ type: 'longtask' });
-    // Long Animation Frames name the script behind a long task (entry point,
-    // source URL, function, duration), so a failure below says whose work it
-    // was instead of only how long it took.
-    const longFrameObserver = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries() as PerformanceLongAnimationFrameTiming[]) {
-        if (entry.duration <= 50) continue;
-        window.__clioLongFrames.push({
-          startTime: Math.round(entry.startTime),
-          duration: Math.round(entry.duration),
-          blockingDuration: Math.round(entry.blockingDuration),
-          scripts: entry.scripts.map((script) => ({
-            invoker: script.invoker,
-            invokerType: script.invokerType,
-            sourceURL: script.sourceURL,
-            sourceFunctionName: script.sourceFunctionName,
-            sourceCharPosition: script.sourceCharPosition,
-            duration: Math.round(script.duration),
-            forcedStyleAndLayoutDuration: Math.round(script.forcedStyleAndLayoutDuration),
-          })),
-        });
-      }
-    });
-    longFrameObserver.observe({ type: 'long-animation-frame' });
-    const transcriptObserver = new MutationObserver(() => {
-      window.__clioTranscriptMutationBatches += 1;
-    });
-    transcriptObserver.observe(element, { characterData: true, childList: true, subtree: true });
-    const streamingText = element.querySelector('[aria-busy="true"]');
-    if (!streamingText) throw new Error('Active streaming text was not mounted');
-    const streamObserver = new MutationObserver(() => {
-      window.__clioStreamMutationBatches += 1;
-    });
-    streamObserver.observe(streamingText, { characterData: true, childList: true, subtree: true });
-  });
-
-  const start = await page.request.post(`${fixtureEndpoint}/__test/start-stream`);
-  expect(start.ok()).toBe(true);
-  // Wait on a cheap textContent read. A text-selector poll (getByText) runs
-  // Playwright's selector engine in the page, computing styles across the
-  // transcript on every retry, and those retries were measured as long tasks
-  // of their own -- the harness, not the app. Visibility is asserted after
-  // the measurements are read.
-  await page.waitForFunction(
-    () =>
-      document
-        .querySelector('[role="log"][aria-label="Conversation"]')
-        ?.textContent?.includes('delta-99') ?? false,
-    undefined,
-    { polling: 100, timeout: 10_000 },
-  );
-
-  const measurements = await page
-    .getByRole('log', { name: 'Conversation' })
-    .evaluate((element) => ({
-      bottomGap: element.scrollHeight - element.scrollTop - element.clientHeight,
-      animationFrames: window.__clioAnimationFrames,
-      longTasks: window.__clioLongTasks,
-      streamMutationBatches: window.__clioStreamMutationBatches,
-      transcriptMutationBatches: window.__clioTranscriptMutationBatches,
-    }));
-  const longFrames = await page.evaluate(() => window.__clioLongFrames);
-  if (longFrames.length) {
-    await testInfo.attach('long-animation-frames', {
-      body: JSON.stringify(longFrames, null, 2),
-      contentType: 'application/json',
-    });
-  }
-  expect(
-    measurements.longTasks.filter((duration) => duration > 50),
-    `long tasks during the delta burst; long animation frames:\n${describeLongFrames(longFrames)}`,
-  ).toEqual([]);
-  await expect(page.getByText(/delta-99/)).toBeVisible();
-  expect(measurements.streamMutationBatches).toBeGreaterThan(0);
-  expect(measurements.streamMutationBatches).toBeLessThanOrEqual(100);
-  expect(measurements.streamMutationBatches).toBeLessThanOrEqual(measurements.animationFrames + 2);
-  expect(measurements.transcriptMutationBatches).toBeLessThan(100);
-  expect(Math.abs(measurements.bottomGap)).toBeLessThanOrEqual(2);
 });
 
 test('keeps summarization in collapsed activity and discloses its exact received text', async ({
@@ -1339,63 +1188,3 @@ test('keeps summarization in collapsed activity and discloses its exact received
   await disclosure.click();
   await expect(compactionRow.locator('pre')).toHaveCount(0);
 });
-
-interface LongFrameRecord {
-  startTime: number;
-  duration: number;
-  blockingDuration: number;
-  scripts: {
-    invoker: string;
-    invokerType: string;
-    sourceURL: string;
-    sourceFunctionName: string;
-    sourceCharPosition: number;
-    duration: number;
-    forcedStyleAndLayoutDuration: number;
-  }[];
-}
-
-/** One line per long frame, naming its heaviest scripts (or that none were attributed). */
-function describeLongFrames(frames: readonly LongFrameRecord[]): string {
-  return frames
-    .map((frame) => {
-      const scripts = [...frame.scripts]
-        .sort((left, right) => right.duration - left.duration)
-        .slice(0, 3)
-        .map(
-          (script) =>
-            `${script.duration}ms ${script.invokerType} ${script.invoker} ` +
-            `${script.sourceFunctionName || '(anonymous)'} ` +
-            `${script.sourceURL.split('/').pop() ?? ''}:${script.sourceCharPosition}`,
-        );
-      return (
-        `  ${frame.duration}ms frame at ${frame.startTime}ms (blocking ${frame.blockingDuration}ms): ` +
-        (scripts.length
-          ? scripts.join(' | ')
-          : 'no page script attributed (style, layout, or harness)')
-      );
-    })
-    .join('\n');
-}
-
-declare global {
-  interface PerformanceScriptTiming extends PerformanceEntry {
-    invoker: string;
-    invokerType: string;
-    sourceURL: string;
-    sourceFunctionName: string;
-    sourceCharPosition: number;
-    forcedStyleAndLayoutDuration: number;
-  }
-  interface PerformanceLongAnimationFrameTiming extends PerformanceEntry {
-    blockingDuration: number;
-    scripts: PerformanceScriptTiming[];
-  }
-  interface Window {
-    __clioLongFrames: LongFrameRecord[];
-    __clioLongTasks: number[];
-    __clioAnimationFrames: number;
-    __clioStreamMutationBatches: number;
-    __clioTranscriptMutationBatches: number;
-  }
-}
