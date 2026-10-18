@@ -23,8 +23,9 @@ export function parseDiagramSource(source: string): {
       const match = line.match(
         /^\s*click\s+([\w-]+)\s+(?:href\s+)?"(workspace-folder:[^"]+)"(?:\s+"([^"]*)")?\s*;?\s*$/u,
       );
-      const path = match ? workspaceFolderPath(match[2]!) : undefined;
-      if (!match || path === undefined)
+      if (!match) throw new Error('Diagram contains an unsupported executable or HTML directive');
+      const path = workspaceFolderPath(match[2]!);
+      if (path === undefined)
         throw new Error('Diagram clicks must name a relative workspace-folder target.');
       if (folders.some((folder) => folder.id === match[1]))
         throw new Error('Diagram repeats a folder target for one node.');
