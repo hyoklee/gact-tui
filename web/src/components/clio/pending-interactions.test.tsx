@@ -663,7 +663,7 @@ describe('ClioPendingInteractions', () => {
     const viewport = screen.getByRole('region', { name: '2 pending responses' });
     expect(responses).toHaveClass('min-h-0', 'shrink');
     // One quiet surface frames the selected request without a nested approval box.
-    expect(responses).toHaveClass('bg-background', 'dark:bg-background', 'overflow-hidden');
+    expect(responses).toHaveClass('bg-composer', 'dark:bg-composer', 'overflow-hidden');
     expect(viewport).toHaveAttribute('tabindex', '0');
     expect(viewport).toHaveClass('pending-interactions-viewport', 'overscroll-contain');
 
