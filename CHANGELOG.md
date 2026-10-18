@@ -6,6 +6,32 @@ UI aren't tracked.
 
 ## Unreleased
 
+## [0.11.3-beta.10] - 2026-10-18
+
+### Added
+
+- Browse NDP datasets and existing remote endpoints, sign in privately, search
+  publishers, review operations and retain bounded stream captures in Sources.
+- Run generated HTML/WebGL and theme-aware SVG previews with adaptive height.
+  Render diagrams with bundled Pele, export them and open declared folders in Files.
+- Review one permission or question at a time, retain drafts when switching views,
+  and submit required question bundles together.
+- Configure subagent concurrency, agent parallelism and nesting depth, including
+  unlimited values. Filter models by context size and display MAG token limits.
+- Select native or container service installation independently, including AMD
+  llama.cpp options, and install the runtime before choosing a model.
+- Turn large configurable pastes into attached Sources and render inline math.
+
+### Fixed
+
+- Preserve workspace folder grants, edit paths directly and show additional folders
+  in Files. Approved external access refreshes the workspace and active tools.
+- Show model waiting, reasoning and goal judging activity, retain the selected
+  provider/model label and open large model catalogs progressively from cache.
+- Coordinate Desktop and runtime updates through one verified product update.
+- Confirm SSH host removal, preserve immutable artifact navigation and keep diagram
+  captures stable across unchanged transcript updates.
+
 ### Added
 
 - Connect Obsidian vaults as knowledge sources with a dedicated graph/files tab,
