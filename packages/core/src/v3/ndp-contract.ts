@@ -30,3 +30,72 @@ export const ndpOrganizationsSchema = z.object({
     z.object({ id: z.string(), endpoint_id: z.string(), endpoint_name: z.string() }),
   ),
 });
+
+export const ndpOperationSchema = z.object({
+  id: z.string(),
+  path: z.string(),
+  method: z.string(),
+  summary: z.string(),
+  description: z.string(),
+  read_only: z.boolean(),
+  body_required: z.boolean(),
+  body_schema: z.record(z.unknown()).nullable(),
+  parameters: z.array(
+    z
+      .object({
+        name: z.string().optional(),
+        in: z.string().optional(),
+        required: z.boolean().optional(),
+        description: z.string().optional(),
+        schema: z.record(z.unknown()).optional(),
+      })
+      .passthrough(),
+  ),
+});
+export const ndpEndpointSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  url: z.string(),
+  ssh_profile: z.string(),
+  authentication: z.enum(['none', 'ndp']),
+  workspace_id: z.string(),
+  observed_at: z.string(),
+  api_title: z.string(),
+  operations: z.array(ndpOperationSchema),
+});
+export const ndpCaptureSchema = z.object({
+  id: z.string(),
+  endpoint_id: z.string(),
+  operation_id: z.string(),
+  method: z.string(),
+  started_at: z.string(),
+  completed_at: z.string(),
+  status_code: z.number(),
+  content_type: z.string(),
+  bytes_received: z.number(),
+  stop_reason: z.string(),
+  resource_id: z.string(),
+  sha256: z.string(),
+  events: z.number(),
+  preview: z.string().optional(),
+  preview_truncated: z.boolean().optional(),
+  workspace_path: z.string().optional(),
+  source_artifact_id: z.string().optional(),
+  materialization: z.object({ state: z.string(), reason: z.string() }).optional(),
+});
+export type NDPEndpointConnection = z.infer<typeof ndpEndpointSchema>;
+export type NDPEndpointOperation = z.infer<typeof ndpOperationSchema>;
+export type NDPEndpointCapture = z.infer<typeof ndpCaptureSchema>;
+export type NDPEndpointInput = {
+  name: string;
+  url: string;
+  ssh_profile: string;
+  authentication: 'none' | 'ndp';
+};
+export type NDPEndpointRequest = {
+  operation_id: string;
+  parameters: Record<string, unknown>;
+  body?: unknown;
+  max_seconds: number;
+  max_events: number;
+};

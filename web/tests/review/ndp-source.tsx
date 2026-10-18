@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { useState } from 'react';
 import { ThemeProvider } from 'next-themes';
+import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ConnectedSourceState, SourceProvider, WorkspaceReference } from '@clio/core/v3';
 import { ArchiveConnectionProvider } from '../../src/providers/connection-provider';
@@ -66,7 +67,9 @@ createRoot(document.getElementById('root')!).render(
   <ArchiveConnectionProvider>
     <RepositoryOverrideProvider repository={repository}>
       <QueryClientProvider client={client}>
-        <Review />
+        <MemoryRouter>
+          <Review />
+        </MemoryRouter>
       </QueryClientProvider>
     </RepositoryOverrideProvider>
   </ArchiveConnectionProvider>,

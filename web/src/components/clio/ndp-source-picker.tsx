@@ -16,12 +16,58 @@ import { RefreshButton } from './refresh-button';
 import { NDPDatasetRow } from './ndp-dataset-row';
 import { useNdpCatalog } from './use-ndp-catalog';
 import { NDPOrganizationFilter } from './ndp-organization-filter';
+import { NDPEndpointPanel } from './ndp-endpoint-panel';
 
 type Selection = { dataset: NDPDataset; ids: string[] };
 const datasetKey = (dataset: NDPDataset) => JSON.stringify([dataset.endpoint_id, dataset.id]);
 
 /** Browse and select catalog metadata, then use the ordinary connected-source review. */
-export function NDPSourcePicker({
+export function NDPSourcePicker(props: {
+  workspaceId: string;
+  provider: SourceProvider;
+  onConnected: (sources: ConnectedSourceState[]) => void;
+  onBack: () => void;
+}) {
+  const [view, setView] = useState('datasets');
+  const [visitedEndpoints, setVisitedEndpoints] = useState(false);
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2" aria-label="NDP view">
+        <Button
+          variant={view === 'datasets' ? 'secondary' : 'ghost'}
+          aria-pressed={view === 'datasets'}
+          onClick={() => setView('datasets')}
+        >
+          Datasets
+        </Button>
+        <Button
+          variant={view === 'endpoints' ? 'secondary' : 'ghost'}
+          aria-pressed={view === 'endpoints'}
+          onClick={() => {
+            setVisitedEndpoints(true);
+            setView('endpoints');
+          }}
+        >
+          Endpoints & streams
+        </Button>
+      </div>
+      <div hidden={view !== 'datasets'}>
+        <NDPCatalogPicker {...props} />
+      </div>
+      {visitedEndpoints ? (
+        <div hidden={view !== 'endpoints'}>
+          <NDPEndpointPanel
+            workspaceId={props.workspaceId}
+            onBack={props.onBack}
+            signedIn={props.provider.authenticated}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function NDPCatalogPicker({
   workspaceId,
   provider,
   onConnected,

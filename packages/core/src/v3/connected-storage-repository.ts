@@ -1,4 +1,11 @@
-import { ndpSearchSchema, ndpOrganizationsSchema } from './ndp-contract.js';
+import {
+  ndpSearchSchema,
+  ndpOrganizationsSchema,
+  ndpEndpointSchema,
+  ndpCaptureSchema,
+  type NDPEndpointInput,
+  type NDPEndpointRequest,
+} from './ndp-contract.js';
 import type { SshRoute } from './infrastructure-contract.js';
 import { z } from 'zod';
 import { A2uiRepository } from './a2ui-repository.js';
@@ -248,6 +255,44 @@ export class ConnectedStorageRepository extends A2uiRepository {
       body: input,
       signal,
       decode: (value) => ndpSearchSchema.parse(value),
+    });
+  }
+  public ndpEndpointConnections(workspaceId: string, signal?: AbortSignal) {
+    return this.transport.request({
+      method: 'GET',
+      path: `/v1/workspaces/${encodeURIComponent(workspaceId)}/ndp-endpoints`,
+      signal,
+      decode: (value) => z.object({ endpoints: z.array(ndpEndpointSchema) }).parse(value),
+    });
+  }
+  public connectNdpEndpoint(workspaceId: string, input: NDPEndpointInput) {
+    return this.transport.request({
+      method: 'POST',
+      path: `/v1/workspaces/${encodeURIComponent(workspaceId)}/ndp-endpoints`,
+      body: input,
+      decode: (value) => ndpEndpointSchema.parse(value),
+    });
+  }
+  public requestNdpEndpoint(workspaceId: string, id: string, input: NDPEndpointRequest) {
+    return this.transport.request({
+      method: 'POST',
+      path: `/v1/workspaces/${encodeURIComponent(workspaceId)}/ndp-endpoints/${encodeURIComponent(id)}/request`,
+      body: input,
+      decode: (value) => ndpCaptureSchema.parse(value),
+    });
+  }
+  public ndpEndpointCaptures(workspaceId: string, id: string) {
+    return this.transport.request({
+      method: 'GET',
+      path: `/v1/workspaces/${encodeURIComponent(workspaceId)}/ndp-endpoints/${encodeURIComponent(id)}/captures`,
+      decode: (value) => z.object({ captures: z.array(ndpCaptureSchema) }).parse(value),
+    });
+  }
+  public disconnectNdpEndpoint(workspaceId: string, id: string) {
+    return this.transport.request({
+      method: 'DELETE',
+      path: `/v1/workspaces/${encodeURIComponent(workspaceId)}/ndp-endpoints/${encodeURIComponent(id)}`,
+      decode: (value) => z.object({ disconnected: z.boolean() }).parse(value),
     });
   }
   public ndpOrganizations(signal?: AbortSignal) {

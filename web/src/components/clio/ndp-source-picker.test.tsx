@@ -10,6 +10,7 @@ const fixture = vi.hoisted(() => ({
     searchNdp: vi.fn(),
     ndpOrganizations: vi.fn(),
     attachNdp: vi.fn(),
+    ndpEndpointConnections: vi.fn(),
     beginSourceDraft: vi.fn(),
     attachSourceFolder: vi.fn(),
   },
@@ -57,6 +58,7 @@ const second = {
 };
 beforeEach(() => {
   vi.resetAllMocks();
+  fixture.repository.ndpEndpointConnections.mockResolvedValue({ endpoints: [] });
   fixture.repository.searchNdp.mockResolvedValue({ datasets: [dataset], warnings: [] });
   fixture.repository.ndpOrganizations.mockResolvedValue({
     organizations: [
@@ -138,6 +140,18 @@ it('connects selected metadata for source review without creating a link or mess
   });
   expect(fixture.repository.beginSourceDraft).not.toHaveBeenCalled();
   expect(fixture.repository.attachSourceFolder).not.toHaveBeenCalled();
+});
+
+it('retains selected dataset resources while inspecting endpoint connections', async () => {
+  show();
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: /Sea observations/ }));
+  await user.click(screen.getByRole('checkbox', { name: /stations.csv/ }));
+  await user.click(screen.getByRole('button', { name: 'Endpoints & streams' }));
+  await screen.findByLabelText('Endpoint connection method');
+  await user.click(screen.getByRole('button', { name: 'Datasets' }));
+  expect(screen.getByRole('checkbox', { name: /stations.csv/ })).toBeChecked();
+  expect(screen.getByRole('button', { name: 'Selected (1)' })).toBeVisible();
 });
 it('filters immediately across names, descriptions, endpoints and files before the remote debounce', async () => {
   vi.useFakeTimers();

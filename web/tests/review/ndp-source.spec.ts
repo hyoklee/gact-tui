@@ -1,5 +1,109 @@
 import { test, expect, type Page } from '@playwright/test';
 
+for (const variant of ['light', 'dark', 'mobile']) {
+  test(`operates an existing SSH endpoint with capture and explicit mutation review (${variant})`, async ({
+    page,
+  }) => {
+    if (variant === 'mobile') await page.setViewportSize({ width: 390, height: 844 });
+    await catalogFixture(page);
+    const methods: string[] = [];
+    let connected = false;
+    const endpoint = {
+      id: 'ep',
+      workspace_id: 'workspace',
+      name: 'Ares endpoint',
+      url: 'http://127.0.0.1:8002',
+      ssh_profile: 'ares',
+      authentication: 'none',
+      observed_at: '2026-10-18T08:00:00Z',
+      api_title: 'NDP Endpoint',
+      operations: [
+        {
+          id: 'GET /stations',
+          method: 'GET',
+          path: '/stations',
+          summary: 'Find stations',
+          description: 'Filter station metadata.',
+          parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer' } }],
+          body_schema: null,
+          body_required: false,
+          read_only: true,
+        },
+        {
+          id: 'POST /sessions',
+          method: 'POST',
+          path: '/sessions',
+          summary: 'Start stream',
+          description: 'Create a remote stream session.',
+          parameters: [],
+          body_schema: { type: 'object' },
+          body_required: true,
+          read_only: false,
+        },
+      ],
+    };
+    const capture = {
+      id: 'capture',
+      endpoint_id: 'ep',
+      operation_id: 'GET /stations',
+      method: 'GET',
+      started_at: '2026-10-18T08:00:00Z',
+      completed_at: '2026-10-18T08:00:01Z',
+      status_code: 200,
+      content_type: 'text/plain',
+      bytes_received: 21,
+      events: 0,
+      stop_reason: 'completed',
+      resource_id: 'res_capture',
+      sha256: '1234567890abcdef',
+      preview: 'station,east\nANMO,1.2',
+      workspace_path: '/workspace/inputs/stations.txt',
+      source_artifact_id: 'artifact_capture',
+    };
+    await page.route('**/v1/workspaces/workspace/ndp-endpoints**', async (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith('/captures'))
+        return route.fulfill({ json: { captures: methods.length ? [capture] : [] } });
+      if (url.pathname.endsWith('/request')) {
+        methods.push(route.request().postDataJSON().operation_id);
+        return route.fulfill({ json: capture });
+      }
+      if (route.request().method() === 'POST') {
+        expect(route.request().postDataJSON()).toEqual({
+          name: 'Ares endpoint',
+          url: 'http://127.0.0.1:8002',
+          ssh_profile: 'ares',
+          authentication: 'none',
+        });
+        connected = true;
+        return route.fulfill({ json: endpoint });
+      }
+      return route.fulfill({ json: { endpoints: connected ? [endpoint] : [] } });
+    });
+    await page.goto(`/tests/review/ndp-source.html?theme=${variant === 'dark' ? 'dark' : 'light'}`);
+    await page.getByRole('button', { name: 'Endpoints & streams', exact: true }).click();
+    await page.getByRole('button', { name: 'SSH', exact: true }).click();
+    await page.getByLabel('Name', { exact: true }).fill('Ares endpoint');
+    await page.getByLabel('SSH profile on connected computer').fill('ares');
+    await page.getByLabel('Remote API URL').fill('http://127.0.0.1:8002');
+    await page.getByRole('button', { name: 'Connect', exact: true }).click();
+    await page.getByLabel('Endpoint operation', { exact: true }).selectOption('GET /stations');
+    await page.getByLabel('limit', { exact: true }).fill('3');
+    await page.getByRole('button', { name: 'Run & capture' }).click();
+    await expect(page.getByRole('link', { name: 'Open captured response' })).toBeVisible();
+    await expect(page.getByLabel('Endpoint response')).toContainText('ANMO,1.2');
+    await page.getByLabel('Endpoint operation', { exact: true }).selectOption('POST /sessions');
+    await page.getByLabel('Request JSON').fill('{"sncl_codes":["ANMO"]}');
+    await page.getByRole('button', { name: 'Review operation' }).click();
+    expect(methods).toEqual(['GET /stations']);
+    await page.getByRole('button', { name: 'Confirm operation' }).click();
+    await expect.poll(() => methods.length).toBe(2);
+    const evidence = process.env.CLIO_REVIEW_EVIDENCE;
+    if (evidence)
+      await page.screenshot({ path: `${evidence}/ndp-endpoint-${variant}.png`, fullPage: true });
+  });
+}
+
 const sea = {
   id: 'sea',
   name: 'coastal_stations_2026',
