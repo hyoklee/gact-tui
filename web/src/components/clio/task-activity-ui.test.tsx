@@ -6,6 +6,60 @@ import { ClioEvidenceView } from './observability-evidence';
 import { AsyncTaskList } from './async-task-list';
 
 afterEach(cleanup);
+
+it('keeps a visibility error in technical details without repeating it as progress', async () => {
+  const issue = 'Server returned an error response';
+  const uncertain: AsyncProcess = {
+    ...task,
+    id: 'external-job',
+    handle: 'task_external',
+    kind: 'mcp',
+    task_kind: 'MCP',
+    title: 'Prepare dataset',
+    child_session_id: undefined,
+    effective_status: 'task_state_uncertain',
+    live_state: 'task_state_uncertain',
+    status: 'working',
+    raw_status: 'working',
+    connection_freshness: 'lost',
+    progress: { message: issue },
+    error_reason: issue,
+    supported_actions: ['observe', 'cancel'],
+  };
+  render(<AsyncTaskList processes={[uncertain]} />);
+  expect(screen.getByText('MCP · Needs inspection')).toBeVisible();
+  expect(screen.queryByText(issue)).toBeNull();
+  await userEvent.click(screen.getByRole('button', { name: 'Task details: Prepare dataset' }));
+  expect(screen.queryByText(issue)).toBeNull();
+  expect(screen.getByRole('status')).toHaveTextContent('could not be confirmed');
+  await userEvent.click(screen.getByRole('button', { name: 'Technical details' }));
+  expect(screen.getAllByText(issue)).toHaveLength(1);
+});
+
+it('retains numeric progress when a repeated visibility error is disclosed separately', () => {
+  const issue = 'Server returned an error response';
+  render(
+    <AsyncTaskList
+      processes={[
+        {
+          ...task,
+          kind: 'mcp',
+          task_kind: 'Indexing',
+          child_session_id: undefined,
+          effective_status: 'task_state_uncertain',
+          live_state: 'task_state_uncertain',
+          status: 'working',
+          progress: { completed: 42, unit: 'entries', message: issue },
+          error_reason: issue,
+          supported_actions: ['observe', 'cancel'],
+        },
+      ]}
+    />,
+  );
+  expect(screen.getByText('Indexing · Needs inspection — 42 entries indexed')).toBeVisible();
+  expect(screen.queryByText(issue)).toBeNull();
+});
+
 const assignment =
   'Call shell_bash(command="/home/owned/very-long-source-path/python script.py").\nRetain all output and the original assignment. '.repeat(
     20,

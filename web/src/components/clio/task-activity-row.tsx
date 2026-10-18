@@ -35,7 +35,7 @@ export function TaskActivityRow({
   const title = task?.title || subagent?.title || 'Task';
   const kind = task?.task_kind ?? (task?.kind === 'agent' || subagent ? 'Subagent' : 'MCP');
   const assignment = task?.description || subagent?.task;
-  const progress = taskProgressLabel(task?.progress, kind);
+  const progress = taskProgressLabel(task?.progress, kind, task?.error_reason);
   const held = status === 'paused' || status === 'pause_requested';
   const yielded = status === 'yielded';
   const awaitingAnswer =
@@ -62,13 +62,14 @@ export function TaskActivityRow({
             : status === 'cancelled'
               ? BanIcon
               : CircleAlertIcon;
-  const label = status === 'task_state_uncertain'
-    ? 'Needs inspection'
-    : status === 'cancelling' || status === 'cancellation_requested'
-      ? 'Cancellation requested'
-      : awaitingAnswer
-    ? 'Waiting for your answer'
-    : status.replaceAll('_', ' ').replace(/^./u, (letter) => letter.toUpperCase());
+  const label =
+    status === 'task_state_uncertain'
+      ? 'Needs inspection'
+      : status === 'cancelling' || status === 'cancellation_requested'
+        ? 'Cancellation requested'
+        : awaitingAnswer
+          ? 'Waiting for your answer'
+          : status.replaceAll('_', ' ').replace(/^./u, (letter) => letter.toUpperCase());
   const result = task?.result?.answer || task?.result?.answer_excerpt || subagent?.result;
   return (
     <Collapsible className="group/task min-w-0 rounded-lg data-[state=open]:bg-muted/35">
@@ -112,7 +113,7 @@ export function TaskActivityRow({
           {progress ? (
             <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">{progress}</p>
           ) : null}
-          {task?.error_reason ? (
+          {task?.error_reason && status !== 'task_state_uncertain' ? (
             <p className="text-sm text-destructive [overflow-wrap:anywhere]">{task.error_reason}</p>
           ) : null}
           {yielded ? (
@@ -125,8 +126,16 @@ export function TaskActivityRow({
               History recording is unconfirmed. Check the task before retrying.
             </p>
           ) : null}
-          {status === 'stopping' ? <p role="status" className="text-xs text-muted-foreground">The agent is stopping. New input stays queued until its current execution exits.</p> : null}
-          {status === 'task_state_uncertain' ? <p role="status" className="text-xs text-muted-foreground">Execution or cleanup could not be confirmed. Inspect the task before retrying.</p> : null}
+          {status === 'stopping' ? (
+            <p role="status" className="text-xs text-muted-foreground">
+              The agent is stopping. New input stays queued until its current execution exits.
+            </p>
+          ) : null}
+          {status === 'task_state_uncertain' ? (
+            <p role="status" className="text-xs text-muted-foreground">
+              Execution or cleanup could not be confirmed. Inspect the task before retrying.
+            </p>
+          ) : null}
           {result ? (
             <div
               role="region"
@@ -191,6 +200,12 @@ export function TaskActivityRow({
                     <div>
                       <dt>Connection</dt>
                       <dd>{task.connection_freshness}</dd>
+                    </div>
+                  ) : null}
+                  {status === 'task_state_uncertain' && task.error_reason ? (
+                    <div>
+                      <dt>Reported issue</dt>
+                      <dd>{task.error_reason}</dd>
                     </div>
                   ) : null}
                 </dl>

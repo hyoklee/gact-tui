@@ -456,6 +456,11 @@ export function RunsPage() {
               <p className="mt-2 whitespace-pre-wrap break-words">{row.original.assignment}</p>
               <p className="mt-2 break-all font-mono">{row.original.taskId}</p>
               <p className="text-muted-foreground">Backend: {row.original.reportedStatus}</p>
+              {row.original.state === 'task_state_uncertain' && row.original.statusReason ? (
+                <p className="mt-2 text-muted-foreground">
+                  Reported issue: {row.original.statusReason}
+                </p>
+              ) : null}
             </details>
           </div>
         ),
@@ -477,12 +482,20 @@ export function RunsPage() {
               }
               value={row.original.state}
             />
-            {taskProgressLabel(row.original.progress, row.original.taskKind) && (
-              <p className="text-xs text-muted-foreground">
-                {taskProgressLabel(row.original.progress, row.original.taskKind)}
+            {taskProgressLabel(
+              row.original.progress,
+              row.original.taskKind,
+              row.original.statusReason,
+            ) && (
+              <p className="line-clamp-2 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                {taskProgressLabel(
+                  row.original.progress,
+                  row.original.taskKind,
+                  row.original.statusReason,
+                )}
               </p>
             )}
-            {row.original.statusReason ? (
+            {row.original.statusReason && row.original.state !== 'task_state_uncertain' ? (
               <p
                 className="line-clamp-2 text-xs text-destructive"
                 title={row.original.statusReason}

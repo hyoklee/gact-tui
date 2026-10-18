@@ -4,6 +4,7 @@ import { formatBytes } from '@/lib/format';
 export function taskProgressLabel(
   progress: Record<string, unknown> | undefined,
   kind = '',
+  reportedIssue?: string,
 ): string {
   if (typeof progress?.completed === 'number') {
     const total = typeof progress.total === 'number' ? progress.total : undefined;
@@ -21,5 +22,7 @@ export function taskProgressLabel(
   if (typeof progress?.bytes === 'number') return `${formatBytes(progress.bytes)} output`;
   if (typeof progress?.progress === 'number')
     return `${progress.progress}${typeof progress.total === 'number' ? ` / ${progress.total}` : ''}`;
-  return typeof progress?.message === 'string' ? progress.message : '';
+  return typeof progress?.message === 'string' && progress.message.trim() !== reportedIssue?.trim()
+    ? progress.message
+    : '';
 }

@@ -99,6 +99,21 @@ function show() {
   );
 }
 
+it('discloses a lost-visibility issue once in run details rather than repeating it as progress', async () => {
+  const issue = 'Server returned an error response';
+  const lost = task('task-lost', 'MCP');
+  lost.status = 'task_state_uncertain';
+  lost.connection_freshness = 'lost';
+  lost.progress = { message: issue, completed: null, total: null, unit: '', output: null };
+  repository.queryTasks.mockResolvedValue({ tasks: [lost], total: 1, cursor: null, revision: 1 });
+  show();
+  expect(await screen.findByText('Needs inspection')).toBeVisible();
+  expect(screen.queryByText(issue, { exact: true })).toBeNull();
+  await userEvent.click(screen.getByText('Details'));
+  expect(screen.getAllByText(`Reported issue: ${issue}`)).toHaveLength(1);
+  expect(screen.getByText(`Reported issue: ${issue}`)).toBeVisible();
+});
+
 it('loads explicit task pages across sessions and keeps original handles navigable', async () => {
   repository.queryTasks.mockImplementation(async ({ cursor }: { cursor?: string }) =>
     cursor
