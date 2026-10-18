@@ -126,6 +126,7 @@ it('filters immediately across names, descriptions, endpoints and files before t
   );
   expect(screen.getByRole('button', { name: /Sea observations/ })).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+  expect(input).toHaveFocus();
   await act(async () => {
     await vi.advanceTimersByTimeAsync(1);
   });

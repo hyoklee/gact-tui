@@ -217,3 +217,33 @@ test('selections survive filtering and remote result changes', async ({ page }) 
     ['climate', ['temperatures']],
   ]);
 });
+
+test('a large catalog keeps selection actions visible and finds results beyond the rendered page', async ({
+  page,
+}) => {
+  await catalogFixture(page);
+  const rows = Array.from({ length: 50 }, (_, index) => ({
+    ...sea,
+    id: `catalog-${index}`,
+    name: `CESM2_historical_daily_v01_${index}`,
+    title: `Catalog example ${index}`,
+    resources: [{ ...sea.resources[0], name: `${index}-data.csv` }],
+  }));
+  await page.route('**/v1/storage/ndp/search', (route) => {
+    const query = route.request().postDataJSON().query;
+    return route.fulfill({
+      json: { datasets: rows.filter((row) => JSON.stringify(row).includes(query)), warnings: [] },
+    });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/tests/review/ndp-source.html');
+  await expect(page.getByRole('button', { name: /Catalog example 0 / })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue' })).toBeInViewport();
+  await expect(page.getByRole('button', { name: /Catalog example 39 / })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show more datasets' }).click();
+  await expect(page.getByRole('button', { name: /Catalog example 39 / })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Continue' })).toBeInViewport();
+  await page.getByRole('textbox', { name: 'Search NDP datasets' }).fill('39');
+  await expect(page.getByRole('checkbox', { name: /39-data.csv/ })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

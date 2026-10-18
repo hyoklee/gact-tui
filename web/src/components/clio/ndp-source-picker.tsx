@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ConnectedSourceState, NDPDataset, SourceProvider } from '@clio/core/v3';
 import { ArrowLeftIcon, SearchIcon } from 'lucide-react';
@@ -40,6 +40,7 @@ export function NDPSourcePicker({
   const [limit, setLimit] = useState({ query: '', count: 30 });
   const signedIn = provider.authenticated ?? false;
   const catalog = useNdpCatalog(signedIn, provider.account_name);
+  const searchInput = useRef<HTMLInputElement>(null);
   const choices = Object.values(selected);
   const count = choices.reduce((sum, choice) => sum + choice.ids.length, 0);
   const datasets = showSelected ? choices.map((choice) => choice.dataset) : catalog.datasets;
@@ -124,6 +125,7 @@ export function NDPSourcePicker({
             className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
           />
           <Input
+            ref={searchInput}
             aria-label="Search NDP datasets"
             placeholder="Search names, descriptions or files…"
             className="pl-9 pr-9"
@@ -140,7 +142,10 @@ export function NDPSourcePicker({
               size="icon"
               aria-label="Clear search"
               className="absolute right-0 top-0 size-9"
-              onClick={() => catalog.setQuery('')}
+              onClick={() => {
+                catalog.setQuery('');
+                searchInput.current?.focus();
+              }}
             >
               <CloseIcon />
             </Button>
@@ -214,7 +219,12 @@ export function NDPSourcePicker({
           {warning}
         </p>
       ))}
-      <div className="divide-y divide-border/60" aria-label="NDP datasets">
+      <div
+        role="region"
+        tabIndex={0}
+        className="max-h-[32dvh] divide-y divide-border/60 overflow-y-auto overscroll-contain pr-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label="NDP datasets"
+      >
         {datasets.slice(0, pageSize).map((dataset) => (
           <NDPDatasetRow
             key={datasetKey(dataset)}
