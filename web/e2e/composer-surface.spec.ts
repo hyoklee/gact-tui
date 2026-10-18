@@ -107,6 +107,16 @@ for (const theme of ['dark', 'light'] as const) {
     const composer = page.locator('[data-slot="clio-composer-stack"]');
     const input = composer.locator('form > [data-slot="input-group"]');
     const question = page.locator('[data-slot="pending-question-notice"]');
+    await expect(question).not.toBeVisible();
+    await page.getByRole('button', { name: '1 open question', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: 'Open questions', exact: true })
+      .getByRole('button', { name: 'Go to question 1', exact: true })
+      .click();
+    await page
+      .locator('#question-tool_fixture_question')
+      .getByRole('button', { name: 'Other answer', exact: true })
+      .click();
     await expect(question).toBeVisible();
     const background = await input.evaluate((node) => getComputedStyle(node).backgroundColor);
     await expect
