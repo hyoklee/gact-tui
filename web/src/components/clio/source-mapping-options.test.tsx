@@ -75,7 +75,7 @@ it('offers only read access when the source cannot be edited', () => {
     />,
   );
   expect(screen.queryByRole('button', { name: 'Download all' })).toBeNull();
-  expect(screen.getByRole('option', { name: 'Edit locally, publish later' })).toBeDisabled();
-  expect(screen.getByRole('option', { name: 'Update originals on save' })).toBeDisabled();
+  expect(screen.queryByRole('combobox', { name: 'Linked folder access' })).toBeNull();
+  expect(screen.getByText('Read-only link')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Link folder' })).toBeEnabled();
 });

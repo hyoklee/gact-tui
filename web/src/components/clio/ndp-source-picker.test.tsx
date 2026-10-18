@@ -126,7 +126,7 @@ function show(
 it('connects selected metadata for source review without creating a link or message attachment', async () => {
   const { onConnected } = show();
   const user = userEvent.setup();
-  await user.click(await screen.findByRole('button', { name: /Sea observations/ }));
+  await screen.findByRole('checkbox', { name: /stations.csv/ });
   expect(screen.queryByText('Viewer')).not.toBeInTheDocument();
   expect(screen.queryByText(/Nothing is downloaded/)).not.toBeInTheDocument();
   expect(fixture.repository.attachNdp).not.toHaveBeenCalled();
@@ -145,7 +145,7 @@ it('connects selected metadata for source review without creating a link or mess
 it('retains selected dataset resources while inspecting endpoint connections', async () => {
   show();
   const user = userEvent.setup();
-  await user.click(await screen.findByRole('button', { name: /Sea observations/ }));
+  await screen.findByRole('checkbox', { name: /stations.csv/ });
   await user.click(screen.getByRole('checkbox', { name: /stations.csv/ }));
   await user.click(screen.getByRole('button', { name: 'Endpoints & streams' }));
   await screen.findByLabelText('Endpoint connection method');
@@ -185,10 +185,15 @@ it('filters immediately across names, descriptions, endpoints and files before t
   });
   expect(screen.getByRole('button', { name: /Weather records/ })).toBeVisible();
 });
-it('reveals matching file names automatically while typing', async () => {
+it('starts expanded without the metadata summary and keeps matching files available', async () => {
   show();
   const user = userEvent.setup();
-  await screen.findByRole('button', { name: /Sea observations/ });
+  expect(await screen.findByRole('button', { name: /Sea observations/ })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  expect(screen.getByRole('checkbox', { name: /stations.csv/ })).toBeVisible();
+  expect(screen.queryByText('Océan Endpoint')).not.toBeInTheDocument();
   await user.type(screen.getByRole('textbox', { name: 'Search NDP datasets' }), 'station');
   expect(screen.getByRole('checkbox', { name: /stations.csv/ })).toBeVisible();
 });
@@ -199,10 +204,10 @@ it('preserves selections from different searches and connects every selected dat
   }));
   const { onConnected } = show();
   const user = userEvent.setup();
-  await user.click(await screen.findByRole('button', { name: /Sea observations/ }));
+  await screen.findByRole('checkbox', { name: /stations.csv/ });
   await user.click(screen.getByRole('checkbox', { name: /stations.csv/ }));
   await user.type(screen.getByRole('textbox', { name: 'Search NDP datasets' }), 'weather');
-  await user.click(await screen.findByRole('button', { name: /Weather records/ }));
+  await screen.findByRole('checkbox', { name: /temperatures.nc/ });
   await user.click(screen.getByRole('checkbox', { name: /temperatures.nc/ }));
   await user.click(screen.getByRole('button', { name: 'Selected (2)' }));
   expect(screen.getByRole('button', { name: /Sea observations/ })).toBeVisible();
@@ -233,9 +238,12 @@ it('shows a live access-check warning and passes the group filter without droppi
   const user = userEvent.setup();
   expect(await screen.findByText('NDP could not check Endpoint access.')).toBeVisible();
   expect(screen.queryByText('Request access')).not.toBeInTheDocument();
-  await user.click(screen.getByRole('button', { name: /Sea observations/ }));
+  expect(screen.getByRole('checkbox', { name: /stations.csv/ })).toBeVisible();
   await user.click(screen.getByRole('checkbox', { name: /stations.csv/ }));
-  await user.selectOptions(screen.getByRole('combobox', { name: 'Endpoint filter' }), 'groups');
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Catalog access filter' }),
+    'groups',
+  );
   await waitFor(() =>
     expect(fixture.repository.searchNdp).toHaveBeenLastCalledWith(
       { query: '', only_groups: true },
@@ -264,6 +272,23 @@ it('reuses cached initial results when reopening the picker', async () => {
   expect(screen.getByRole('button', { name: /Sea observations/ })).toBeVisible();
   expect(fixture.repository.searchNdp).toHaveBeenCalledTimes(1);
 });
+it('loads the next catalog page while retaining earlier selections', async () => {
+  fixture.repository.searchNdp
+    .mockResolvedValueOnce({ datasets: [dataset], warnings: [], total: 2, next_offset: 30 })
+    .mockResolvedValue({ datasets: [second], warnings: [], total: 2, next_offset: null });
+  show();
+  const user = userEvent.setup();
+  await screen.findByRole('checkbox', { name: /stations.csv/ });
+  await user.click(screen.getByRole('checkbox', { name: /stations.csv/ }));
+  await user.click(screen.getByRole('button', { name: 'Show more datasets' }));
+  expect(await screen.findByRole('button', { name: /Weather records/ })).toBeVisible();
+  expect(screen.getByRole('checkbox', { name: /stations.csv/ })).toBeChecked();
+  expect(fixture.repository.searchNdp).toHaveBeenLastCalledWith(
+    { query: '', only_groups: false, offset: 30 },
+    expect.any(AbortSignal),
+  );
+  expect(screen.queryByRole('button', { name: 'Show more datasets' })).not.toBeInTheDocument();
+});
 it('keeps a loaded file-format match when the remote full-text index misses it', async () => {
   fixture.repository.searchNdp
     .mockResolvedValueOnce({ datasets: [dataset], warnings: [] })
@@ -286,7 +311,7 @@ it('refreshes an expired backend selection once while retaining the exact chosen
     .mockResolvedValue({ id: 'sea', label: 'sea' });
   const { onConnected } = show();
   const user = userEvent.setup();
-  await user.click(await screen.findByRole('button', { name: /Sea observations/ }));
+  await screen.findByRole('checkbox', { name: /stations.csv/ });
   await user.click(screen.getByRole('checkbox', { name: /stations.csv/ }));
   await user.click(screen.getByRole('button', { name: 'Continue' }));
   await waitFor(() => expect(onConnected).toHaveBeenCalledOnce());
@@ -303,7 +328,7 @@ it('keeps selection available when connecting fails and supports clearing it', a
   fixture.repository.attachNdp.mockRejectedValue(new Error('NDP selection expired. Search again.'));
   show();
   const user = userEvent.setup();
-  await user.click(await screen.findByRole('button', { name: /Sea observations/ }));
+  await screen.findByRole('checkbox', { name: /stations.csv/ });
   await user.click(screen.getByRole('checkbox', { name: /stations.csv/ }));
   await user.click(screen.getByRole('button', { name: 'Continue' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Search again');

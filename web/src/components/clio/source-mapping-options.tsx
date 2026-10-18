@@ -27,6 +27,7 @@ export function SourceMappingOptions({
   onConfirmed,
   onDownload,
   onLink,
+  selectionKind = 'folder',
 }: {
   canDownload: boolean;
   canLink: boolean;
@@ -43,7 +44,9 @@ export function SourceMappingOptions({
   onConfirmed: (value: boolean) => void;
   onDownload: () => void;
   onLink: () => void;
+  selectionKind?: 'folder' | 'files';
 }) {
+  const readOnlyLink = allowed.length === 1 && allowed[0] === 'read_only';
   return (
     <section aria-label="How to use this folder" className="space-y-3">
       <h4 className="text-sm font-medium">How do you want to use these files?</h4>
@@ -73,7 +76,7 @@ export function SourceMappingOptions({
             </label>
             <Button variant="outline" onClick={onDownload} disabled={disabled}>
               <DownloadIcon />
-              Download all
+              {selectionKind === 'files' ? 'Download selected files' : 'Download all'}
             </Button>
           </div>
         )}
@@ -84,29 +87,38 @@ export function SourceMappingOptions({
               Link to the originals
             </div>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Keep files at their source. {vocab.agent} reads them when needed. Choose how edits
-              should be handled.
+              Keep files at their source. {vocab.agent} reads{' '}
+              {selectionKind === 'files' ? 'the selected files' : 'them'} when needed.
+              {readOnlyLink
+                ? ' The originals stay unchanged.'
+                : ' Choose how edits should be handled.'}
             </p>
-            <label className="space-y-1 text-xs">
-              <span className="font-medium">Through this link</span>
-              <select
-                aria-label="Linked folder access"
-                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                value={linkAccess}
-                onChange={(e) => {
-                  onLinkAccess(e.target.value as LinkAccess);
-                  onConfirmed(false);
-                }}
-                disabled={disabled || linkLocked}
-              >
-                {(['read_only', 'publish_later', 'write_through'] as const).map((value) => (
-                  <option key={value} value={value} disabled={!allowed.includes(value)}>
-                    {linkAccessNames[value]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <p className="text-xs leading-relaxed">{explanations[linkAccess]}</p>
+            {readOnlyLink ? (
+              <p className="text-xs font-medium">Read-only link</p>
+            ) : (
+              <label className="space-y-1 text-xs">
+                <span className="font-medium">Through this link</span>
+                <select
+                  aria-label="Linked folder access"
+                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                  value={linkAccess}
+                  onChange={(e) => {
+                    onLinkAccess(e.target.value as LinkAccess);
+                    onConfirmed(false);
+                  }}
+                  disabled={disabled || linkLocked}
+                >
+                  {(['read_only', 'publish_later', 'write_through'] as const).map((value) => (
+                    <option key={value} value={value} disabled={!allowed.includes(value)}>
+                      {linkAccessNames[value]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {!readOnlyLink ? (
+              <p className="text-xs leading-relaxed">{explanations[linkAccess]}</p>
+            ) : null}
             {linkAccess === 'write_through' && (
               <label className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs leading-relaxed">
                 <input
@@ -132,7 +144,11 @@ export function SourceMappingOptions({
               }
             >
               <LinkIcon />
-              {linked ? 'Update link' : 'Link folder'}
+              {linked
+                ? 'Update link'
+                : selectionKind === 'files'
+                  ? 'Link selected files'
+                  : 'Link folder'}
             </Button>
           </div>
         )}

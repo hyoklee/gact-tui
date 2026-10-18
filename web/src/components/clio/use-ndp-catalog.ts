@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import type { ClioRepository, NDPDataset } from '@clio/core/v3';
 import { useRepository } from '@/hooks/use-repository';
 import { useConnectionSettings } from '@/providers/connection-provider';
@@ -7,6 +7,17 @@ import { connectionScope } from '@/lib/connection-scope';
 import type { NDPOrganizationChoice } from './ndp-organization-filter';
 
 type Catalog = Awaited<ReturnType<ClioRepository['searchNdp']>>;
+type Pages = InfiniteData<Catalog, number>;
+
+function flatten(pages: Pages | undefined): Catalog | undefined {
+  if (!pages) return undefined;
+  return {
+    datasets: pages.pages.flatMap((page) => page.datasets),
+    warnings: [...new Set(pages.pages.flatMap((page) => page.warnings))],
+    total: pages.pages[0]?.total,
+    next_offset: pages.pages.at(-1)?.next_offset,
+  };
+}
 
 /** Match fragments across human names, technical identifiers, descriptions and file metadata. */
 export function ndpSearchText(value: string): string {
@@ -36,18 +47,22 @@ export function useNdpCatalog(signedIn: boolean, accountName = '') {
   const prefix = [
     'ndp-catalog',
     scope,
+    'pages-v1',
     account,
     groups,
     organization?.endpoint_id ?? '',
     organization?.id ?? '',
   ] as const;
-  const results = useQuery({
+  const results = useInfiniteQuery<Catalog, Error, Pages, readonly unknown[], number>({
     queryKey: [...prefix, search],
-    queryFn: ({ signal }) =>
+    initialPageParam: 0,
+    getNextPageParam: (last) => last.next_offset ?? undefined,
+    queryFn: ({ signal, pageParam }) =>
       repository.searchNdp(
         {
           query: search,
           only_groups: groups,
+          ...(pageParam ? { offset: pageParam } : {}),
           ...(organization
             ? { organization: organization.id, endpoint_id: organization.endpoint_id }
             : {}),
@@ -63,8 +78,10 @@ export function useNdpCatalog(signedIn: boolean, accountName = '') {
     refetchOnWindowFocus: false,
     retry: false,
   });
-  const loaded = client.getQueryData<Catalog>([...prefix, '']);
-  const data = results.data ?? loaded;
+  const loadedPages = client.getQueryData<Pages>([...prefix, '']);
+  const loaded = useMemo(() => flatten(loadedPages), [loadedPages]);
+  const remoteData = useMemo(() => flatten(results.data), [results.data]);
+  const data = remoteData ?? loaded;
   const indexed = useMemo(
     () =>
       [
@@ -94,7 +111,7 @@ export function useNdpCatalog(signedIn: boolean, accountName = '') {
   const authoritative =
     search === query.trim() && !results.isPlaceholderData && Boolean(results.data);
   const remote = new Set(
-    results.data?.datasets.map((dataset) => JSON.stringify([dataset.endpoint_id, dataset.id])),
+    remoteData?.datasets.map((dataset) => JSON.stringify([dataset.endpoint_id, dataset.id])),
   );
   const datasets: NDPDataset[] = indexed
     .filter(
