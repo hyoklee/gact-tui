@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { NDPEndpointPanel } from './ndp-endpoint-panel';
@@ -11,6 +12,7 @@ const fixture = vi.hoisted(() => ({
     requestNdpEndpoint: vi.fn(),
     ndpEndpointCaptures: vi.fn(),
     disconnectNdpEndpoint: vi.fn(),
+    updateNdpEndpoint: vi.fn(),
   },
 }));
 vi.mock('@/hooks/use-repository', () => ({ useRepository: () => fixture.repository }));
@@ -58,6 +60,11 @@ beforeEach(() => {
   fixture.repository.ndpEndpointConnections.mockResolvedValue({ endpoints: [endpoint] });
   fixture.repository.connectNdpEndpoint.mockResolvedValue(endpoint);
   fixture.repository.ndpEndpointCaptures.mockResolvedValue({ captures: [] });
+  fixture.repository.updateNdpEndpoint.mockImplementation(async (_workspace, _id, update) => ({
+    ...endpoint,
+    ...update,
+  }));
+  fixture.repository.disconnectNdpEndpoint.mockResolvedValue({ disconnected: true });
   fixture.repository.requestNdpEndpoint.mockResolvedValue({
     id: 'sample',
     resource_id: 'res_capture',
@@ -86,12 +93,10 @@ function show() {
 
 it('runs a discovered read with typed optional parameters and an openable capture', async () => {
   show();
-  await screen.findByLabelText('Endpoint operation');
-  fireEvent.change(screen.getByLabelText('Endpoint operation'), {
-    target: { value: 'GET /stations' },
-  });
+  fireEvent.click(await screen.findByText('Advanced API tools'));
+  fireEvent.click(await screen.findByRole('button', { name: /Find stations/ }));
   fireEvent.change(screen.getByLabelText('limit'), { target: { value: '3' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Run & capture' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Run and save response' }));
   await screen.findByRole('link', { name: 'Open captured response' });
   expect(fixture.repository.requestNdpEndpoint).toHaveBeenCalledWith('ws', 'ep', {
     operation_id: 'GET /stations',
@@ -103,14 +108,12 @@ it('runs a discovered read with typed optional parameters and an openable captur
 });
 it('requires review before sending a remote state-changing request', async () => {
   show();
-  await screen.findByLabelText('Endpoint operation');
-  fireEvent.change(screen.getByLabelText('Endpoint operation'), {
-    target: { value: 'POST /sessions' },
-  });
+  fireEvent.click(await screen.findByText('Advanced API tools'));
+  fireEvent.click(await screen.findByRole('button', { name: /Start stream/ }));
   fireEvent.change(screen.getByLabelText('Request JSON'), {
     target: { value: '{"sncl_codes":["ANMO"]}' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Review operation' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review action' }));
   expect(fixture.repository.requestNdpEndpoint).not.toHaveBeenCalled();
   expect(screen.getByRole('alert')).toHaveTextContent('POST /sessions on Ares');
   fireEvent.click(screen.getByRole('button', { name: 'Confirm operation' }));
@@ -129,16 +132,77 @@ it('connects SSH explicitly and filters the observed operation list', async () =
     target: { value: 'http://127.0.0.1:8002' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
-  await screen.findByLabelText('Endpoint operation');
+  fireEvent.click(await screen.findByText('Advanced API tools'));
+  await screen.findByRole('button', { name: /Find stations/ });
   expect(fixture.repository.connectNdpEndpoint).toHaveBeenCalledWith('ws', {
     name: 'Ares',
     url: 'http://127.0.0.1:8002',
     ssh_profile: 'ares',
     authentication: 'none',
   });
-  fireEvent.change(screen.getByLabelText('Filter endpoint operations'), {
+  fireEvent.change(screen.getByLabelText('Search endpoint actions'), {
     target: { value: 'stream' },
   });
-  expect(screen.queryByRole('option', { name: 'GET · Find stations' })).not.toBeInTheDocument();
-  expect(screen.getByRole('option', { name: 'POST · Start stream' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Find stations/ })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Start stream/ })).toBeInTheDocument();
+});
+
+it('saves endpoint edits without replacing the saved identity', async () => {
+  show();
+  await userEvent.click(await screen.findByRole('button', { name: 'Endpoint actions' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Edit endpoint' }));
+  expect(screen.getByLabelText('Name')).toHaveValue('Ares');
+  fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Research endpoint' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save endpoint' }));
+  await waitFor(() =>
+    expect(fixture.repository.updateNdpEndpoint).toHaveBeenCalledWith('ws', 'ep', {
+      name: 'Research endpoint',
+      url: endpoint.url,
+      ssh_profile: 'ares',
+      authentication: 'none',
+    }),
+  );
+  expect(
+    await screen.findByRole('option', { name: 'Research endpoint · SSH ares' }),
+  ).toBeInTheDocument();
+});
+
+it('hides and restores endpoints through the same persisted connection', async () => {
+  show();
+  await userEvent.click(await screen.findByRole('button', { name: 'Endpoint actions' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Hide endpoint' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Show hidden endpoints (1)' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Endpoint actions' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Show endpoint' }));
+  await waitFor(() =>
+    expect(fixture.repository.updateNdpEndpoint).toHaveBeenLastCalledWith('ws', 'ep', {
+      hidden: false,
+    }),
+  );
+  expect(fixture.repository.updateNdpEndpoint).toHaveBeenCalledWith('ws', 'ep', { hidden: true });
+  expect(screen.queryByRole('button', { name: /Show hidden endpoints/ })).not.toBeInTheDocument();
+});
+
+it('does not remove an endpoint until its confirmation is accepted', async () => {
+  show();
+  await userEvent.click(await screen.findByRole('button', { name: 'Endpoint actions' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Remove endpoint…' }));
+  expect(screen.getByRole('alertdialog')).toHaveTextContent('Captured files stay in Sources');
+  expect(fixture.repository.disconnectNdpEndpoint).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(fixture.repository.disconnectNdpEndpoint).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole('button', { name: 'Endpoint actions' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Remove endpoint…' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Remove endpoint' }));
+  await waitFor(() =>
+    expect(fixture.repository.disconnectNdpEndpoint).toHaveBeenCalledWith('ws', 'ep'),
+  );
+});
+
+it('reuses the connected NDP account when configuring another endpoint', async () => {
+  show();
+  fireEvent.click(screen.getByRole('button', { name: 'Connect endpoint' }));
+  fireEvent.change(screen.getByLabelText('Authentication'), { target: { value: 'ndp' } });
+  expect(screen.getByText('NDP account connected')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Sign in to NDP' })).not.toBeInTheDocument();
 });

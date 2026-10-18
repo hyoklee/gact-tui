@@ -83,7 +83,7 @@ it('shows shared preferences in the browser and preserves their existing saved v
   expect(
     screen.queryByRole('radiogroup', { name: 'Conversation activity' }),
   ).not.toBeInTheDocument();
-  expect(screen.queryByRole('switch', { name: 'Enable beta updates' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('switch', { name: 'Beta updates' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Check for updates' })).not.toBeInTheDocument();
   expect(screen.queryByText(`${vocab.agent} updates`)).not.toBeInTheDocument();
   expect(screen.queryByText('Installed app only')).not.toBeInTheDocument();
@@ -113,17 +113,17 @@ it('lets the user configure large pastes and disable conversion across restarts'
 it('offers native updates in General and preserves opt-in and opt-out across remounts', async () => {
   native.active = true;
   const view = renderSettings();
-  const toggle = screen.getByRole('switch', { name: 'Enable beta updates' });
+  const toggle = screen.getByRole('switch', { name: 'Beta updates' });
   expect(toggle).not.toBeChecked();
-  expect(toggle).toHaveAccessibleDescription(/Beta releases may be unstable/);
+  expect(toggle).toHaveAccessibleDescription(/Beta versions may be unstable/);
   fireEvent.click(toggle);
   await waitFor(() => expect(screen.getByText(`${vocab.agent} is up to date`)).toBeVisible());
   expect(getUpdateChannel()).toBe('beta');
   expect(native.check).toHaveBeenCalledTimes(1);
   view.unmount();
   renderSettings();
-  expect(screen.getByRole('switch', { name: 'Enable beta updates' })).toBeChecked();
-  fireEvent.click(screen.getByRole('switch', { name: 'Enable beta updates' }));
+  expect(screen.getByRole('switch', { name: 'Beta updates' })).toBeChecked();
+  fireEvent.click(screen.getByRole('switch', { name: 'Beta updates' }));
   await waitFor(() => expect(screen.getByText(`${vocab.agent} is up to date`)).toBeVisible());
   expect(getUpdateChannel()).toBe('stable');
   expect(native.check).toHaveBeenCalledTimes(2);
@@ -134,12 +134,12 @@ it('locks the channel during native or managed installation', () => {
   native.active = true;
   native.installing = true;
   const view = renderSettings();
-  expect(screen.getByRole('switch', { name: 'Enable beta updates' })).toBeDisabled();
+  expect(screen.getByRole('switch', { name: 'Beta updates' })).toBeDisabled();
   view.unmount();
   native.installing = false;
   useUpdateFlowStore.getState().start('both', '0.9.5-beta.2');
   renderSettings();
-  expect(screen.getByRole('switch', { name: 'Enable beta updates' })).toBeDisabled();
+  expect(screen.getByRole('switch', { name: 'Beta updates' })).toBeDisabled();
 });
 
 it('shows refresh feedback until the native check completes and reports errors', async () => {
@@ -156,9 +156,9 @@ it('shows refresh feedback until the native check completes and reports errors',
   const refresh = screen.getByRole('button', { name: 'Check for updates' });
   expect(refresh).toHaveAttribute('aria-busy', 'true');
   expect(refresh).toBeDisabled();
-  expect(screen.getByRole('switch', { name: 'Enable beta updates' })).toBeDisabled();
+  expect(screen.getByRole('switch', { name: 'Beta updates' })).toBeDisabled();
   reject(new Error('Release feed unavailable'));
   await waitFor(() => expect(screen.getByText('Release feed unavailable')).toBeVisible());
   expect(screen.getByRole('button', { name: 'Check for updates' })).toBeEnabled();
-  expect(screen.getByRole('switch', { name: 'Enable beta updates' })).toBeEnabled();
+  expect(screen.getByRole('switch', { name: 'Beta updates' })).toBeEnabled();
 });

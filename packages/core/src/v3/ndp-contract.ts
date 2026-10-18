@@ -23,6 +23,8 @@ export const ndpDatasetSchema = z.object({
 export const ndpSearchSchema = z.object({
   datasets: z.array(ndpDatasetSchema),
   warnings: z.array(z.string()),
+  total: z.number().int().nonnegative().optional(),
+  next_offset: z.number().int().nonnegative().nullable().optional(),
 });
 export type NDPDataset = z.infer<typeof ndpDatasetSchema>;
 export const ndpOrganizationsSchema = z.object({
@@ -60,6 +62,7 @@ export const ndpEndpointSchema = z.object({
   authentication: z.enum(['none', 'ndp']),
   workspace_id: z.string(),
   observed_at: z.string(),
+  hidden: z.boolean().optional(),
   api_title: z.string(),
   operations: z.array(ndpOperationSchema),
 });
@@ -82,6 +85,9 @@ export const ndpCaptureSchema = z.object({
   workspace_path: z.string().optional(),
   source_artifact_id: z.string().optional(),
   materialization: z.object({ state: z.string(), reason: z.string() }).optional(),
+  endpoint_name: z.string().optional(),
+  endpoint_url: z.string().optional(),
+  ssh_profile: z.string().optional(),
 });
 export type NDPEndpointConnection = z.infer<typeof ndpEndpointSchema>;
 export type NDPEndpointOperation = z.infer<typeof ndpOperationSchema>;

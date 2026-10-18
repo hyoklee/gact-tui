@@ -5,53 +5,30 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { sourceBytes } from './connected-source-labels';
-import { ndpSearchText } from './use-ndp-catalog';
 
-/** Keep dataset and resource names readable, revealing matching files while filtering. */
+/** Show readable dataset details and resource choices without an extra expand step. */
 export function NDPDatasetRow({
   dataset,
-  query,
   selected,
   disabled,
   onChange,
 }: {
   dataset: NDPDataset;
-  query: string;
   selected: string[];
   disabled: boolean;
   onChange: (resourceId: string, checked: boolean) => void;
 }) {
-  const [expanded, setExpanded] = useState<{ query: string; open: boolean }>();
-  const tokens = ndpSearchText(query).split(/\s+/).filter(Boolean);
-  const fileMatch =
-    tokens.length > 0 &&
-    dataset.resources.some((resource) => {
-      const text = ndpSearchText(`${resource.name} ${resource.format}`);
-      return tokens.every((token) => text.includes(token));
-    });
-  const open = expanded?.query === query ? expanded.open : fileMatch;
+  const [open, setOpen] = useState(true);
   return (
-    <Collapsible
-      open={open}
-      onOpenChange={(value) => setExpanded({ query, open: value })}
-      className="py-3"
-    >
+    <Collapsible open={open} onOpenChange={setOpen} className="py-3">
       <CollapsibleTrigger className="group flex w-full items-start justify-between gap-3 text-left">
         <span className="min-w-0 space-y-1">
           <span className="block break-words font-medium">{dataset.title || dataset.name}</span>
           {dataset.description ? (
-            <span className="line-clamp-2 block text-sm text-muted-foreground">
+            <span className="block break-words text-sm text-muted-foreground">
               {dataset.description}
             </span>
           ) : null}
-          <span className="block text-xs text-muted-foreground">
-            {dataset.organization ? `${dataset.organization} · ` : ''}
-            {dataset.endpoint_name} · {dataset.resources.length} resource
-            {dataset.resources.length === 1 ? '' : 's'}
-            {dataset.resources.some((item) => item.format)
-              ? ` · ${[...new Set(dataset.resources.map((item) => item.format).filter(Boolean))].join(', ')}`
-              : ''}
-          </span>
         </span>
         <span className="flex shrink-0 items-center gap-2">
           {selected.length > 0 ? (
@@ -79,9 +56,9 @@ export function NDPDatasetRow({
             />
             <span className="min-w-0 flex-1 break-words">
               {resource.name}
-              <span className="mt-0.5 block text-xs text-muted-foreground">
-                {resource.format}
-                {resource.size ? ` · ${sourceBytes(resource.size)}` : ''}
+              <span className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
+                {resource.format ? <span>{resource.format}</span> : null}
+                {resource.size ? <span>{sourceBytes(resource.size)}</span> : null}
               </span>
             </span>
           </label>

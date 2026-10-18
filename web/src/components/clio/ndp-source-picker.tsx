@@ -17,6 +17,7 @@ import { NDPDatasetRow } from './ndp-dataset-row';
 import { useNdpCatalog } from './use-ndp-catalog';
 import { NDPOrganizationFilter } from './ndp-organization-filter';
 import { NDPEndpointPanel } from './ndp-endpoint-panel';
+import { InfoTip } from './info-tip';
 
 type Selection = { dataset: NDPDataset; ids: string[] };
 const datasetKey = (dataset: NDPDataset) => JSON.stringify([dataset.endpoint_id, dataset.id]);
@@ -33,24 +34,42 @@ export function NDPSourcePicker(props: {
   return (
     <div className="space-y-3">
       <div className="flex gap-2" aria-label="NDP view">
-        <Button
-          variant={view === 'datasets' ? 'secondary' : 'ghost'}
-          aria-pressed={view === 'datasets'}
-          onClick={() => setView('datasets')}
-        >
-          Datasets
-        </Button>
-        <Button
-          variant={view === 'endpoints' ? 'secondary' : 'ghost'}
-          aria-pressed={view === 'endpoints'}
-          onClick={() => {
-            setVisitedEndpoints(true);
-            setView('endpoints');
-          }}
-        >
-          Endpoints & streams
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant={view === 'datasets' ? 'secondary' : 'ghost'}
+            aria-pressed={view === 'datasets'}
+            onClick={() => setView('datasets')}
+          >
+            Datasets
+          </Button>
+          <InfoTip label="About datasets">
+            Discover scientific observations, measurements, simulations and analysis results. A
+            dataset can provide files in HDF5, NetCDF, CSV or other formats, plus metadata and links
+            to live data.
+          </InfoTip>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant={view === 'endpoints' ? 'secondary' : 'ghost'}
+            aria-pressed={view === 'endpoints'}
+            onClick={() => {
+              setVisitedEndpoints(true);
+              setView('endpoints');
+            }}
+          >
+            Endpoints & streams
+          </Button>
+          <InfoTip label="About endpoints and streams">
+            Connect to a research institution’s data services. Browse its catalog, query services
+            and work with available streams through a direct connection or SSH.
+          </InfoTip>
+        </div>
       </div>
+      <p className="text-xs text-muted-foreground">
+        {view === 'datasets'
+          ? 'Discover scientific datasets in the NDP catalog.'
+          : 'Browse catalogs, query services and explore streams.'}
+      </p>
       <div hidden={view !== 'datasets'}>
         <NDPCatalogPicker {...props} />
       </div>
@@ -60,6 +79,7 @@ export function NDPSourcePicker(props: {
             workspaceId={props.workspaceId}
             onBack={props.onBack}
             signedIn={props.provider.authenticated}
+            accountName={props.provider.account_name}
           />
         </div>
       ) : null}
@@ -218,7 +238,7 @@ function NDPCatalogPicker({
           }}
         />
         <select
-          aria-label="Endpoint filter"
+          aria-label="Catalog access filter"
           className="h-8 max-w-full rounded-md border bg-background px-2 text-sm"
           value={catalog.onlyGroups ? 'groups' : 'all'}
           onChange={(event) => {
@@ -226,7 +246,7 @@ function NDPCatalogPicker({
             setShowSelected(false);
           }}
         >
-          <option value="all">All endpoints</option>
+          <option value="all">All catalog data</option>
           <option value="groups" disabled={!signedIn}>
             Only my groups
           </option>
@@ -235,7 +255,7 @@ function NDPCatalogPicker({
           <span role="status" aria-live="polite">
             {catalog.searching
               ? 'Searching…'
-              : `${datasets.length} dataset${datasets.length === 1 ? '' : 's'}`}
+              : `${datasets.length}${!showSelected && catalog.data?.total !== undefined && catalog.data.total > datasets.length ? ` of ${catalog.data.total.toLocaleString()}` : ''} dataset${datasets.length === 1 ? '' : 's'}`}
           </span>
           {count > 0 ? (
             <Button
@@ -283,7 +303,6 @@ function NDPCatalogPicker({
           <NDPDatasetRow
             key={datasetKey(dataset)}
             dataset={dataset}
-            query={showSelected ? '' : catalog.query}
             selected={selected[datasetKey(dataset)]?.ids ?? []}
             disabled={connect.isPending}
             onChange={(id, checked) => select(dataset, id, checked)}
@@ -299,13 +318,19 @@ function NDPCatalogPicker({
               : 'No datasets found.'}
         </p>
       ) : null}
-      {datasets.length > pageSize ? (
+      {!showSelected && (datasets.length > pageSize || catalog.results.hasNextPage) ? (
         <Button
           type="button"
           variant="ghost"
-          onClick={() => setLimit({ query: catalog.query, count: pageSize + 30 })}
+          disabled={catalog.results.isFetchingNextPage}
+          onClick={() => {
+            setLimit({ query: catalog.query, count: pageSize + 30 });
+            if (datasets.length <= pageSize && catalog.results.hasNextPage) {
+              void catalog.results.fetchNextPage();
+            }
+          }}
         >
-          Show more datasets
+          {catalog.results.isFetchingNextPage ? 'Loading datasets…' : 'Show more datasets'}
         </Button>
       ) : null}
       <div className="flex items-center justify-between gap-3 border-t pt-4">

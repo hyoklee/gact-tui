@@ -396,6 +396,7 @@ export function ConnectedSourceDetail({
       )}
       {source.connected && canAccessSource && source.origin !== 'desktop_upload' && (
         <SourceMappingOptions
+          selectionKind={source.provider === 'ndp' ? 'files' : 'folder'}
           canDownload={Boolean(canDownload)}
           canLink={Boolean(source.link_available)}
           linked={Boolean(source.linked)}
