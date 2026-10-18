@@ -18,12 +18,14 @@ import { setUpdateChannel, useUpdateChannel } from '@/lib/update-channel';
 import { isUpdateInFlight, useUpdateFlowStore } from '@/store/update-flow-store';
 import { formatBytes } from '@/lib/format';
 import { vocab } from '@/lib/brand-vocabulary';
+import { displayReleaseVersion } from '@/lib/release-version';
 import {
   checkForDesktopUpdate,
   describeUpdateError,
   DESKTOP_UPDATE_TOAST_ID,
   installDesktopUpdate,
   isDesktopUpdateInstalling,
+  getDesktopUpdateSnapshot,
   subscribeDesktopUpdate,
   type DesktopUpdateInfo,
   type DesktopUpdateProgress,
@@ -47,47 +49,53 @@ export function AppUpdateSettings() {
     isDesktopUpdateInstalling,
   );
   const updateInFlight = useUpdateFlowStore((state) => isUpdateInFlight(state.step));
-  const [updateState, setUpdateState] = useState<UpdateState>({ kind: 'idle' });
+  const snapshot = useSyncExternalStore(
+    subscribeDesktopUpdate,
+    getDesktopUpdateSnapshot,
+    getDesktopUpdateSnapshot,
+  );
+  const [progress, setProgress] = useState<DesktopUpdateProgress>({
+    downloadedBytes: 0,
+    finished: false,
+  });
+  const updateState: UpdateState =
+    snapshot.status === 'available'
+      ? desktopInstalling
+        ? { kind: 'installing', update: snapshot.update, progress }
+        : { kind: 'available', update: snapshot.update }
+      : snapshot.status === 'error'
+        ? { kind: 'error', message: snapshot.message }
+        : { kind: snapshot.status === 'unknown' ? 'idle' : snapshot.status };
 
   const checkUpdate = async () => {
-    setUpdateState({ kind: 'checking' });
     try {
       const update = await checkForDesktopUpdate();
-      if (update) {
-        setUpdateState({ kind: 'available', update });
-      } else {
+      if (!update) {
         // A manual check that finds the build current outranks a possibly
         // stale background toast (an earlier "available" reported a version
         // the person may have already installed some other way) — clear it.
         toast.dismiss(DESKTOP_UPDATE_TOAST_ID);
-        setUpdateState({ kind: 'current' });
       }
     } catch (error) {
-      setUpdateState({ kind: 'error', message: describeUpdateError(error) });
+      toast.error(describeUpdateError(error));
     }
   };
 
-  const installUpdate = async (update: DesktopUpdateInfo) => {
-    setUpdateState({
-      kind: 'installing',
-      update,
-      progress: { downloadedBytes: 0, finished: false },
-    });
+  const installUpdate = async () => {
+    setProgress({ downloadedBytes: 0, finished: false });
     try {
-      await installDesktopUpdate((progress) =>
-        setUpdateState({ kind: 'installing', update, progress }),
-      );
+      await installDesktopUpdate(setProgress);
     } catch (error) {
-      setUpdateState({ kind: 'error', message: describeUpdateError(error) });
+      toast.error(describeUpdateError(error));
     }
   };
 
   return (
     <Frame spacing="lg">
       <FrameHeader>
-        <FrameTitle>App updates</FrameTitle>
+        <FrameTitle>{vocab.agent} updates</FrameTitle>
         <FrameDescription>
-          Updates come from the signed release feed configured for {vocab.product}.
+          The app and its managed runtime update together from one release.
         </FrameDescription>
       </FrameHeader>
       <FramePanel className="grid gap-4">
@@ -97,8 +105,8 @@ export function AppUpdateSettings() {
           description={
             <>
               <p className="text-sm text-muted-foreground" id="beta-updates-warning">
-                Beta releases may be unstable. Receive published beta updates for {vocab.product}{' '}
-                and {vocab.agent}. Turn this off to receive stable releases only.
+                Beta releases may be unstable. Receive beta updates for the app and runtime. Turn
+                this off for stable releases only.
               </p>
               <p className="text-xs text-muted-foreground">
                 Changing channels never installs an update or downgrades your current version.
@@ -118,7 +126,6 @@ export function AppUpdateSettings() {
             }
             onCheckedChange={(enabled) => {
               setUpdateChannel(enabled ? 'beta' : 'stable');
-              setUpdateState({ kind: 'idle' });
               void checkUpdate();
             }}
           />
@@ -128,8 +135,10 @@ export function AppUpdateSettings() {
         ) : updateState.kind === 'current' ? (
           <Alert>
             <CheckCircle2Icon aria-hidden="true" />
-            <AlertTitle>This app is up to date</AlertTitle>
-            <AlertDescription>No newer signed release is available.</AlertDescription>
+            <AlertTitle>{vocab.agent} is up to date</AlertTitle>
+            <AlertDescription>
+              The installed app and its managed runtime have been checked.
+            </AlertDescription>
           </Alert>
         ) : updateState.kind === 'error' ? (
           <Alert variant="destructive">
@@ -145,14 +154,19 @@ export function AppUpdateSettings() {
       </FramePanel>
       <FrameFooter className="items-start">
         {updateState.kind === 'available' ? (
-          <Button onClick={() => void installUpdate(updateState.update)}>
-            <DownloadIcon aria-hidden="true" /> Install and restart
+          <Button
+            disabled={updateInFlight || desktopInstalling}
+            onClick={() => void installUpdate()}
+          >
+            <DownloadIcon aria-hidden="true" /> Update {vocab.agent}
           </Button>
         ) : (
           <RefreshButton
             label="Check for updates"
             refreshing={updateState.kind === 'checking'}
-            disabled={updateState.kind === 'checking' || updateState.kind === 'installing'}
+            disabled={
+              updateInFlight || updateState.kind === 'checking' || updateState.kind === 'installing'
+            }
             onRefresh={checkUpdate}
             variant="outline"
           >
@@ -177,10 +191,14 @@ function UpdateAvailable({
   return (
     <Alert>
       <DownloadIcon aria-hidden="true" />
-      <AlertTitle>Version {state.update.version} is available</AlertTitle>
+      <AlertTitle>
+        {state.update.repair
+          ? 'Restore the matching runtime'
+          : `${vocab.agent} ${displayReleaseVersion(state.update.version)} is available`}
+      </AlertTitle>
       <AlertDescription className="grid gap-3">
         <p>
-          Installed {state.update.currentVersion}
+          Installed {displayReleaseVersion(state.update.currentVersion)}
           {state.update.date ? `, released ${formatReleaseDate(state.update.date)}` : ''}
         </p>
         {state.update.body ? <p className="whitespace-pre-line">{state.update.body}</p> : null}
