@@ -22,6 +22,11 @@ UI aren't tracked.
   llama.cpp options, and install the runtime before choosing a model.
 - Turn large configurable pastes into attached Sources and render inline math.
 
+- Connect Obsidian vaults as knowledge sources with a dedicated graph/files tab,
+  shared note selection, search, links/backlinks, and a reader. Attach captured
+  note revisions to chat, reopen knowledge from Sources, and see read/edit access
+  separately from optional official Headless Sync status and controls.
+
 ### Fixed
 
 - Preserve workspace folder grants, edit paths directly and show additional folders
@@ -31,15 +36,6 @@ UI aren't tracked.
 - Coordinate Desktop and runtime updates through one verified product update.
 - Confirm SSH host removal, preserve immutable artifact navigation and keep diagram
   captures stable across unchanged transcript updates.
-
-### Added
-
-- Connect Obsidian vaults as knowledge sources with a dedicated graph/files tab,
-  shared note selection, search, links/backlinks, and a reader. Attach captured
-  note revisions to chat, reopen knowledge from Sources, and see read/edit access
-  separately from optional official Headless Sync status and controls.
-
-### Fixed
 
 - Saving a long access token (for example a JWT personal access token) no longer fails with
   "Secure credential storage is unavailable" on Windows. Secrets over the Credential
