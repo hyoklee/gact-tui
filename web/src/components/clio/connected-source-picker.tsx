@@ -352,9 +352,14 @@ export function ConnectedSourceContents({
       <NDPSourcePicker
         workspaceId={workspaceId}
         provider={activeProvider}
-        onSelect={onSelect}
-        onChanged={() => {
-          void sources.refetch();
+        onConnected={(connected) => {
+          queryClient.setQueryData([...key, 'sources'], (previous: ConnectedSourceState[] = []) => [
+            ...previous.filter((row) => !connected.some((item) => item.id === row.id)),
+            ...connected,
+          ]);
+          if (connected[0]) select(connected[0].id);
+          setProvider(undefined);
+          setProviderIntent(undefined);
           onChanged?.();
         }}
         onBack={() => {

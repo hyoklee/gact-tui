@@ -2,11 +2,12 @@ import { createRoot } from 'react-dom/client';
 import { useState } from 'react';
 import { ThemeProvider } from 'next-themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { SourceProvider, WorkspaceReference } from '@clio/core/v3';
+import type { ConnectedSourceState, SourceProvider, WorkspaceReference } from '@clio/core/v3';
 import { ArchiveConnectionProvider } from '../../src/providers/connection-provider';
 import { RepositoryOverrideProvider } from '../../src/providers/repository-override';
 import { createRepository } from '../../src/lib/connection';
 import { NDPSourcePicker } from '../../src/components/clio/ndp-source-picker';
+import { ConnectedSourceDetail } from '../../src/components/clio/connected-source-detail';
 import '../../src/index.css';
 
 const repository = createRepository({ endpoint: location.origin, token: '' });
@@ -24,6 +25,7 @@ const provider: SourceProvider = {
 };
 function Review() {
   const [attached, setAttached] = useState<WorkspaceReference[]>([]);
+  const [source, setSource] = useState<ConnectedSourceState>();
   const theme = new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light';
   return (
     <ThemeProvider attribute="class" forcedTheme={theme}>
@@ -33,13 +35,23 @@ function Review() {
             NDP interface fixture. Catalog and account responses are intercepted; no protected NDP
             access is claimed.
           </p>
-          <NDPSourcePicker
-            workspaceId="workspace"
-            provider={provider}
-            onBack={() => undefined}
-            onChanged={() => undefined}
-            onSelect={(reference) => setAttached((rows) => [...rows, reference])}
-          />
+          {source ? (
+            <ConnectedSourceDetail
+              workspaceId="workspace"
+              source={source}
+              hostLabel="Fixture host"
+              onBack={() => setSource(undefined)}
+              onChanged={() => undefined}
+              onSelect={(reference) => setAttached((rows) => [...rows, reference])}
+            />
+          ) : (
+            <NDPSourcePicker
+              workspaceId="workspace"
+              provider={provider}
+              onBack={() => undefined}
+              onConnected={(sources) => setSource(sources[0])}
+            />
+          )}
           {attached.map((reference) => (
             <p key={reference.id} role="status">
               Attached: {reference.label}

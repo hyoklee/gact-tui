@@ -1,106 +1,105 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { SourceProvider, WorkspaceReference } from '@clio/core/v3';
-import { ArrowLeftIcon, ChevronDownIcon, DatabaseIcon, SearchIcon } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { ConnectedSourceState, NDPDataset, SourceProvider } from '@clio/core/v3';
+import { ArrowLeftIcon, SearchIcon } from 'lucide-react';
+import { CloseIcon } from '@/lib/icon-vocabulary';
 import { useRepository } from '@/hooks/use-repository';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { connectionScope } from '@/lib/connection-scope';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { sourceBytes } from './connected-source-labels';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ConnectedAccountSignIn } from './connected-source-auth';
+import { SourceProviderLogo } from './source-provider-logo';
+import { SourceProviderInfo } from './source-provider-info';
+import { RefreshButton } from './refresh-button';
+import { NDPDatasetRow } from './ndp-dataset-row';
+import { useNdpCatalog } from './use-ndp-catalog';
 
-/** Dataset-oriented NDP selection; attaching grants read-only access without fetching bytes. */
+type Selection = { dataset: NDPDataset; ids: string[] };
+const datasetKey = (dataset: NDPDataset) => JSON.stringify([dataset.endpoint_id, dataset.id]);
+
+/** Browse and select catalog metadata, then use the ordinary connected-source review. */
 export function NDPSourcePicker({
   workspaceId,
   provider,
-  onSelect,
-  onChanged,
+  onConnected,
   onBack,
 }: {
   workspaceId: string;
   provider: SourceProvider;
-  onSelect?: (reference: WorkspaceReference) => void;
-  onChanged: () => void;
+  onConnected: (sources: ConnectedSourceState[]) => void;
   onBack: () => void;
 }) {
   const repository = useRepository();
   const { settings } = useConnectionSettings();
   const client = useQueryClient();
   const scope = connectionScope(settings);
-  const [query, setQuery] = useState('');
-  const [search, setSearch] = useState('');
-  const [onlyGroups, setOnlyGroups] = useState(false);
-  const [selected, setSelected] = useState<Record<string, string[]>>({});
+  const [selected, setSelected] = useState<Record<string, Selection>>({});
+  const [showSelected, setShowSelected] = useState(false);
+  const [limit, setLimit] = useState({ query: '', count: 30 });
   const signedIn = provider.authenticated ?? false;
-  const results = useQuery({
-    queryKey: ['ndp-catalog', scope, search, onlyGroups],
-    queryFn: ({ signal }) =>
-      repository.searchNdp({ query: search, only_groups: onlyGroups }, signal),
-    retry: false,
-  });
-  const count = Object.values(selected).reduce((sum, rows) => sum + rows.length, 0);
-  const attach = useMutation({
+  const catalog = useNdpCatalog(signedIn, provider.account_name);
+  const choices = Object.values(selected);
+  const count = choices.reduce((sum, choice) => sum + choice.ids.length, 0);
+  const datasets = showSelected ? choices.map((choice) => choice.dataset) : catalog.datasets;
+  const pageSize = limit.query === catalog.query ? limit.count : 30;
+  const connect = useMutation({
     mutationFn: async () => {
-      const references: WorkspaceReference[] = [];
-      for (const dataset of results.data?.datasets ?? []) {
-        const ids = selected[JSON.stringify([dataset.endpoint_id, dataset.id])];
-        if (!ids?.length) continue;
-        const source = await repository.attachNdp(workspaceId, {
-          endpoint_id: dataset.endpoint_id,
-          dataset_id: dataset.id,
-          resource_ids: ids,
-        });
-        if (onSelect) {
-          const lease = await repository.beginSourceDraft(workspaceId, source.id);
-          const resource = await repository.attachSourceFolder(
-            workspaceId,
-            source.id,
-            true,
-            '',
-            lease.id,
-          );
-          references.push({
-            kind: 'resource',
-            id: resource.id,
-            label: source.label,
-            detail: `${ids.length} NDP resource${ids.length === 1 ? '' : 's'}`,
-            media_type: resource.detected_mime,
-            revision: String(resource.revision),
-            navigation: {
-              resource_id: resource.id,
-              source_id: source.id,
-              source_draft_id: lease.id,
-              source_provider: 'ndp',
-              source_kind: 'folder',
-              source_linked: 'true',
-              source_path: '',
-            },
+      const sources: ConnectedSourceState[] = [];
+      for (const { dataset, ids } of choices) {
+        const connectSelection = () =>
+          repository.attachNdp(workspaceId, {
+            endpoint_id: dataset.endpoint_id,
+            dataset_id: dataset.id,
+            resource_ids: ids,
           });
+        try {
+          sources.push(await connectSelection());
+        } catch (error) {
+          if (
+            !(error instanceof Error) ||
+            !error.message.includes('Search for this NDP dataset again')
+          )
+            throw error;
+          // Re-observe cached IDs after a backend restart; never widen the selection.
+          await repository.searchNdp({ query: dataset.name, endpoint_id: dataset.endpoint_id });
+          sources.push(await connectSelection());
         }
       }
-      return references;
+      return sources;
     },
-    onSuccess: (references) => {
-      for (const reference of references) onSelect?.(reference);
+    onSuccess: (sources) => {
       void client.invalidateQueries({ queryKey: ['connected-storage', scope] });
-      onChanged();
-      onBack();
+      onConnected(sources);
     },
   });
+  const select = (dataset: NDPDataset, id: string, checked: boolean) => {
+    setSelected((previous) => {
+      const key = datasetKey(dataset);
+      const ids = previous[key]?.ids ?? [];
+      const nextIds = checked ? [...new Set([...ids, id])] : ids.filter((value) => value !== id);
+      const next = { ...previous };
+      if (nextIds.length) next[key] = { dataset, ids: nextIds };
+      else delete next[key];
+      return next;
+    });
+  };
   return (
     <section aria-label="National Data Platform" className="space-y-4">
-      <Button variant="ghost" size="sm" onClick={onBack}>
+      <Button variant="ghost" size="sm" onClick={onBack} disabled={connect.isPending}>
         <ArrowLeftIcon /> Back
       </Button>
       <div className="flex items-center gap-3">
-        <DatabaseIcon className="size-5 text-primary" />
-        <div>
-          <h3 className="font-medium">National Data Platform</h3>
-          <p className="text-sm text-muted-foreground">Choose datasets and resources</p>
+        <SourceProviderLogo provider="ndp" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="font-medium">National Data Platform</h3>
+            <SourceProviderInfo provider={provider} />
+          </div>
+          {signedIn && provider.account_name ? (
+            <p className="break-all text-xs text-muted-foreground">{provider.account_name}</p>
+          ) : null}
         </div>
       </div>
       {!signedIn ? (
@@ -111,134 +110,167 @@ export function NDPSourcePicker({
             void client.invalidateQueries({ queryKey: ['ndp-catalog', scope] });
           }}
         />
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          Signed in{provider.account_name ? ` as ${provider.account_name}` : ''}
-        </p>
-      )}
+      ) : null}
       <form
-        className="flex gap-2"
+        className="flex items-center gap-2"
         onSubmit={(event) => {
           event.preventDefault();
-          setSelected({});
-          setSearch(query.trim());
-          if (search === query.trim()) void results.refetch();
+          catalog.submit();
         }}
       >
-        <Input
-          aria-label="Search NDP datasets"
-          placeholder="Search datasets…"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        <Button type="submit" variant="outline" aria-label="Search datasets">
-          <SearchIcon />
-        </Button>
+        <div className="relative min-w-0 flex-1">
+          <SearchIcon
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            aria-label="Search NDP datasets"
+            placeholder="Search names, descriptions or files…"
+            className="pl-9 pr-9"
+            value={catalog.query}
+            onChange={(event) => {
+              catalog.setQuery(event.target.value);
+              setShowSelected(false);
+            }}
+          />
+          {catalog.query ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Clear search"
+              className="absolute right-0 top-0 size-9"
+              onClick={() => catalog.setQuery('')}
+            >
+              <CloseIcon />
+            </Button>
+          ) : null}
+        </div>
+        <RefreshButton
+          type="button"
+          variant="outline"
+          size="icon"
+          label="Refresh catalog"
+          refreshing={catalog.results.isFetching}
+          onRefresh={catalog.submit}
+        >
+          <span className="sr-only">Refresh catalog</span>
+        </RefreshButton>
       </form>
-      <select
-        aria-label="Endpoint filter"
-        className="rounded-md border bg-background px-3 py-2 text-sm"
-        value={onlyGroups ? 'groups' : 'all'}
-        onChange={(event) => {
-          setOnlyGroups(event.target.value === 'groups');
-          setSelected({});
-        }}
-      >
-        <option value="all">All endpoints</option>
-        <option value="groups">Only my groups</option>
-      </select>
-      {results.isPending ? (
-        <p role="status" className="animate-pulse text-sm text-muted-foreground">
-          Searching NDP catalogs…
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <select
+          aria-label="Endpoint filter"
+          className="h-8 max-w-full rounded-md border bg-background px-2 text-sm"
+          value={catalog.onlyGroups ? 'groups' : 'all'}
+          onChange={(event) => {
+            catalog.setOnlyGroups(event.target.value === 'groups');
+            setShowSelected(false);
+          }}
+        >
+          <option value="all">All endpoints</option>
+          <option value="groups" disabled={!signedIn}>
+            Only my groups
+          </option>
+        </select>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span role="status" aria-live="polite">
+            {catalog.searching
+              ? 'Searching…'
+              : `${datasets.length} dataset${datasets.length === 1 ? '' : 's'}`}
+          </span>
+          {count > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              variant={showSelected ? 'secondary' : 'ghost'}
+              aria-pressed={showSelected}
+              onClick={() => setShowSelected((value) => !value)}
+            >
+              Selected ({count})
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      {catalog.results.isPending && !catalog.data && !showSelected ? (
+        <div aria-label="Loading datasets" role="status" className="space-y-5 py-2">
+          {[0, 1, 2].map((index) => (
+            <div key={index} className="space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+          ))}
+        </div>
       ) : null}
-      {results.error ? (
+      {catalog.results.error ? (
         <p role="alert" className="text-sm text-destructive">
-          {results.error.message}
+          {catalog.results.error.message}
         </p>
       ) : null}
-      {results.data?.warnings.map((warning) => (
+      {catalog.results.error && catalog.data ? (
+        <p className="text-xs text-muted-foreground">Showing saved results.</p>
+      ) : null}
+      {catalog.data?.warnings.map((warning) => (
         <p role="status" key={warning} className="text-sm text-muted-foreground">
           {warning}
         </p>
       ))}
-      <div className="divide-y divide-border/60">
-        {results.data?.datasets.map((dataset) => {
-          const key = JSON.stringify([dataset.endpoint_id, dataset.id]);
-          const values = selected[key] ?? [];
-          return (
-            <Collapsible key={key} className="py-3">
-              <CollapsibleTrigger className="flex w-full items-start justify-between gap-3 text-left">
-                <span className="min-w-0">
-                  <span className="font-medium">{dataset.title}</span>
-                  <span className="mt-1 block text-xs text-muted-foreground">
-                    {dataset.endpoint_name} · {dataset.resources.length} resources ·{' '}
-                    {[
-                      ...new Set(dataset.resources.map((item) => item.format).filter(Boolean)),
-                    ].join(', ') || 'Format unspecified'}
-                  </span>
-                </span>
-                <span className="flex shrink-0 items-center gap-2">
-                  {dataset.access ? (
-                    <Badge variant="outline">
-                      {dataset.access === 'viewer' ? 'Viewer' : 'Request access'}
-                    </Badge>
-                  ) : null}
-                  <ChevronDownIcon className="size-4" />
-                </span>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-2 pt-3">
-                {dataset.description ? (
-                  <p className="line-clamp-3 text-sm text-muted-foreground">
-                    {dataset.description}
-                  </p>
-                ) : null}
-                {dataset.resources.map((resource) => (
-                  <label
-                    key={resource.id}
-                    className="flex cursor-pointer items-center gap-3 py-2 text-sm"
-                  >
-                    <Checkbox
-                      checked={values.includes(resource.id)}
-                      disabled={attach.isPending}
-                      onCheckedChange={(checked) =>
-                        setSelected((previous) => ({
-                          ...previous,
-                          [key]: checked
-                            ? [...values, resource.id]
-                            : values.filter((id) => id !== resource.id),
-                        }))
-                      }
-                    />
-                    <span className="min-w-0 flex-1 break-words">{resource.name}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {resource.format}
-                      {resource.size ? ` · ${sourceBytes(resource.size)}` : ' · Size unknown'}
-                    </span>
-                  </label>
-                ))}
-                {!dataset.resources.length ? (
-                  <p className="text-sm text-muted-foreground">No resources in this dataset.</p>
-                ) : null}
-              </CollapsibleContent>
-            </Collapsible>
-          );
-        })}
+      <div className="divide-y divide-border/60" aria-label="NDP datasets">
+        {datasets.slice(0, pageSize).map((dataset) => (
+          <NDPDatasetRow
+            key={datasetKey(dataset)}
+            dataset={dataset}
+            query={showSelected ? '' : catalog.query}
+            selected={selected[datasetKey(dataset)]?.ids ?? []}
+            disabled={connect.isPending}
+            onChange={(id, checked) => select(dataset, id, checked)}
+          />
+        ))}
       </div>
-      {results.isSuccess && !results.data.datasets.length ? (
-        <p className="text-sm text-muted-foreground">No datasets found.</p>
-      ) : null}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-        <p className="max-w-sm text-xs text-muted-foreground">
-          Read-only. Nothing is downloaded until the agent reads a selected resource.
+      {!datasets.length && !catalog.searching && !catalog.results.error ? (
+        <p className="py-4 text-sm text-muted-foreground">
+          {showSelected
+            ? 'No resources selected.'
+            : catalog.query
+              ? 'No matching datasets. Try another name or file format.'
+              : 'No datasets found.'}
         </p>
-        <Button disabled={!count || attach.isPending} onClick={() => attach.mutate()}>
-          {attach.isPending ? 'Attaching…' : `Attach ${count} resource${count === 1 ? '' : 's'}`}
+      ) : null}
+      {datasets.length > pageSize ? (
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => setLimit({ query: catalog.query, count: pageSize + 30 })}
+        >
+          Show more datasets
+        </Button>
+      ) : null}
+      <div className="flex items-center justify-between gap-3 border-t pt-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <span>
+            {count ? `${count} resource${count === 1 ? '' : 's'} selected` : 'Select resources'}
+          </span>
+          {count > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={connect.isPending}
+              onClick={() => {
+                setSelected({});
+                setShowSelected(false);
+              }}
+            >
+              Clear selection
+            </Button>
+          ) : null}
+        </div>
+        <Button disabled={!count || connect.isPending} onClick={() => connect.mutate()}>
+          {connect.isPending ? 'Connecting…' : 'Continue'}
         </Button>
       </div>
-      {attach.error ? (
+      {connect.error ? (
         <p role="alert" className="text-sm text-destructive">
-          {attach.error.message}
+          {connect.error.message}
         </p>
       ) : null}
     </section>
