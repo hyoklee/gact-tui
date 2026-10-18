@@ -4,6 +4,7 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { isMacOS } from '@/lib/platform';
 import { AlertTriangleIcon, Loader2 } from 'lucide-react';
+import { updateTextLayerGeometry, type TextLayerGeometry } from './text-layer-geometry';
 
 /**
  * #1549 G9 #27 follow-up (adversarial review of #514): the wheel listener
@@ -85,10 +86,7 @@ export function ZoomPan({
   const viewportRef = React.useRef<HTMLDivElement>(null);
   const imageRef = React.useRef<HTMLImageElement | null>(null);
   const hitRegionsRef = React.useRef(hitRegions);
-  const textGeometryRef = React.useRef<{
-    node: HTMLDivElement;
-    values: Record<string, string>;
-  } | null>(null);
+  const textGeometryRef = React.useRef<TextLayerGeometry | null>(null);
   const selectableHtml = React.useMemo(
     () => ({ __html: selectableTextSvg ?? '' }),
     [selectableTextSvg],
@@ -158,22 +156,12 @@ export function ZoomPan({
 
     const { x, y, scale } = currentRef.current;
     if (textLayerRef.current) {
-      const style = textLayerRef.current.style;
-      const geometry = {
-        width: `${image.naturalWidth}px`,
-        height: `${image.naturalHeight}px`,
-        transform: `translate(${x}px, ${y}px) scale(${scale})`,
-      };
-      // A parent render can replace a callback without changing any pixels.
-      // Redundant style writes would falsely advance the viewer capture epoch.
-      const previous = textGeometryRef.current;
-      for (const [property, value] of Object.entries(geometry)) {
-        if (previous?.node !== textLayerRef.current || previous.values[property] !== value)
-          style.setProperty(property, value);
-      }
-      // Cache desired values: browsers round CSS transforms when serializing
-      // them, so comparing a read-back string can still rewrite equal geometry.
-      textGeometryRef.current = { node: textLayerRef.current, values: geometry };
+      textGeometryRef.current = updateTextLayerGeometry(
+        textLayerRef.current,
+        image,
+        { x, y, scale },
+        textGeometryRef.current,
+      );
     }
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
