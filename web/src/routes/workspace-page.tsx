@@ -183,6 +183,7 @@ export function WorkspacePage() {
     conversationNavigation,
     openWorkspaceResource,
     revealWorkbench,
+    revealSurfaceOwner,
   } = useWorkbenchNavigation({ allSessions: allSessions.data ?? [], workspaceId });
   const { openObservability, requestedView } = useObservabilityNavigation(sessionId, () =>
     revealWorkbench({ kind: 'session' }),
@@ -275,10 +276,10 @@ export function WorkspacePage() {
       interactions,
       tools,
       messages: transcript.data?.messages ?? [],
-      sessionId,
       focusComposer: focusComposerForAnswer,
       respondInteraction: respondInteraction.mutateAsync,
       send: send.mutateAsync,
+      revealSurfaceOwner,
       tray: {
         actionLifecycles: entities.a2ui_action_lifecycles,
         capabilityError: interactionCapabilityError ?? undefined,
