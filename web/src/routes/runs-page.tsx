@@ -96,6 +96,7 @@ export interface RunRow {
   state: RunState;
   reportedStatus: string;
   statusReason?: string;
+  statusDetail?: string;
   source: RunSource;
   host: string;
   placement: string;
@@ -162,6 +163,9 @@ function buildRows(
           qualifiers: [],
         })
       : { name: `${capitalize(vocab.workspace)} unavailable`, qualifiers: [] };
+    const statusDetail = ['failed', 'task_state_uncertain'].includes(run.status)
+      ? run.progress.message || undefined
+      : undefined;
     return {
       handleId: run.handle,
       taskKind: run.kind,
@@ -176,9 +180,8 @@ function buildRows(
       label: run.label || 'Unnamed task',
       state: taskState(run),
       reportedStatus: run.raw_status || run.status,
-      statusReason: ['failed', 'task_state_uncertain'].includes(run.status)
-        ? conciseReason(run.progress.message)
-        : undefined,
+      statusReason: conciseReason(statusDetail),
+      statusDetail,
       source: ['Session', 'Subagent'].includes(run.kind) ? 'agent_task' : 'mcp_task',
       host: run.backend?.server || '',
       placement: run.backend?.placement || 'local',
@@ -456,9 +459,9 @@ export function RunsPage() {
               <p className="mt-2 whitespace-pre-wrap break-words">{row.original.assignment}</p>
               <p className="mt-2 break-all font-mono">{row.original.taskId}</p>
               <p className="text-muted-foreground">Backend: {row.original.reportedStatus}</p>
-              {row.original.state === 'task_state_uncertain' && row.original.statusReason ? (
-                <p className="mt-2 text-muted-foreground">
-                  Reported issue: {row.original.statusReason}
+              {row.original.statusDetail ? (
+                <p className="mt-2 whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]">
+                  Reported issue: {row.original.statusDetail}
                 </p>
               ) : null}
             </details>
@@ -485,13 +488,13 @@ export function RunsPage() {
             {taskProgressLabel(
               row.original.progress,
               row.original.taskKind,
-              row.original.statusReason,
+              row.original.statusDetail,
             ) && (
               <p className="line-clamp-2 text-xs text-muted-foreground [overflow-wrap:anywhere]">
                 {taskProgressLabel(
                   row.original.progress,
                   row.original.taskKind,
-                  row.original.statusReason,
+                  row.original.statusDetail,
                 )}
               </p>
             )}

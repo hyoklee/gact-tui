@@ -114,6 +114,34 @@ it('discloses a lost-visibility issue once in run details rather than repeating 
   expect(screen.getByText(`Reported issue: ${issue}`)).toBeVisible();
 });
 
+it.each([
+  [
+    'structured',
+    JSON.stringify({ last_error: 'Connection lost', context: 'original backend identity' }),
+  ],
+  [
+    'long',
+    'Transport visibility was lost. ' +
+      'The accepted operation may still be running. '.repeat(8) +
+      'End of original diagnostic.',
+  ],
+])(
+  'keeps the full %s diagnostic in details without repeating it as progress',
+  async (_kind, issue) => {
+    const lost = task('task-lost-details', 'MCP');
+    lost.status = 'task_state_uncertain';
+    lost.connection_freshness = 'lost';
+    lost.progress = { message: issue, completed: null, total: null, unit: '', output: null };
+    repository.queryTasks.mockResolvedValue({ tasks: [lost], total: 1, cursor: null, revision: 1 });
+    show();
+    expect(await screen.findByText('Needs inspection')).toBeVisible();
+    expect(screen.queryByText(issue, { exact: true })).toBeNull();
+    await userEvent.click(screen.getByText('Details'));
+    expect(screen.getAllByText(`Reported issue: ${issue}`)).toHaveLength(1);
+    expect(screen.getByText(`Reported issue: ${issue}`)).toBeVisible();
+  },
+);
+
 it('loads explicit task pages across sessions and keeps original handles navigable', async () => {
   repository.queryTasks.mockImplementation(async ({ cursor }: { cursor?: string }) =>
     cursor
