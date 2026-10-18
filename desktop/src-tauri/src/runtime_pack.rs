@@ -29,6 +29,20 @@ use crate::installer_runtime_stop;
 
 const PACK_MANIFEST_NAME: &str = "gact-runtime.pack.json";
 
+/// A bundled installation must launch its own matching runtime, not silently
+/// adopt a different independently running CLIO on the conventional port.
+pub(crate) fn has_bundled_runtime(resource_dir: &Path, app_local_data_dir: &Path) -> bool {
+    has_runtime_payload(resource_dir)
+        || app_local_data_dir
+            .join("bundled-runtime/gact-runtime/runtime.json")
+            .is_file()
+}
+
+/// Signed app updates already replace this payload; no parallel pip upgrade is needed.
+pub(crate) fn has_runtime_payload(resource_dir: &Path) -> bool {
+    resource_dir.join(PACK_MANIFEST_NAME).is_file() || bundled_runtime_dir(resource_dir).is_some()
+}
+
 #[cfg(windows)]
 #[derive(Debug, Deserialize)]
 struct RuntimePackManifest {

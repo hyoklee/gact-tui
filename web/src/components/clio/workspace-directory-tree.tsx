@@ -9,8 +9,9 @@ import { connectionScope } from '@/lib/connection-scope';
 import { FileTypeIcon } from './file-type-icon';
 
 interface TreeProps {
+  directory?: string;
   workspaceId: string;
-  root: WorkspaceFileListing;
+  root?: WorkspaceFileListing;
   selectedPath?: string;
   onSelect: (path: string) => void;
   filter?: string;
@@ -41,7 +42,7 @@ export function WorkspaceDirectoryTree(props: TreeProps) {
       onSelect={props.onSelect}
       selectedPath={props.selectedPath}
     >
-      <DirectoryChildren {...props} directory="" expanded={expanded} />
+      <DirectoryChildren {...props} directory={props.directory ?? ''} expanded={expanded} />
     </FileTree>
   );
 }
@@ -67,7 +68,8 @@ function DirectoryChildren({
       !hideDotFiles,
     ],
     initialPageParam: 0,
-    initialData: directory === '' ? { pages: [props.root], pageParams: [0] } : undefined,
+    initialData:
+      directory === '' && props.root ? { pages: [props.root], pageParams: [0] } : undefined,
     queryFn: ({ signal, pageParam }) =>
       repository.workspaceFiles(props.workspaceId, signal, {
         directory,

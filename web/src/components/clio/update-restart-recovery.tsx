@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { vocab } from '@/lib/brand-vocabulary';
-import { useConnectionSettings } from '@/providers/connection-provider';
+import { verifyClioUpdate } from '@/tauri/clio-update-verification';
 import {
   clearPendingUpdateMarker,
   readPendingUpdateMarker,
@@ -20,41 +20,57 @@ const DONE_STATE_LINGER_MS = 4_000;
  * (`app.restart()` / `relaunch()`), which destroys every in-memory store,
  * including `useUpdateFlowStore`. This component resumes the flow from the
  * persisted marker (`readPendingUpdateMarker`) as soon as the app boots back
- * up, and watches the SAME connection signals `ConnectionProvider` already
- * computes (`credentialsReady`/`managedConnectionReady`/`credentialError`) —
- * no second polling loop — to learn when the managed backend answers again.
+ * up. Verification observes the native supervisor's local runtime directly;
+ * a selected remote connection cannot complete or fail a local update.
  *
  * Mount once, inside `ConnectionProvider`'s subtree. Renders nothing; pair it
  * with `UpdateRestartOverlay` for the visible blocking state.
  */
 export function UpdateRestartRecovery(): null {
-  const { credentialsReady, managedConnectionReady, credentialError } = useConnectionSettings();
   const resumedRef = useRef(false);
   const settledRef = useRef(false);
+  const doneTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
-    if (resumedRef.current) return;
-    resumedRef.current = true;
-    const marker = readPendingUpdateMarker();
-    if (marker) useUpdateFlowStore.getState().resume(marker.action, marker.version);
+    if (!resumedRef.current) {
+      resumedRef.current = true;
+      const marker = readPendingUpdateMarker();
+      if (marker) useUpdateFlowStore.getState().resume(marker.action, marker.version);
+    }
+    return () => clearTimeout(doneTimer.current);
   }, []);
 
   useEffect(() => {
-    if (settledRef.current || !credentialsReady) return;
+    if (settledRef.current) return;
     const marker = readPendingUpdateMarker();
     if (!marker) return;
-    if (managedConnectionReady) {
-      settledRef.current = true;
-      useUpdateFlowStore.getState().finish(marker.version);
-      clearPendingUpdateMarker();
-      toast.success(marker.version ? `Updated to v${marker.version}` : `${vocab.agent} is up to date`);
-      setTimeout(() => useUpdateFlowStore.getState().reset(), DONE_STATE_LINGER_MS);
-    } else if (credentialError) {
-      settledRef.current = true;
-      useUpdateFlowStore.getState().fail(credentialError);
-      clearPendingUpdateMarker();
-    }
-  }, [credentialError, credentialsReady, managedConnectionReady]);
+    const controller = new AbortController();
+    let finished = false;
+    settledRef.current = true;
+    useUpdateFlowStore.getState().setStep('verifying');
+    void verifyClioUpdate(marker, controller.signal).then(
+      () => {
+        if (controller.signal.aborted) return;
+        finished = true;
+        useUpdateFlowStore.getState().finish(marker.version);
+        clearPendingUpdateMarker();
+        toast.success(`${vocab.product} updated to v${marker.version}`);
+        doneTimer.current = setTimeout(() => {
+          const flow = useUpdateFlowStore.getState();
+          if (flow.step === 'done' && flow.version === marker.version) flow.reset();
+        }, DONE_STATE_LINGER_MS);
+      },
+      (error: unknown) => {
+        if (controller.signal.aborted) return;
+        finished = true;
+        useUpdateFlowStore.getState().fail(error instanceof Error ? error.message : String(error));
+      },
+    );
+    return () => {
+      controller.abort();
+      if (!finished) settledRef.current = false;
+    };
+  }, []);
 
   return null;
 }

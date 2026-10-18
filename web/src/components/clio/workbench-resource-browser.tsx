@@ -66,6 +66,8 @@ const BlueprintFileEditor = lazy(() =>
 export { CanvasLauncher, type CanvasResourceKind } from './canvas-launcher';
 
 interface FileBrowserProps {
+  directory?: string;
+  onClearDirectory?: () => void;
   workspaceId: string;
   sessionId?: string;
   files: readonly WorkspaceFileEntry[];
@@ -103,6 +105,8 @@ interface BlueprintBrowserProps {
 
 /** Keeps the workspace tree and the selected rendered file in one navigable canvas. */
 export function FileBrowser({
+  directory,
+  onClearDirectory,
   sessionId,
   workspaceId,
   files,
@@ -157,7 +161,10 @@ export function FileBrowser({
   );
   const fileTree = useMemo(() => buildFileTree(filteredFiles), [filteredFiles]);
   const activePath = selectedPath ?? internalSelectedPath;
-  const activeFile = files.find((entry) => entry.type === 'file' && entry.path === activePath);
+  const activeFile =
+    directory === undefined
+      ? files.find((entry) => entry.type === 'file' && entry.path === activePath)
+      : undefined;
   const previewPath = activeFile?.path ?? activePath;
   useEffect(() => {
     const host = hostRef.current;
@@ -191,6 +198,16 @@ export function FileBrowser({
           minSize={stacked ? '140px' : '190px'}
         >
           <section aria-label="Workspace file tree" className="flex h-full min-h-0 flex-col">
+            {directory ? (
+              <div className="flex min-w-0 items-center gap-2 border-b px-2 py-1.5 text-xs">
+                <Button size="xs" variant="ghost" onClick={onClearDirectory}>
+                  All folders
+                </Button>
+                <span className="truncate" title={directory}>
+                  {directory}
+                </span>
+              </div>
+            ) : null}
             <div className="flex shrink-0 items-center gap-1.5 border-b p-2">
               <Button size="sm" variant="outline" onClick={() => setSourcesOpen(true)}>
                 Sources
@@ -230,14 +247,19 @@ export function FileBrowser({
               </Alert>
             ) : null}
             <ScrollArea className="min-h-0 flex-1 p-2">
-              {filesNextOffset !== undefined ? (
+              {directory !== undefined || filesNextOffset !== undefined ? (
                 <WorkspaceDirectoryTree
+                  directory={directory}
                   workspaceId={workspaceId}
-                  root={{
-                    entries: [...files],
-                    truncated: filesTruncated ?? false,
-                    next_offset: filesNextOffset,
-                  }}
+                  root={
+                    directory !== undefined
+                      ? undefined
+                      : {
+                          entries: [...files],
+                          truncated: filesTruncated ?? false,
+                          next_offset: filesNextOffset,
+                        }
+                  }
                   selectedPath={activePath}
                   onSelect={selectFile}
                   filter={normalizedQuery}

@@ -8,7 +8,7 @@ new bundle and relaunches into it.
 
 ### Stable and beta channels
 
-**Settings → Desktop → App updates → Enable beta updates** controls both the
+**Settings → General → CLIO updates → Enable beta updates** controls both the
 Agent version indicator and the signed Desktop updater. The switch warns that
 betas may be unstable. Stable installations default to stable; existing beta
 installations default to beta. A saved explicit choice takes precedence.
@@ -17,8 +17,9 @@ Stable checks retain the configured latest-release endpoint. Beta checks choose
 the highest published stable or numbered beta release from the branded GitHub
 repository, excluding drafts and releases without update manifests. The native
 bridge changes only the release tag in the configured endpoint; the configured
-public key, platform selection, signature verification, and newer-version check
-remain in force. Switching channels never installs or downgrades software.
+public key, platform selection, and signature verification remain in force.
+Ordinary checks require a newer version. Repair may reinstall only the running
+app's exact signed version. Switching channels never installs or downgrades software.
 
 CLIO Desktop beta 1 predates this setting and has a stable-only updater. Those
 installations need one manual Desktop upgrade to gain channel-aware updates.
@@ -180,13 +181,13 @@ updates until replaced.
 - **Capability** — `capabilities/default.json` grants `updater:default` (check +
   download/install) and `process:allow-restart` (relaunch).
 - **Frontend bridge** — `web/src/tauri/desktop-updater.ts` dynamically imports
-  `@tauri-apps/plugin-updater` for `check()` / `downloadAndInstall()` and
+  `@tauri-apps/plugin-updater` for `check()` / `download()` / `install()` and
   `@tauri-apps/plugin-process` for `relaunch()`. Browser execution is rejected
   before either native plugin is loaded.
-- **User workflow** — `web/src/components/clio/settings-desktop.tsx` exposes an
-  explicit check, signed release metadata, real byte progress, install, and
-  relaunch flow. Browser settings label the workflow “Installed app only”; the
-  application does not currently perform an unsolicited launch-time check.
+- **User workflow** — General settings, the bottom-bar version popover and the
+  background notification share one coordinator and one **Update CLIO** action.
+  Component rows show versions without independent install buttons. Settings
+  subscribes to the same check result as the other entry points.
 
 ## 4. Verifying locally (without publishing)
 
@@ -200,6 +201,49 @@ updates until replaced.
 
 [plugin]: https://v2.tauri.app/plugin/updater/
 [action]: https://github.com/tauri-apps/tauri-action
+
+## Managed backend updates and older installations
+
+The signed app feed chooses one target for the entire installation. Before changing
+either component, the coordinator saves that target durably and finishes downloading
+and signature-verifying the app payload. Concurrent updates are rejected; native
+runtime installers also have a process-wide ownership lease.
+
+Bundled installations replace both app and runtime from that signed payload. They do
+not independently pip-update the retained runtime before installing the app. The new
+runtime pack's receipt replaces an older cached pack on startup. A bundled app with an
+older runtime and no newer app release offers the same update action, reinstalling
+the running app's exact signed release to repair the pair.
+
+Lightweight installations with an owned writable/bootstrap runtime install the exact
+same target before the app installer runs. The selected wheel owns its dependency
+graph; Desktop does not override it with a separate hardcoded list. The runtime must
+pass its exact installed/imported-version check and full service entry-point check.
+An owned runtime ahead of the available app is a mismatch, never an automatic downgrade.
+
+After restart, **Verifying update** checks the actual native app version and the
+Desktop-owned service's authenticated capabilities against the retained target.
+Reconnecting alone cannot report success. Partial updates retain their target and
+show **Update did not finish**. A selected remote connection cannot complete or fail
+this local verification. New bundled apps launch their own runtime rather than
+silently adopting an unrelated service on a conventional port.
+
+The action updates this computer's installation. Independently administered remote
+services are not silently upgraded with it. In a plain browser, the single update
+action identifies the serving installation and opens its exact release instructions;
+the browser cannot execute the host's installer. Its UI and runtime ship in the same
+backend release. There are no separate browser-UI update controls.
+
+GitHub beta tags and Python versions differ: `v0.9.5-beta.7.1` installs and verifies
+`clio-agent==0.9.5b7.post1`. Stable four-component releases retain their published
+Python spelling. All update and repair paths retain native signature verification.
+
+When a newer Desktop starts a retained older runtime, package setup checks the old
+installer's help before requesting `--reuse-installed`. A legacy installer without
+that flag keeps its already installed packages so CLIO can start and expose its
+general update action. Failed capability probes and failed supported setup still
+surface their actual errors. Package/startup errors are labelled as local startup
+failures; an authentication failure keeps its separate sign-in message.
 
 ## Reproducible native dependencies
 

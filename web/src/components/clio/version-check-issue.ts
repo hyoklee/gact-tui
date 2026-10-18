@@ -37,6 +37,8 @@ export function agentCheckIssue(
 export function desktopCheckIssue(snapshot: DesktopUpdateSnapshot): VersionCheckIssue | undefined {
   if (snapshot.status !== 'error') return undefined;
   switch (snapshot.reason) {
+    case 'version_mismatch':
+      return {state: 'error', text:snapshot.message};
     case 'signature_mismatch':
       return { state: 'error', text: 'The update was rejected: its signature did not match.' };
     case 'manifest_not_published':

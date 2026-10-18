@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use crate::brand_backend::connect_mode_error;
 use crate::clio_core_daemon::{self, DaemonOutcome};
 use crate::clio_core_registry;
-use crate::runtime_pack::prepare_bundled_runtime;
+use crate::runtime_pack::{has_bundled_runtime, prepare_bundled_runtime};
 use crate::supervisor_attach::try_attach_existing;
 use crate::supervisor_boot_log::{boot_log_line, reset_boot_log};
 use crate::supervisor_spawn::{spawn_and_probe, SpawnError};
@@ -36,7 +36,11 @@ pub(crate) fn boot_sidecar(
     state.set_status(BackendStatus::Starting(
         BackendStartupStage::CheckingExisting,
     ));
-    if let Some(handle) = try_attach_existing() {
+    let owns_bundle = runtime_resource_dir
+        .as_ref()
+        .zip(app_local_data_dir.as_ref())
+        .is_some_and(|(resources, data)| has_bundled_runtime(resources, data));
+    if let Some(handle) = (!owns_bundle).then(try_attach_existing).flatten() {
         boot_log_line("attached to an existing backend on the conventional port");
         if let BackendStatus::AuthUnavailable(reason) = &handle.status {
             boot_log_line(&format!(

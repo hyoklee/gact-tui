@@ -4,7 +4,11 @@ import { Progress } from '@/components/ui/progress';
 import { Spinner } from '@/components/ui/spinner';
 import { formatBytes } from '@/lib/format';
 import { vocab } from '@/lib/brand-vocabulary';
-import { useUpdateFlowStore, type UpdateStep } from '@/store/update-flow-store';
+import {
+  clearPendingUpdateMarker,
+  useUpdateFlowStore,
+  type UpdateStep,
+} from '@/store/update-flow-store';
 
 type OverlayStep = Exclude<UpdateStep, 'idle' | 'done' | 'failed'>;
 
@@ -18,16 +22,20 @@ const STEP_COPY: Record<OverlayStep, { label: string; detail: string }> = {
     detail: `Fetching the signed ${vocab.product} update.`,
   },
   installing: {
-    label: `Installing ${vocab.agent}`,
+    label: `Installing ${vocab.product}`,
     detail: 'Applying the update on this computer.',
   },
   restarting: {
-    label: `Restarting ${vocab.agent}`,
+    label: `Restarting ${vocab.product}`,
     detail: 'The update finished. Restarting to apply it.',
   },
   reconnecting: {
     label: 'Reconnecting',
     detail: `Waiting for ${vocab.agent} to come back online.`,
+  },
+  verifying: {
+    label: 'Verifying update',
+    detail: 'Checking the running app and runtime against the selected release.',
   },
 };
 
@@ -60,7 +68,10 @@ export function UpdateRestartOverlay() {
       >
         <div className="w-full max-w-md rounded-2xl border bg-card p-6 shadow-2xl">
           <div className="flex items-start gap-3">
-            <AlertTriangleIcon aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-destructive" />
+            <AlertTriangleIcon
+              aria-hidden="true"
+              className="mt-0.5 size-5 shrink-0 text-destructive"
+            />
             <div className="min-w-0 flex-1">
               <h2 className="font-heading font-semibold" id="update-restart-failed-title">
                 Update did not finish
@@ -71,7 +82,14 @@ export function UpdateRestartOverlay() {
             </div>
           </div>
           <div className="mt-5 flex justify-end">
-            <Button onClick={reset} type="button" variant="outline">
+            <Button
+              onClick={() => {
+                clearPendingUpdateMarker();
+                reset();
+              }}
+              type="button"
+              variant="outline"
+            >
               Dismiss
             </Button>
           </div>
@@ -99,7 +117,7 @@ export function UpdateRestartOverlay() {
           {copy.label}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">{copy.detail}</p>
-        {percent !== undefined && progress ? (
+        {step === 'downloading' && percent !== undefined && progress ? (
           <div className="mt-4">
             <Progress value={percent} />
             <p className="mt-1 text-xs text-muted-foreground">
@@ -107,8 +125,6 @@ export function UpdateRestartOverlay() {
               {progress.totalBytes ? ` of ${formatBytes(progress.totalBytes)}` : ''}
             </p>
           </div>
-        ) : step === 'installing' || step === 'reconnecting' ? (
-          <Progress className="mt-4 motion-safe:animate-pulse" value={70} />
         ) : null}
         {lines.length > 0 ? (
           <pre className="mt-4 max-h-28 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-muted p-2 text-left font-mono text-[11px] text-muted-foreground">

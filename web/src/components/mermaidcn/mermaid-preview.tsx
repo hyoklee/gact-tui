@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MermaidConfig } from './mermaid';
 import { Mermaid } from './mermaid';
 import { ZoomPan } from './zoom-pan';
@@ -16,6 +16,7 @@ export interface MermaidPreviewProps {
   svgOutput: string;
   onSvgOutputChange: (svg: string) => void;
   className?: string;
+  autoHeight?: boolean;
   controls: (api: {
     zoomIn: () => void;
     zoomOut: () => void;
@@ -37,12 +38,47 @@ export function MermaidPreview({
   svgOutput,
   onSvgOutputChange,
   className,
+  autoHeight = false,
   controls,
   interactiveNodes,
   selectedNodeIds,
   onNodeClick,
 }: MermaidPreviewProps) {
   const [renderError, setRenderError] = useState<string>();
+  const hostRef = useRef<HTMLDivElement>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
+  const [controlsHeight, setControlsHeight] = useState(40);
+  const [availableWidth, setAvailableWidth] = useState<number>();
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const update = () => {
+      if (host.clientWidth > 0) setAvailableWidth(host.clientWidth);
+      const height = controlsRef.current?.getBoundingClientRect().height;
+      if (height) setControlsHeight(height);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(host);
+    if (controlsRef.current) observer.observe(controlsRef.current);
+    return () => observer.disconnect();
+  }, []);
+  const responsiveConfig = useMemo(
+    () => ({ ...config, maxWidth: availableWidth }),
+    [config, availableWidth],
+  );
+  const dimensions = svgDimensions(svgOutput);
+  const height = autoHeight
+    ? Math.max(
+        96,
+        Math.min(
+          600,
+          availableWidth && dimensions
+            ? Math.min(1, availableWidth / dimensions.width) * dimensions.height
+            : 208,
+        ),
+      ) + controlsHeight
+    : undefined;
   const imageSrc = useMemo(
     () =>
       svgOutput
@@ -57,42 +93,48 @@ export function MermaidPreview({
   const textLayer = useMemo(() => mermaidSelectableText(svgOutput), [svgOutput]);
 
   return (
-    <ZoomPan
-      ariaLabel="Interactive Mermaid diagram"
-      className={cn('min-h-0', className)}
-      controls={controls}
-      error={renderError}
-      fitPadding={0.8}
-      imageSrc={imageSrc}
-      selectableTextSvg={textLayer}
-      hitRegions={hitRegions}
-      selectedRegionIds={selectedNodeIds}
-      onRegionClick={onNodeClick}
-      wheelZoom="plain"
-    >
-      <Mermaid
-        chart={chart}
-        className="size-full"
-        config={config}
-        debounceTime={0}
-        onError={(error) => {
-          onSvgOutputChange('');
-          setRenderError(error.split('\n')[0] || 'The diagram could not be rendered.');
-        }}
-        onSuccess={(svg) => {
-          try {
-            const sanitized = sanitizeMermaidSvg(svg);
-            onSvgOutputChange(new XMLSerializer().serializeToString(sanitized));
-            setRenderError(undefined);
-          } catch (error) {
+    <div ref={hostRef} className={cn('min-w-0', className)} style={height ? { height } : undefined}>
+      <ZoomPan
+        ariaLabel="Interactive Mermaid diagram"
+        className="h-full min-h-0"
+        controls={(api) => (
+          <div ref={controlsRef} className="flow-root shrink-0">
+            {controls(api)}
+          </div>
+        )}
+        error={renderError}
+        fitPadding={0.94}
+        imageSrc={imageSrc}
+        selectableTextSvg={textLayer}
+        hitRegions={hitRegions}
+        selectedRegionIds={selectedNodeIds}
+        onRegionClick={onNodeClick}
+        wheelZoom="plain"
+      >
+        <Mermaid
+          chart={chart}
+          className="size-full"
+          config={responsiveConfig}
+          debounceTime={0}
+          onError={(error) => {
             onSvgOutputChange('');
-            setRenderError(
-              error instanceof Error ? error.message : 'The diagram could not be rendered.',
-            );
-          }
-        }}
-      />
-    </ZoomPan>
+            setRenderError(error.split('\n')[0] || 'The diagram could not be rendered.');
+          }}
+          onSuccess={(svg) => {
+            try {
+              const sanitized = sanitizeMermaidSvg(svg);
+              onSvgOutputChange(new XMLSerializer().serializeToString(sanitized));
+              setRenderError(undefined);
+            } catch (error) {
+              onSvgOutputChange('');
+              setRenderError(
+                error instanceof Error ? error.message : 'The diagram could not be rendered.',
+              );
+            }
+          }}
+        />
+      </ZoomPan>
+    </div>
   );
 }
 

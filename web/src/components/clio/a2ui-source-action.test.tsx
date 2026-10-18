@@ -35,7 +35,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
-function mount(readOnly = false) {
+function mount(readOnly = false, provider = 'google_drive') {
   const catalogId = CLIO_WORKSPACE_CATALOG_ROW.catalogId;
   const surface: A2UISurface = {
     id: 'login',
@@ -57,7 +57,7 @@ function mount(readOnly = false) {
               child: 'label',
               action: {
                 event: {
-                  name: 'data_source/login/google_drive',
+                  name: `data_source/login/${provider}`,
                   context: { clio_id: 'c', workspace_id: 'w' },
                 },
               },
@@ -76,20 +76,23 @@ function mount(readOnly = false) {
     </QueryClientProvider>,
   );
 }
-it('opens private UI only after the recorded client action is accepted', async () => {
-  mount();
-  await userEvent.click(await screen.findByRole('button', { name: 'Sign in to Drive' }));
-  expect(repository.openSignIn).toHaveBeenCalledWith({
-    provider: 'google_drive',
-    clioId: 'c',
-    workspaceId: 'w',
-  });
-  expect(repository.a2uiAction).toHaveBeenCalledOnce();
-  expect(repository.a2uiAction.mock.calls[0][1].action.context).toEqual({
-    clio_id: 'c',
-    workspace_id: 'w',
-  });
-});
+it.each(['google_drive', 'ndp'])(
+  'opens private %s UI only after the recorded client action is accepted',
+  async (provider) => {
+    mount(false, provider);
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign in to Drive' }));
+    expect(repository.openSignIn).toHaveBeenCalledWith({
+      provider,
+      clioId: 'c',
+      workspaceId: 'w',
+    });
+    expect(repository.a2uiAction).toHaveBeenCalledOnce();
+    expect(repository.a2uiAction.mock.calls[0][1].action.context).toEqual({
+      clio_id: 'c',
+      workspace_id: 'w',
+    });
+  },
+);
 it('does not start sign-in when an older server routes the action to an agent', async () => {
   repository.a2uiAction.mockResolvedValue({
     status: 'accepted',
