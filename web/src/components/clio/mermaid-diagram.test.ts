@@ -10,11 +10,16 @@ describe('Mermaid trust boundary', () => {
 
   it.each([
     '%%{init: {"securityLevel": "loose"}}%%\nflowchart LR\na-->b',
-    'flowchart LR\na-->b\nclick a javascript:alert(1)',
     'flowchart LR\na[<b>unsafe</b>] --> b',
   ])('rejects executable or HTML source', (source) => {
     expect(() => validateMermaidSource(source)).toThrow(
       'Diagram contains an unsupported executable or HTML directive',
+    );
+  });
+
+  it('rejects executable click targets before rendering or navigation', () => {
+    expect(() => validateMermaidSource('flowchart LR\na-->b\nclick a javascript:alert(1)')).toThrow(
+      'Diagram clicks must name a relative workspace-folder target.',
     );
   });
 

@@ -122,6 +122,7 @@ it.each(['link', 'download'])(
       >
         <ConnectedSourcePicker
           workspaceId="w"
+          sessionId="session_ndp"
           open
           initialProviderId="ndp"
           onOpenChange={vi.fn()}
@@ -151,7 +152,7 @@ it.each(['link', 'download'])(
         false,
         'draft',
         { access: 'read_only', confirm_remote: false },
-        undefined,
+        'session_ndp',
       );
       expect(fixture.repository.transferConnectedSource).not.toHaveBeenCalled();
     } else {
@@ -163,7 +164,7 @@ it.each(['link', 'download'])(
           undefined,
           'draft',
           'editable',
-          undefined,
+          'session_ndp',
         ),
       );
       expect(fixture.repository.linkConnectedSource).not.toHaveBeenCalled();
