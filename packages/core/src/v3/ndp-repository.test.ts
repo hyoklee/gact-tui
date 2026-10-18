@@ -19,8 +19,8 @@ it('lists hidden endpoints explicitly and patches the existing connection with o
   const transport = new RecordingTransport([{ endpoints: [endpoint] }, endpoint]);
   const repository = new ClioRepository(transport);
   expect(
-    (await repository.ndpEndpointConnections('workspace/one', undefined, true)).endpoints[0].hidden,
-  ).toBe(true);
+    (await repository.ndpEndpointConnections('workspace/one', undefined, true)).endpoints,
+  ).toEqual([endpoint]);
   expect(await repository.updateNdpEndpoint('workspace/one', 'ep/one', { hidden: true })).toEqual(
     endpoint,
   );
