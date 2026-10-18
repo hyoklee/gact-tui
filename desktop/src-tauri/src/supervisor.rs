@@ -77,6 +77,28 @@ impl Supervisor {
             .filter(|runtime| runtime.join("runtime.json").is_file())
     }
 
+    /// Both a bundled runtime and a launched legacy bootstrap belong to this app.
+    pub fn owns_runtime(&self) -> bool {
+        self.runtime_update_mode() != "external"
+    }
+
+    /// Select how this installation obtains its runtime, independently of the active connection.
+    pub fn runtime_update_mode(&self) -> &'static str {
+        if self
+            .runtime_resource_dir
+            .as_ref()
+            .is_some_and(|root| crate::runtime_pack::has_runtime_payload(root))
+        {
+            "bundled"
+        } else if self.managed_runtime_dir().is_some() {
+            "writable"
+        } else if self.state.owns_child() {
+            "bootstrap"
+        } else {
+            "external"
+        }
+    }
+
     /// Reads the current backend handle (cheap clone of a small struct).
     pub fn snapshot(&self) -> BackendHandle {
         self.state.snapshot()
@@ -179,6 +201,7 @@ mod tests {
     #[test]
     fn runtime_update_ownership_requires_this_supervisors_prepared_runtime() {
         let mut supervisor = Supervisor::new();
+        assert_eq!(supervisor.runtime_update_mode(), "external");
         assert!(supervisor.managed_runtime_dir().is_none());
         let root =
             std::env::temp_dir().join(format!("clio-update-ownership-{}", std::process::id()));
@@ -189,6 +212,10 @@ mod tests {
         std::fs::create_dir_all(&runtime).unwrap();
         std::fs::write(runtime.join("runtime.json"), "{}").unwrap();
         assert_eq!(supervisor.managed_runtime_dir(), Some(runtime));
+        assert_eq!(supervisor.runtime_update_mode(), "writable");
+        std::fs::create_dir(root.join("resources")).unwrap();
+        std::fs::write(root.join("resources/gact-runtime.pack.json"), "{}").unwrap();
+        assert_eq!(supervisor.runtime_update_mode(), "bundled");
         std::fs::remove_dir_all(root).unwrap();
     }
 

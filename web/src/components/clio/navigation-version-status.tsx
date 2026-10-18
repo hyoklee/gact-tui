@@ -12,6 +12,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ExternalLink } from '@/components/ui/external-link';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useRepository } from '@/hooks/use-repository';
 import { vocab } from '@/lib/brand-vocabulary';
 import { queryKeys } from '@/lib/query-keys';
@@ -27,15 +34,9 @@ import {
   installDesktopUpdate,
   subscribeDesktopUpdate,
 } from '@/tauri/desktop-updater';
-import { restartClio, updateManagedClio } from '@/tauri/managed-backend';
-import {
-  clearPendingUpdateMarker,
-  isUpdateInFlight,
-  useUpdateFlowStore,
-  writePendingUpdateMarker,
-  type UpdateAction,
-} from '@/store/update-flow-store';
+import { isUpdateInFlight, useUpdateFlowStore } from '@/store/update-flow-store';
 import { agentCheckIssue, desktopCheckIssue } from './version-check-issue';
+import { managedClioVersion } from '@/tauri/clio-update-verification';
 
 // 'unknown' is a REAL state -- no check has run, or the one that ran had
 // nothing to compare against (no release feed, a failed fetch). It must
@@ -59,62 +60,11 @@ function webBuildVersion(): string | undefined {
   return displayReleaseVersion(typeof stamped === 'string' ? stamped : undefined);
 }
 
-/**
- * Drives one "Update all" click through the real state machine
- * (`useUpdateFlowStore`), persisting the restart marker before any call that
- * disconnects the backend or replaces the process. Module-level (not a
- * closure inside `SystemVersionStatus`) so its `Date.now()` calls happen only
- * when a person actually triggers an update -- never reachable from render.
- */
-async function runUpdate(
-  action: UpdateAction,
-  {
-    desktopTargetVersion,
-    latestClioVersion,
-  }: { desktopTargetVersion?: string; latestClioVersion?: string },
-): Promise<void> {
-  const flow = useUpdateFlowStore.getState();
-  const version = action === 'desktop' ? desktopTargetVersion : latestClioVersion;
-  flow.start(action, version);
+/** Every native entry point uses the same release coordinator. */
+async function runUpdate(): Promise<void> {
   try {
-    if (action === 'agent') {
-      if (!latestClioVersion)
-        throw new Error(`No newer ${vocab.agent} release was found to update to.`);
-      // Persisted BEFORE the restart-triggering call below: `update_clio`
-      // disconnects the current backend immediately, then (restartApp:
-      // true) replaces the whole process a moment after success. Nothing
-      // in this session survives that to report "reconnecting" itself --
-      // the next boot reads this marker instead (see `UpdateRestartRecovery`).
-      writePendingUpdateMarker({ action, version: latestClioVersion, startedAt: Date.now() });
-      flow.setStep('installing');
-      await updateManagedClio(releaseTag(latestClioVersion), {
-        restartApp: true,
-        onProgress: (line) => useUpdateFlowStore.getState().appendLine(line),
-      });
-      flow.setStep('restarting');
-      return;
-    }
-    if (action === 'both' && latestClioVersion) {
-      writePendingUpdateMarker({ action, version: latestClioVersion, startedAt: Date.now() });
-      flow.setStep('installing');
-      await updateManagedClio(releaseTag(latestClioVersion), {
-        restartApp: false,
-        onProgress: (line) => useUpdateFlowStore.getState().appendLine(line),
-      });
-    } else if (action === 'desktop') {
-      writePendingUpdateMarker({ action, version: desktopTargetVersion, startedAt: Date.now() });
-    }
-    flow.setStep('downloading');
-    await installDesktopUpdate((progress) => useUpdateFlowStore.getState().setProgress(progress), {
-      runtimeAlreadyUpdated: action === 'both' && Boolean(latestClioVersion),
-      flowAlreadyStarted: true,
-    });
-    flow.setStep('restarting');
+    await installDesktopUpdate((progress) => useUpdateFlowStore.getState().setProgress(progress));
   } catch (error) {
-    clearPendingUpdateMarker();
-    if (action === 'agent' || action === 'both') {
-      await restartClio().catch(() => undefined);
-    }
     useUpdateFlowStore.getState().fail(error instanceof Error ? error.message : String(error));
   }
 }
@@ -123,12 +73,13 @@ async function runUpdate(
 export function SystemVersionStatus() {
   const updateChannel = useUpdateChannel();
   const repository = useRepository();
-  const { credentialsReady, isManagedConnection, settings } = useConnectionSettings();
+  const { credentialsReady, settings } = useConnectionSettings();
   // Read once: the runtime never changes under a mounted page. Outside the
   // desktop shell the Tauri version call can never answer, so waiting on it
   // was the endless "Version" spinner in a plain browser.
   const [desktopShell] = useState(inTauri);
   const [desktopVersion, setDesktopVersion] = useState<string>();
+  const [serviceUpdateOpen, setServiceUpdateOpen] = useState(false);
   const updateFlowStep = useUpdateFlowStore((state) => state.step);
   const updateFlowAction = useUpdateFlowStore((state) => state.action);
   // Any in-flight step (including the post-restart `reconnecting` window)
@@ -142,15 +93,20 @@ export function SystemVersionStatus() {
     getDesktopUpdateSnapshot,
   );
   const capabilities = useQuery({
-    enabled: credentialsReady,
-    queryKey: queryKeys.key('capabilities', settings.endpoint),
-    queryFn: ({ signal }) => repository.capabilities(signal),
+    enabled: desktopShell || credentialsReady,
+    queryKey: desktopShell
+      ? ['owned-runtime-version']
+      : queryKeys.key('capabilities', settings.endpoint),
+    queryFn: async ({ signal }) =>
+      desktopShell
+        ? { service: { version: await managedClioVersion(signal) } }
+        : repository.capabilities(signal),
   });
   // Stable checks use the server's manifest route. Beta metadata comes from
   // GitHub's CORS-enabled API, so an older connected agent needs no upgrade
   // before the UI can discover its next beta.
   const latestClioRelease = useQuery({
-    enabled: credentialsReady,
+    enabled: credentialsReady && !desktopShell,
     queryKey: [...queryKeys.key('latest-release', settings.endpoint), updateChannel],
     queryFn: async ({ signal }) => {
       if (updateChannel === 'stable') return repository.latestRelease(signal);
@@ -203,16 +159,19 @@ export function SystemVersionStatus() {
     snapshot.status === 'available' ? snapshot.update.version : undefined,
   );
   const desktopUpdateAvailable = snapshot.status === 'available';
-  const agentVersionKnown = Boolean(agentVersion && latestClioVersion);
+  const agentTargetVersion = desktopShell
+    ? (desktopTargetVersion ?? displayedDesktopVersion)
+    : latestClioVersion;
+  const agentVersionKnown = Boolean(agentVersion && agentTargetVersion);
   const agentBehindLatest = Boolean(
     agentVersion &&
-      latestClioVersion &&
-      compareReleaseVersions(agentVersion, latestClioVersion) < 0,
+      agentTargetVersion &&
+      compareReleaseVersions(agentVersion, agentTargetVersion) < 0,
   );
   // Knowing the agent is behind is a fact; being ALLOWED to push a remote
   // update is a separate, narrower permission (only a managed connection can).
-  const agentUpdateActionable = agentBehindLatest && isManagedConnection;
-  const latestClioReleaseChecking = credentialsReady && latestClioRelease.isPending;
+  const latestClioReleaseChecking =
+    !desktopShell && credentialsReady && latestClioRelease.isPending;
   const agentIssue = agentCheckIssue(latestClioRelease.data, latestClioRelease.isError);
   const desktopIssue = desktopCheckIssue(snapshot);
   const agentRowState: VersionState = capabilities.isError
@@ -263,27 +222,18 @@ export function SystemVersionStatus() {
     snapshot.status,
   ]);
 
-  const performUpdate = (action: UpdateAction) =>
-    runUpdate(action, { desktopTargetVersion, latestClioVersion });
-
   const recheck = async (): Promise<void> => {
     await Promise.allSettled([
       ...(desktopShell ? [checkForDesktopUpdate()] : []),
       capabilities.refetch(),
-      latestClioRelease.refetch(),
+      ...(!desktopShell ? [latestClioRelease.refetch()] : []),
     ]);
   };
 
   const updateAll = (): void => {
-    if (desktopUpdateAvailable && agentUpdateActionable) {
-      void performUpdate('both');
-    } else if (desktopUpdateAvailable) {
-      void performUpdate('desktop');
-    } else if (agentUpdateActionable) {
-      void performUpdate('agent');
-    } else {
-      void recheck();
-    }
+    if (desktopShell && desktopUpdateAvailable) void runUpdate();
+    else if (!desktopShell && agentBehindLatest) setServiceUpdateOpen(true);
+    else void recheck();
   };
 
   const statusLabel = {
@@ -300,7 +250,7 @@ export function SystemVersionStatus() {
   }[state];
   const systemActionLabel =
     state === 'available'
-      ? 'Update all'
+      ? `Update ${vocab.agent}`
       : state === 'checking'
         ? 'Checking…'
         : state === 'error' || state === 'unavailable'
@@ -310,70 +260,87 @@ export function SystemVersionStatus() {
             : 'Up to date';
 
   return (
-    <Popover
-      onOpenChange={(open) => {
-        if (open) void recheck();
-      }}
-    >
-      <PopoverTrigger asChild>
-        <Button
-          aria-label={statusLabel}
-          className="h-6 gap-1.5 px-1.5 font-mono text-[0.625rem] text-muted-foreground"
-          size="xs"
-          title={statusLabel}
-          variant="ghost"
-        >
-          <VersionStateIcon state={state} />
-          <span>{displayedDesktopVersion ? `v${displayedDesktopVersion}` : 'Version'}</span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 p-3" side="top">
-        <div className="flex items-center justify-between gap-3 border-b pb-3">
-          <span className="font-semibold">System Version</span>
-          <VersionAction
-            disabled={Boolean(updating) || state === 'checking'}
-            label={systemActionLabel}
-            onClick={updateAll}
-            state={state}
-            updating={Boolean(updating)}
+    <>
+      <Popover
+        onOpenChange={(open) => {
+          if (open) void recheck();
+        }}
+      >
+        <PopoverTrigger asChild>
+          <Button
+            aria-label={statusLabel}
+            className="h-6 gap-1.5 px-1.5 font-mono text-[0.625rem] text-muted-foreground"
+            size="xs"
+            title={statusLabel}
+            variant="ghost"
+          >
+            <VersionStateIcon state={state} />
+            <span>{displayedDesktopVersion ? `v${displayedDesktopVersion}` : 'Version'}</span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-80 p-3" side="top">
+          <div className="flex items-center justify-between gap-3 border-b pb-3">
+            <span className="font-semibold">{vocab.agent} updates</span>
+            <VersionAction
+              disabled={Boolean(updating) || state === 'checking'}
+              label={systemActionLabel}
+              onClick={updateAll}
+              state={state}
+              updating={Boolean(updating)}
+            />
+          </div>
+          <VersionRow
+            currentVersion={agentVersion}
+            label={vocab.agent}
+            releaseUrl={
+              brand.agentReleaseUrl && agentVersion
+                ? `${brand.agentReleaseUrl}/tag/${releaseTag(agentVersion)}`
+                : undefined
+            }
+            note={agentRowState === 'unavailable' ? agentIssue?.text : undefined}
+            state={agentRowState}
+            targetVersion={agentBehindLatest ? agentTargetVersion : undefined}
+            testId="version-row-agent"
           />
-        </div>
-        <VersionRow
-          currentVersion={agentVersion}
-          disabled={Boolean(updating)}
-          label={vocab.agent}
-          onRecheck={() => void recheck()}
-          onUpdate={agentUpdateActionable ? () => void performUpdate('agent') : undefined}
-          releaseUrl={
-            brand.agentReleaseUrl && agentVersion
-              ? `${brand.agentReleaseUrl}/tag/${releaseTag(agentVersion)}`
-              : undefined
-          }
-          note={agentRowState === 'unavailable' ? agentIssue?.text : undefined}
-          state={agentRowState}
-          targetVersion={agentBehindLatest ? latestClioVersion : undefined}
-          testId="version-row-agent"
-          updating={updating === 'agent' || updating === 'both'}
-        />
-        <VersionRow
-          currentVersion={displayedDesktopVersion}
-          disabled={Boolean(updating)}
-          label={vocab.product}
-          onRecheck={() => void recheck()}
-          onUpdate={desktopUpdateAvailable ? () => void performUpdate('desktop') : undefined}
-          releaseUrl={
-            brand.desktopReleaseUrl && displayedDesktopVersion
-              ? `${brand.desktopReleaseUrl}/tag/${releaseTag(displayedDesktopVersion)}`
-              : undefined
-          }
-          note={desktopShell ? desktopIssue?.text : 'Update checks run in the desktop app.'}
-          state={desktopRowState}
-          targetVersion={desktopUpdateAvailable ? desktopTargetVersion : undefined}
-          testId="version-row-desktop"
-          updating={updating === 'desktop' || updating === 'both'}
-        />
-      </PopoverContent>
-    </Popover>
+          <VersionRow
+            currentVersion={displayedDesktopVersion}
+            label={vocab.product}
+            releaseUrl={
+              brand.desktopReleaseUrl && displayedDesktopVersion
+                ? `${brand.desktopReleaseUrl}/tag/${releaseTag(displayedDesktopVersion)}`
+                : undefined
+            }
+            note={desktopShell ? desktopIssue?.text : 'Update checks run in the desktop app.'}
+            state={desktopRowState}
+            targetVersion={desktopUpdateAvailable ? desktopTargetVersion : undefined}
+            testId="version-row-desktop"
+          />
+        </PopoverContent>
+      </Popover>
+      <Dialog open={serviceUpdateOpen} onOpenChange={setServiceUpdateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update {vocab.agent}</DialogTitle>
+            <DialogDescription>
+              Update the installation serving this workspace. Its runtime and browser interface come
+              from the same release.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="break-all text-sm">{settings.label ?? settings.endpoint}</p>
+          <p className="text-sm text-muted-foreground">
+            This browser cannot run the host’s installer. Use the installation’s existing location
+            and the selected release, then reload the workspace after the service restarts.
+          </p>
+          {brand.agentReleaseUrl && latestClioVersion ? (
+            <Button asChild>
+              <ExternalLink href={`${brand.agentReleaseUrl}/tag/${releaseTag(latestClioVersion)}`}>
+                Open {vocab.agent} {latestClioVersion}
+              </ExternalLink>
+            </Button>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -418,45 +385,24 @@ function VersionStateBadge({ state }: { state: RowState }) {
 
 function VersionRow({
   currentVersion,
-  disabled,
   label,
   note,
-  onRecheck,
-  onUpdate,
   releaseUrl,
   state,
   targetVersion,
   testId,
-  updating,
 }: {
   currentVersion?: string;
-  /**
-   * True while ANY update is running, even one this row did not start --
-   * both rows must lock while one update is in flight, since running two at
-   * once was never a real, supported combination on its own (a bug the
-   * previous same-row-only `updating` disable let through).
-   */
-  disabled?: boolean;
   label: string;
   /** Why the check could not finish, or what needs the person, in plain words. */
   note?: string;
-  onRecheck: () => void;
-  onUpdate?: () => void;
   releaseUrl?: string;
   state: RowState;
   targetVersion?: string;
   /** Stable hook for scoping assertions to ONE row -- two rows can be in
    * different states at once (e.g. desktop checking, agent current). */
   testId: string;
-  /** True while THIS row's own update is the one actively running -- drives its spinner. */
-  updating: boolean;
 }) {
-  // Offer an action only when there is one: install a real update, or
-  // retry a check that came back unknown/failed. A settled "current" row
-  // gets a status badge and nothing to click.
-  const action =
-    onUpdate ??
-    (state === 'error' || state === 'unknown' || state === 'unavailable' ? onRecheck : undefined);
   return (
     <div
       className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-3 [&:not(:last-child)]:border-b"
@@ -477,14 +423,6 @@ function VersionRow({
       )}
       <div className="flex items-center gap-2">
         <VersionStateBadge state={state} />
-        {action ? (
-          <Button disabled={disabled || updating} onClick={action} size="sm" variant="outline">
-            {updating ? (
-              <LoaderCircleIcon aria-hidden="true" className="size-3.5 motion-safe:animate-spin" />
-            ) : null}
-            {onUpdate ? 'Update' : 'Recheck'}
-          </Button>
-        ) : null}
       </div>
       <p className="font-mono text-xs text-muted-foreground">
         {currentVersion ? `v${currentVersion}` : 'Not checked'}

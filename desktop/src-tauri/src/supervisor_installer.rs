@@ -122,13 +122,9 @@ fn bundled_update_args(python: &Path, version: &str) -> Vec<String> {
         "--upgrade".to_string(),
         "--reinstall-package".to_string(),
         "clio-agent".to_string(),
-        format!("clio-agent=={version}"),
-        "clio-kit==2.10.6".to_string(),
-        "globus-sdk>=3.0.0".to_string(),
-        "dspy==3.3.0b1".to_string(),
-        "fastmcp==4.0.0b5".to_string(),
-        "fastmcp-slim==4.0.0b5".to_string(),
-        "fastmcp-tasks==4.0.0b5".to_string(),
+        // The selected release owns its dependency graph, including provider
+        // support. Old Desktop dependency pins must not override a new release.
+        format!("clio-agent[argonne,flowcept]=={version}"),
     ]
 }
 
@@ -302,7 +298,8 @@ mod tests {
         assert!(args
             .windows(2)
             .any(|pair| { pair == ["--reinstall-package".to_string(), "clio-agent".to_string()] }));
-        assert!(args.contains(&"clio-agent==0.9.4.9".to_string()));
+        assert!(args.contains(&"clio-agent[argonne,flowcept]==0.9.4.9".to_string()));
+        assert!(!args.iter().any(|arg| arg.starts_with("fastmcp==")));
     }
 
     #[test]
@@ -312,7 +309,7 @@ mod tests {
         let version = crate::package_version::python_package_version("v0.9.5-beta.7.1").unwrap();
         let args = bundled_update_args(&python, &version);
         let steps = super::bundled_update_verify_steps(runtime, &python, &version);
-        assert!(args.contains(&"clio-agent==0.9.5b7.post1".to_string()));
+        assert!(args.contains(&"clio-agent[argonne,flowcept]==0.9.5b7.post1".to_string()));
         assert!(steps[0].args[1].contains("installed == {'0.9.5b7.post1'}"));
         assert!(!steps[0].args[1].contains("-beta."));
         assert_eq!(steps[1].args, ["-m", "clio_agent.gact", "--help"]);

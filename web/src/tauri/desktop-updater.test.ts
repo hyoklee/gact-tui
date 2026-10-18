@@ -1,3 +1,4 @@
+import { vocab } from '@/lib/brand-vocabulary';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
@@ -7,7 +8,8 @@ const mocks = vi.hoisted(() => {
     date: '2026-08-24T00:00:00Z',
     body: 'Improved workspace support.',
     close: vi.fn().mockResolvedValue(undefined),
-    downloadAndInstall: vi.fn().mockImplementation(async (onEvent) => {
+    install: vi.fn().mockResolvedValue(undefined),
+    download: vi.fn().mockImplementation(async (onEvent) => {
       onEvent({ event: 'Started', data: { contentLength: 100 } });
       onEvent({ event: 'Progress', data: { chunkLength: 40 } });
       onEvent({ event: 'Finished' });
@@ -41,15 +43,19 @@ const channelMocks = vi.hoisted(() => ({
 
 const runtimeMocks = vi.hoisted(() => ({
   has: vi.fn(async () => false),
+  mode: vi.fn(async () => 'external'),
+  version: vi.fn(async () => '0.7.2'),
   update: vi.fn<(...args: unknown[]) => Promise<void>>(async () => {}),
   restart: vi.fn(async () => undefined),
 }));
 vi.mock('./managed-backend', () => ({
   hasManagedRuntime: runtimeMocks.has,
+  managedRuntimeUpdateMode: runtimeMocks.mode,
   updateManagedClio: runtimeMocks.update,
   restartClio: runtimeMocks.restart,
 }));
 
+vi.mock('./clio-update-verification', () => ({ managedClioVersion: runtimeMocks.version }));
 vi.mock('@/lib/transport/tauri-runtime', () => ({ inTauri: () => true }));
 vi.mock('@tauri-apps/plugin-updater', () => ({
   check: mocks.check,
@@ -88,6 +94,8 @@ beforeEach(() => {
   useUpdateFlowStore.getState().reset();
   channelMocks.getVersion.mockResolvedValue('0.7.2');
   runtimeMocks.has.mockResolvedValue(false);
+  runtimeMocks.mode.mockResolvedValue('external');
+  runtimeMocks.version.mockResolvedValue('0.7.2');
   mocks.update.version = '0.8.0';
 });
 
@@ -96,7 +104,7 @@ describe('desktop updater bridge', () => {
     await checkForDesktopUpdate();
     mocks.update.close.mockClear();
     let finish!: () => void;
-    mocks.update.downloadAndInstall.mockImplementationOnce(
+    mocks.update.download.mockImplementationOnce(
       () =>
         new Promise<void>((resolve) => {
           finish = resolve;
@@ -104,7 +112,7 @@ describe('desktop updater bridge', () => {
     );
     const pending = installDesktopUpdate(() => undefined);
     expect(isDesktopUpdateInstalling()).toBe(true);
-    await expect(checkForDesktopUpdate()).rejects.toThrow('already being installed');
+    await expect(checkForDesktopUpdate()).rejects.toThrow('already in progress');
     setUpdateChannel('beta');
     expect(mocks.update.close).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
@@ -188,13 +196,14 @@ describe('Desktop-owned runtime updates (#1777)', () => {
     await checkForDesktopUpdate();
     useUpdateFlowStore.getState().start('agent', '0.9.5-beta.7.1');
     await expect(installDesktopUpdate(() => undefined)).rejects.toThrow('already in progress');
-    expect(runtimeMocks.has).not.toHaveBeenCalled();
+    expect(runtimeMocks.mode).not.toHaveBeenCalled();
     expect(runtimeMocks.update).not.toHaveBeenCalled();
-    expect(mocks.update.downloadAndInstall).not.toHaveBeenCalled();
+    expect(mocks.update.download).not.toHaveBeenCalled();
   });
 
   it('awaits the matching backend update before installing and restarts only once', async () => {
     runtimeMocks.has.mockResolvedValue(true);
+    runtimeMocks.mode.mockResolvedValue('writable');
     mocks.update.version = '0.9.5-7+1';
     await checkForDesktopUpdate();
     let finish!: () => void;
@@ -211,12 +220,13 @@ describe('Desktop-owned runtime updates (#1777)', () => {
         onProgress: expect.any(Function),
       }),
     );
-    expect(mocks.update.downloadAndInstall).not.toHaveBeenCalled();
+    expect(mocks.update.download).toHaveBeenCalledOnce();
+    expect(mocks.update.install).not.toHaveBeenCalled();
     expect(useUpdateFlowStore.getState()).toMatchObject({ action: 'both', step: 'installing' });
     expect(readPendingUpdateMarker()).toMatchObject({ action: 'both', version: '0.9.5-beta.7.1' });
     finish();
     await pending;
-    expect(mocks.update.downloadAndInstall).toHaveBeenCalledOnce();
+    expect(mocks.update.download).toHaveBeenCalledOnce();
     expect(mocks.relaunch).toHaveBeenCalledOnce();
     expect(runtimeMocks.restart).not.toHaveBeenCalled();
     expect(useUpdateFlowStore.getState().step).toBe('restarting');
@@ -226,31 +236,140 @@ describe('Desktop-owned runtime updates (#1777)', () => {
     await checkForDesktopUpdate();
     await installDesktopUpdate(() => undefined);
     expect(runtimeMocks.update).not.toHaveBeenCalled();
-    expect(mocks.update.downloadAndInstall).toHaveBeenCalledOnce();
+    expect(mocks.update.download).toHaveBeenCalledOnce();
   });
 
-  it('does not update a runtime twice after Update all already prepared it', async () => {
+  it('replaces bundled app and runtime through one signed payload', async () => {
     runtimeMocks.has.mockResolvedValue(true);
+    runtimeMocks.mode.mockResolvedValue('bundled');
     await checkForDesktopUpdate();
-    await installDesktopUpdate(() => undefined, { runtimeAlreadyUpdated: true });
-    expect(runtimeMocks.has).not.toHaveBeenCalled();
+    await installDesktopUpdate(() => undefined);
     expect(runtimeMocks.update).not.toHaveBeenCalled();
-    expect(mocks.update.downloadAndInstall).toHaveBeenCalledOnce();
+    expect(mocks.update.download).toHaveBeenCalledOnce();
+    expect(mocks.update.install).toHaveBeenCalledOnce();
+    expect(readPendingUpdateMarker()).toMatchObject({ action: 'both', version: '0.8.0' });
+  });
+
+  it('does not change the runtime when signed download fails', async () => {
+    runtimeMocks.has.mockResolvedValue(true);
+    runtimeMocks.mode.mockResolvedValue('writable');
+    await checkForDesktopUpdate();
+    mocks.update.download.mockRejectedValueOnce(new Error('Download failed'));
+    await expect(installDesktopUpdate(() => undefined)).rejects.toThrow('Download failed');
+    expect(runtimeMocks.update).not.toHaveBeenCalled();
+    expect(mocks.update.install).not.toHaveBeenCalled();
+    expect(readPendingUpdateMarker()).toBeUndefined();
+  });
+
+  it('offers the same action to repair an older runtime to the installed app', async () => {
+    runtimeMocks.has.mockResolvedValue(true);
+    runtimeMocks.mode.mockResolvedValue('writable');
+    runtimeMocks.version.mockResolvedValue('0.7.1');
+    mocks.check.mockResolvedValueOnce(null);
+    await expect(checkForDesktopUpdate()).resolves.toMatchObject({
+      repair: true,
+      version: '0.7.2',
+    });
+    await installDesktopUpdate(() => undefined);
+    expect(runtimeMocks.update).toHaveBeenCalledWith(
+      'v0.7.2',
+      expect.objectContaining({ restartApp: false }),
+    );
+    expect(mocks.update.download).not.toHaveBeenCalled();
+    expect(mocks.update.install).not.toHaveBeenCalled();
+    expect(runtimeMocks.restart).toHaveBeenCalledOnce();
+    expect(readPendingUpdateMarker()).toMatchObject({ action: 'both', version: '0.7.2' });
+  });
+
+  it('never silently downgrades a runtime newer than the signed app target', async () => {
+    runtimeMocks.has.mockResolvedValue(true);
+    runtimeMocks.mode.mockResolvedValue('writable');
+    runtimeMocks.version.mockResolvedValue('9.0.0');
+    await expect(checkForDesktopUpdate()).rejects.toThrow('will not be downgraded');
+    expect(runtimeMocks.update).not.toHaveBeenCalled();
+    expect(mocks.update.install).not.toHaveBeenCalled();
+  });
+
+  it('repairs a bundled runtime by reinstalling the same signed app release', async () => {
+    runtimeMocks.has.mockResolvedValue(true);
+    runtimeMocks.mode.mockResolvedValue('bundled');
+    runtimeMocks.version.mockResolvedValue('0.7.1');
+    mocks.check.mockResolvedValueOnce(null);
+    channelMocks.invoke.mockResolvedValueOnce({
+      rid: 42,
+      currentVersion: '0.7.2',
+      version: '0.7.2',
+      rawJson: {},
+    });
+    await expect(checkForDesktopUpdate()).resolves.toMatchObject({
+      repair: true,
+      version: '0.7.2',
+    });
+    expect(channelMocks.invoke).toHaveBeenCalledWith('check_release_update', {
+      tag: 'v0.7.2',
+      repair: true,
+    });
+    await installDesktopUpdate(() => undefined);
+    expect(mocks.update.download).toHaveBeenCalledOnce();
+    expect(mocks.update.install).toHaveBeenCalledOnce();
+    expect(runtimeMocks.update).not.toHaveBeenCalled();
+    expect(readPendingUpdateMarker()).toMatchObject({ action: 'both', version: '0.7.2' });
+  });
+
+  it('does not change either component if restart intent cannot be saved', async () => {
+    await checkForDesktopUpdate();
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage blocked');
+    });
+    try {
+      await expect(installDesktopUpdate(() => undefined)).rejects.toThrow('cannot retain');
+      expect(mocks.update.download).not.toHaveBeenCalled();
+      expect(runtimeMocks.update).not.toHaveBeenCalled();
+      expect(mocks.update.install).not.toHaveBeenCalled();
+    } finally {
+      set.mockRestore();
+    }
+  });
+
+  it('keeps the target after an installer fails after it may have changed the app', async () => {
+    await checkForDesktopUpdate();
+    mocks.update.install.mockRejectedValueOnce(new Error('installer interrupted'));
+    await expect(installDesktopUpdate(() => undefined)).rejects.toThrow('installer interrupted');
+    expect(readPendingUpdateMarker()).toMatchObject({ version: '0.8.0' });
+    expect(useUpdateFlowStore.getState().step).toBe('failed');
+    expect(mocks.relaunch).not.toHaveBeenCalled();
+  });
+
+  it('can repair an unavailable owned runtime using the signed app payload', async () => {
+    runtimeMocks.has.mockResolvedValue(true);
+    runtimeMocks.mode.mockResolvedValue('bundled');
+    runtimeMocks.version.mockRejectedValue(new Error('runtime unavailable'));
+    try {
+      await expect(checkForDesktopUpdate()).resolves.toMatchObject({ version: '0.8.0' });
+      await installDesktopUpdate(() => undefined);
+      expect(mocks.update.install).toHaveBeenCalledOnce();
+      expect(runtimeMocks.update).not.toHaveBeenCalled();
+      expect(readPendingUpdateMarker()).toMatchObject({ action: 'both', version: '0.8.0' });
+    } finally {
+      runtimeMocks.version.mockResolvedValue('0.7.2');
+    }
   });
 
   it('halts the Desktop update on backend failure and restores the managed service', async () => {
     runtimeMocks.has.mockResolvedValue(true);
+    runtimeMocks.mode.mockResolvedValue('writable');
     runtimeMocks.update.mockRejectedValueOnce(new Error('Backend import verification failed'));
     await checkForDesktopUpdate();
     await expect(installDesktopUpdate(() => undefined)).rejects.toThrow(
       'Backend import verification failed',
     );
-    expect(mocks.update.downloadAndInstall).not.toHaveBeenCalled();
+    expect(mocks.update.download).toHaveBeenCalledOnce();
+    expect(mocks.update.install).not.toHaveBeenCalled();
     expect(mocks.relaunch).not.toHaveBeenCalled();
     expect(runtimeMocks.restart).toHaveBeenCalledOnce();
     expect(isDesktopUpdateInstalling()).toBe(false);
     expect(useUpdateFlowStore.getState().step).toBe('failed');
-    expect(readPendingUpdateMarker()).toBeUndefined();
+    expect(readPendingUpdateMarker()).toMatchObject({ action: 'both', version: '0.8.0' });
   });
 });
 
@@ -396,7 +515,7 @@ describe('background update scheduling', () => {
       ];
       expect(message).toContain('0.8.0');
       expect(options.id).toBe(DESKTOP_UPDATE_TOAST_ID);
-      expect(options.action.label).toBe('Restart to update');
+      expect(options.action.label).toBe(`Update ${vocab.agent}`);
 
       options.action.onClick();
       await vi.advanceTimersByTimeAsync(0);
@@ -420,6 +539,11 @@ describe('background update scheduling', () => {
       expect(sonnerMocks.toast.dismiss).toHaveBeenCalledWith(DESKTOP_UPDATE_TOAST_ID);
 
       await vi.advanceTimersByTimeAsync(BACKGROUND_UPDATE_CHECK_INTERVAL_MS);
+      expect(mocks.check).toHaveBeenCalledOnce();
+      // A real relaunch destroys this process. Here the restart is stubbed,
+      // so explicitly finish verified recovery before the scheduler resumes.
+      useUpdateFlowStore.getState().finish('0.8.0');
+      await vi.advanceTimersByTimeAsync(BACKGROUND_UPDATE_CHECK_INTERVAL_MS);
       expect(mocks.check.mock.calls.length).toBeGreaterThanOrEqual(2);
       // A re-fire still targets the same stable id, so sonner replaces the
       // existing toast rather than stacking a second one.
@@ -441,7 +565,7 @@ describe('background update scheduling', () => {
   it('dismisses the progress toast and reports the typed error when installation fails mid-restart', async () => {
     vi.useFakeTimers();
     try {
-      mocks.update.downloadAndInstall.mockImplementationOnce(async () => {
+      mocks.update.download.mockImplementationOnce(async () => {
         throw new Error('Could not fetch a valid release JSON from the remote');
       });
       const cleanup = scheduleBackgroundUpdateCheck();

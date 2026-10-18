@@ -34,6 +34,13 @@ interface ManagedBackendOptions {
   prepareTimeoutMs?: number;
 }
 
+/** Bundled apps replace their runtime with the signed payload; lightweight apps install it. */
+export async function managedRuntimeUpdateMode(): Promise<
+  'bundled' | 'writable' | 'bootstrap' | 'external'
+> {
+  return invokeManagedBackend('managed_runtime_update_mode');
+}
+
 async function invokeManagedBackend<T>(
   command: string,
   args?: Record<string, unknown>,

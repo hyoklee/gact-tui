@@ -83,6 +83,11 @@ impl SupervisorState {
         self.set_status(BackendStatus::Error(msg));
     }
 
+    /// An adopted external listener is never an installation owned by Desktop.
+    pub fn owns_child(&self) -> bool {
+        lock_recover(&self.inner).child.is_some()
+    }
+
     pub fn set_status(&self, status: BackendStatus) {
         lock_recover(&self.inner).handle.status = status;
     }

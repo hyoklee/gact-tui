@@ -43,6 +43,7 @@ fn release_endpoint(configured: &str, tag: &str) -> Result<String, String> {
 pub(crate) async fn check_release_update(
     webview: Webview,
     tag: String,
+    repair: Option<bool>,
 ) -> Result<Option<UpdateMetadata>, String> {
     let configured = webview
         .config()
@@ -57,13 +58,17 @@ pub(crate) async fn check_release_update(
     let endpoint = release_endpoint(configured, &tag)?
         .parse()
         .map_err(|error| format!("Invalid configured updater URL: {error}"))?;
-    let updater = webview
+    let mut builder = webview
         .updater_builder()
         .endpoints(vec![endpoint])
         .map_err(|error| error.to_string())?
-        .timeout(Duration::from_secs(15))
-        .build()
-        .map_err(|error| error.to_string())?;
+        .timeout(Duration::from_secs(15));
+    if repair.unwrap_or(false) {
+        // Repair can only reinstall the running app's exact signed release.
+        // It must never turn the command into an arbitrary downgrade path.
+        builder = builder.version_comparator(|current, release| release.version == current);
+    }
+    let updater = builder.build().map_err(|error| error.to_string())?;
     let Some(update) = updater.check().await.map_err(|error| error.to_string())? else {
         return Ok(None);
     };

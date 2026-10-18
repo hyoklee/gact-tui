@@ -34,7 +34,7 @@ describe('UpdateRestartOverlay', () => {
 
     render(<UpdateRestartOverlay />);
 
-    expect(screen.getByRole('status', { name: `Installing ${vocab.agent}` })).toBeVisible();
+    expect(screen.getByRole('status', { name: `Installing ${vocab.product}` })).toBeVisible();
     expect(screen.getByText(/Successfully installed clio-agent-0.9.5.0/)).toBeVisible();
   });
 
