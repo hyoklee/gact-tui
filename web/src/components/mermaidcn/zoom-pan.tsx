@@ -85,6 +85,10 @@ export function ZoomPan({
   const viewportRef = React.useRef<HTMLDivElement>(null);
   const imageRef = React.useRef<HTMLImageElement | null>(null);
   const hitRegionsRef = React.useRef(hitRegions);
+  const textGeometryRef = React.useRef<{
+    node: HTMLDivElement;
+    values: Record<string, string>;
+  } | null>(null);
   const selectableHtml = React.useMemo(
     () => ({ __html: selectableTextSvg ?? '' }),
     [selectableTextSvg],
@@ -162,9 +166,14 @@ export function ZoomPan({
       };
       // A parent render can replace a callback without changing any pixels.
       // Redundant style writes would falsely advance the viewer capture epoch.
+      const previous = textGeometryRef.current;
       for (const [property, value] of Object.entries(geometry)) {
-        if (style.getPropertyValue(property) !== value) style.setProperty(property, value);
+        if (previous?.node !== textLayerRef.current || previous.values[property] !== value)
+          style.setProperty(property, value);
       }
+      // Cache desired values: browsers round CSS transforms when serializing
+      // them, so comparing a read-back string can still rewrite equal geometry.
+      textGeometryRef.current = { node: textLayerRef.current, values: geometry };
     }
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 

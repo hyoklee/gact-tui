@@ -52,6 +52,45 @@ for (const theme of ['light', 'dark']) {
   }
 }
 
+test('unchanged parent updates preserve diagram DOM and fractional canvas geometry', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 631, height: 900 });
+  await page.goto(`${gallery}&theme=light`);
+  const diagram = page.getByRole('region', { name: 'Workflow folders', exact: true }).last();
+  await expect(diagram.getByRole('button', { name: 'Reset zoom', exact: true })).toBeEnabled();
+  await diagram.evaluate((element) => {
+    const state = element as HTMLElement & {
+      reviewMutations: string[];
+      reviewObserver: MutationObserver;
+    };
+    state.reviewMutations = [];
+    state.reviewObserver = new MutationObserver((records) =>
+      state.reviewMutations.push(
+        ...records.map((record) => `${record.type}:${record.attributeName}`),
+      ),
+    );
+    state.reviewObserver.observe(element, { subtree: true, childList: true, attributes: true });
+  });
+  await page.getByRole('button', { name: 'Refresh diagram views', exact: true }).click();
+  const mutations = await diagram.evaluate(
+    (element) =>
+      new Promise<string[]>((resolve) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            const state = element as HTMLElement & {
+              reviewMutations: string[];
+              reviewObserver: MutationObserver;
+            };
+            state.reviewObserver.disconnect();
+            resolve(state.reviewMutations);
+          }),
+        ),
+      ),
+  );
+  expect(mutations).toEqual([]);
+});
+
 test('folder node opens the real directory and back returns to the workspace root', async ({
   page,
 }, info) => {

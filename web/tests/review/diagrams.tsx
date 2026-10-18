@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import { useRef } from 'react';
+import { useRef, useReducer } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
 import '../../src/index.css';
@@ -44,6 +44,7 @@ const examples = [
 ] as const;
 
 function Review() {
+  const [, refresh] = useReducer((value: number) => value + 1, 0);
   const workbench = useRef<ClioWorkbenchHandle>(null);
   return (
     <div className="min-h-dvh bg-background text-foreground">
@@ -52,6 +53,9 @@ function Review() {
         <p className="text-sm text-muted-foreground">
           Synthetic examples · production renderer · local libraries · explicit folder navigation
         </p>
+        <button onClick={refresh} className="mt-2 text-sm underline">
+          Refresh diagram views
+        </button>
       </header>
       <main className="grid grid-cols-1 items-start gap-6 p-6 lg:grid-cols-2">
         <PresentationNavigation.Provider
