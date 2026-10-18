@@ -4,6 +4,7 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { isMacOS } from '@/lib/platform';
 import { AlertTriangleIcon, Loader2 } from 'lucide-react';
+import { updateTextLayerGeometry, type TextLayerGeometry } from './text-layer-geometry';
 
 /**
  * #1549 G9 #27 follow-up (adversarial review of #514): the wheel listener
@@ -85,6 +86,11 @@ export function ZoomPan({
   const viewportRef = React.useRef<HTMLDivElement>(null);
   const imageRef = React.useRef<HTMLImageElement | null>(null);
   const hitRegionsRef = React.useRef(hitRegions);
+  const textGeometryRef = React.useRef<TextLayerGeometry | null>(null);
+  const selectableHtml = React.useMemo(
+    () => ({ __html: selectableTextSvg ?? '' }),
+    [selectableTextSvg],
+  );
   const selectedRegionIdsRef = React.useRef(selectedRegionIds);
   const onRegionClickRef = React.useRef(onRegionClick);
   const [imageDimensions, setImageDimensions] = React.useState<Dimensions>();
@@ -150,9 +156,12 @@ export function ZoomPan({
 
     const { x, y, scale } = currentRef.current;
     if (textLayerRef.current) {
-      textLayerRef.current.style.width = `${image.naturalWidth}px`;
-      textLayerRef.current.style.height = `${image.naturalHeight}px`;
-      textLayerRef.current.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+      textGeometryRef.current = updateTextLayerGeometry(
+        textLayerRef.current,
+        image,
+        { x, y, scale },
+        textGeometryRef.current,
+      );
     }
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
@@ -730,7 +739,7 @@ export function ZoomPan({
                 if (window.getSelection()?.isCollapsed !== false)
                   selectAt(event.clientX, event.clientY, event);
               }}
-              dangerouslySetInnerHTML={{ __html: selectableTextSvg }}
+              dangerouslySetInnerHTML={selectableHtml}
             />
           ) : null}
 

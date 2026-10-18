@@ -80,6 +80,7 @@ export function StructuredQuestionResponse(props: QuestionSurfaceProps) {
       <FieldGroup className="gap-3">
         {fields.map((field) => (
           <SchemaField
+            prefix={interaction.id}
             disabled={props.disabled || sending}
             error={errors[field.name]}
             field={field}
@@ -187,19 +188,21 @@ export function UrlConsentResponse(props: QuestionSurfaceProps) {
 }
 
 function SchemaField({
+  prefix,
   disabled,
   error,
   field,
   onChange,
   value,
 }: {
+  prefix: string;
   disabled?: boolean;
   error?: string;
   field: PendingInteractionField;
   onChange: (value: unknown) => void;
   value: unknown;
 }) {
-  const id = `elicitation-${field.name}`;
+  const id = `elicitation-${prefix}-${field.name}`;
   const enumValues = field.enum ?? [];
   if (field.multi) {
     const selected = Array.isArray(value) ? value : [];

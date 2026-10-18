@@ -17,6 +17,50 @@ afterEach(() => {
   files.mockReset();
 });
 
+it('opens the explicitly requested directory in its owning workspace', async () => {
+  files.mockResolvedValue({
+    entries: [{ path: 'reports/result.md', type: 'file', internal: false }],
+    truncated: false,
+    next_offset: null,
+  });
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <WorkspaceDirectoryTree
+        workspaceId="other_workspace"
+        directory="reports"
+        root={{
+          entries: [{ path: 'wrong-root.txt', type: 'file', internal: false }],
+          truncated: false,
+          next_offset: null,
+        }}
+        onSelect={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByRole('treeitem', { name: 'result.md' })).toBeVisible();
+  expect(screen.queryByText('wrong-root.txt')).not.toBeInTheDocument();
+  expect(files).toHaveBeenCalledWith('other_workspace', expect.any(AbortSignal), {
+    directory: 'reports',
+    offset: 0,
+    includeHidden: false,
+  });
+});
+
+it('shows a folder access failure without pretending it granted access', async () => {
+  files.mockRejectedValue(new Error('Folder is outside the permitted roots'));
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <WorkspaceDirectoryTree workspaceId="workspace" directory="private" onSelect={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByText(/Folder is outside the permitted roots/)).toBeVisible();
+  expect(files).toHaveBeenCalledTimes(1);
+});
+
 it('loads only an expanded directory and unmounts it when collapsed', async () => {
   files.mockResolvedValue({
     entries: [{ path: 'analysis/curve.csv', type: 'file', internal: false }],

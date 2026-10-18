@@ -9,6 +9,7 @@ type Navigation = Pick<
   | 'onOpenArtifact'
   | 'onOpenResource'
   | 'onOpenFile'
+  | 'onOpenFolder'
   | 'onOpenFileReference'
   | 'onOpenWork'
   | 'onOpenSubagent'

@@ -96,6 +96,7 @@ export interface ClioWorkbenchProps {
 export type ClioWorkbenchOpenRequest =
   | { kind: 'knowledge'; sourceId: string; label: string }
   | { kind: 'workspace-file'; path: string; workspaceId?: string; line?: number; find?: string }
+  | { kind: 'workspace-folder'; path: string; workspaceId?: string }
   | { kind: 'diff'; diff: SessionDiff }
   | { kind: 'artifact'; artifact: ArtifactEntity }
   | {
@@ -349,6 +350,16 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
     const openRequest = useCallback(
       (request: ClioWorkbenchOpenRequest, targetWorkspaceId: string = workspaceId) => {
         switch (request.kind) {
+          case 'workspace-folder':
+            targetWorkspaceId = request.workspaceId ?? targetWorkspaceId;
+            openTab({
+              id: targetWorkspaceId === workspaceId ? 'files' : `files:${targetWorkspaceId}`,
+              kind: 'files',
+              label: 'Files',
+              workspaceId: targetWorkspaceId,
+              directory: request.path === '.' ? '' : request.path,
+            });
+            return;
           case 'knowledge':
             openTab({
               id: `knowledge:${request.sourceId}`,
@@ -654,6 +665,11 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
                       onOpenFile: (path) =>
                         openRequest(
                           { kind: 'workspace-file', path },
+                          'workspaceId' in tab ? tab.workspaceId : workspaceId,
+                        ),
+                      onOpenFolder: (path) =>
+                        openRequest(
+                          { kind: 'workspace-folder', path },
                           'workspaceId' in tab ? tab.workspaceId : workspaceId,
                         ),
                       onOpenFileReference: (path, location) =>

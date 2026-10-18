@@ -16,6 +16,10 @@ import { QuestionSurface } from './question-surface';
 import { QuestionMarkdown } from './question-markdown';
 import { StructuredQuestionResponse, UrlConsentResponse } from './question-interaction-forms';
 import { useQuestionDraftValue } from './question-answer-context';
+import { embedsQuestionSurface } from '@/lib/a2ui/question-navigation';
+import { SurfaceQuestionNotice } from './surface-question-notice';
+import { QuestionBundleResponse } from './question-bundle-response';
+import { bundleQuestions } from './question-bundle';
 
 /**
  * Split out of `pending-interactions.tsx` purely for file size (the 800-line
@@ -54,6 +58,29 @@ export function QuestionResponse({
     'optionComments',
     {},
   );
+  if (bundleQuestions(interaction).length) {
+    return (
+      <QuestionBundleResponse
+        interaction={interaction}
+        disabled={disabled}
+        onResponse={onResponse}
+        ownerLabel={ownerLabel}
+        responseError={responseError}
+        showOwner={showOwner}
+      />
+    );
+  }
+  if (interaction.source.surface_id && !embedsQuestionSurface(interaction)) {
+    return (
+      <SurfaceQuestionNotice
+        interaction={interaction}
+        disabled={disabled}
+        onResponse={onResponse}
+        ownerLabel={ownerLabel}
+        showOwner={showOwner}
+      />
+    );
+  }
   if (interaction.payload?.mode === 'url') {
     return (
       <UrlConsentResponse

@@ -332,7 +332,13 @@ mod tests {
         // Another clio-desktop.exe under the root (the running app) is a target.
         assert!(is_stop_target(7, "clio-desktop.exe", Some(exe), root, 42));
         // Outside the root, an unmanaged name, or an unreadable image: not targets.
-        assert!(!is_stop_target(7, "clio-desktop.exe", Some(r"D:\other\clio-desktop.exe"), root, 42));
+        assert!(!is_stop_target(
+            7,
+            "clio-desktop.exe",
+            Some(r"D:\other\clio-desktop.exe"),
+            root,
+            42
+        ));
         assert!(!is_stop_target(7, "notepad.exe", Some(exe), root, 42));
         assert!(!is_stop_target(7, "clio-desktop.exe", None, root, 42));
     }
