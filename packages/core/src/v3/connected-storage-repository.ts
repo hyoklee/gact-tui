@@ -246,7 +246,13 @@ export class ConnectedStorageRepository extends A2uiRepository {
     });
   }
   public searchNdp(
-    input: { query: string; only_groups?: boolean; endpoint_id?: string; organization?: string },
+    input: {
+      query: string;
+      only_groups?: boolean;
+      endpoint_id?: string;
+      organization?: string;
+      offset?: number;
+    },
     signal?: AbortSignal,
   ) {
     return this.transport.request({
@@ -257,10 +263,10 @@ export class ConnectedStorageRepository extends A2uiRepository {
       decode: (value) => ndpSearchSchema.parse(value),
     });
   }
-  public ndpEndpointConnections(workspaceId: string, signal?: AbortSignal) {
+  public ndpEndpointConnections(workspaceId: string, signal?: AbortSignal, includeHidden = false) {
     return this.transport.request({
       method: 'GET',
-      path: `/v1/workspaces/${encodeURIComponent(workspaceId)}/ndp-endpoints`,
+      path: `/v1/workspaces/${encodeURIComponent(workspaceId)}/ndp-endpoints${includeHidden ? '?include_hidden=true' : ''}`,
       signal,
       decode: (value) => z.object({ endpoints: z.array(ndpEndpointSchema) }).parse(value),
     });
@@ -279,6 +285,32 @@ export class ConnectedStorageRepository extends A2uiRepository {
       path: `/v1/workspaces/${encodeURIComponent(workspaceId)}/ndp-endpoints/${encodeURIComponent(id)}/request`,
       body: input,
       decode: (value) => ndpCaptureSchema.parse(value),
+    });
+  }
+  public browseNdpEndpoint(
+    workspaceId: string,
+    id: string,
+    input: { operation_id: string; parameters: Record<string, unknown> },
+    signal?: AbortSignal,
+  ): Promise<unknown> {
+    return this.transport.request({
+      method: 'POST',
+      path: `/v1/workspaces/${encodeURIComponent(workspaceId)}/ndp-endpoints/${encodeURIComponent(id)}/browse`,
+      body: input,
+      signal,
+      decode: (value) => value,
+    });
+  }
+  public updateNdpEndpoint(
+    workspaceId: string,
+    id: string,
+    input: Partial<NDPEndpointInput> & { hidden?: boolean },
+  ) {
+    return this.transport.request({
+      method: 'PATCH',
+      path: `/v1/workspaces/${encodeURIComponent(workspaceId)}/ndp-endpoints/${encodeURIComponent(id)}`,
+      body: input,
+      decode: (value) => ndpEndpointSchema.parse(value),
     });
   }
   public ndpEndpointCaptures(workspaceId: string, id: string) {

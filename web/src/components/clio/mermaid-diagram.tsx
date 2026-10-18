@@ -61,7 +61,7 @@ const legacyConfig: MermaidConfig = {
   },
 };
 
-/** A MermaidCN-backed diagram with source, G0 download/copy/reference/full-screen, and an auto-fit canvas. */
+/** A Pele-backed diagram with source, G0 download/copy/reference/full-screen, and an auto-fit canvas. */
 export function ClioMermaidDiagram({
   accessibilityDescription,
   accessibilityLabel,
@@ -225,7 +225,7 @@ export function ClioMermaidDiagram({
   const header = (
     <header className="mb-2 flex min-w-0 flex-wrap items-center gap-2">
       <h3
-        className="min-w-0 flex-1 basis-full truncate text-sm font-medium @md:basis-auto"
+        className="min-w-0 flex-1 basis-full break-words text-sm font-medium @md:basis-auto"
         title={heading}
       >
         {heading}
@@ -286,7 +286,7 @@ export function ClioMermaidDiagram({
                 <header className="mb-2 flex min-w-0 flex-wrap items-center gap-2">
                   {!fullscreen ? (
                     <h3
-                      className="min-w-0 flex-1 basis-full truncate text-sm font-medium @md:basis-auto"
+                      className="min-w-0 flex-1 basis-full break-words text-sm font-medium @md:basis-auto"
                       title={heading}
                     >
                       {heading}
