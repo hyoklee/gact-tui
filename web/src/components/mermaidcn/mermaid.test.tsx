@@ -8,8 +8,20 @@ const mermaidMock = vi.hoisted(() => ({
 }));
 
 vi.mock('mermaid', () => ({ default: mermaidMock }));
+// Exercise the compatibility renderer's configuration separately from Pele.
+vi.mock('@/components/clio/diagram-renderer', () => ({
+  renderPeleDiagram: vi.fn(async () => undefined),
+}));
 
 describe('Mermaid renderer configuration', () => {
+  it('retains an unchanged SVG subtree across parent callbacks so captures stay current', async () => {
+    const chart = 'flowchart TD\n A --> B';
+    const view = renderComponent(<Mermaid chart={chart} debounceTime={0} onSuccess={vi.fn()} />);
+    await waitFor(() => expect(view.container.querySelector('[role="img"] > svg')).not.toBeNull());
+    const svg = view.container.querySelector('[role="img"] > svg');
+    view.rerender(<Mermaid chart={chart} debounceTime={0} onSuccess={vi.fn()} />);
+    expect(view.container.querySelector('[role="img"] > svg')).toBe(svg);
+  });
   it('disables HTML labels at the Mermaid 11 root configuration seam', async () => {
     renderComponent(
       <Mermaid

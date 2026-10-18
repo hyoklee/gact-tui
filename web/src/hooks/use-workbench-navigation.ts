@@ -105,6 +105,10 @@ export function useWorkbenchNavigation({ allSessions, workspaceId }: UseWorkbenc
       }),
     [revealWorkbench, workspacePath, workspaceId],
   );
+  const openWorkspaceFolder = useCallback(
+    (path: string) => revealWorkbench({ kind: 'workspace-folder', path }),
+    [revealWorkbench],
+  );
   const openWorkspaceResource = useCallback(
     (resource: WorkspaceResource, relatedResources?: readonly WorkspaceResource[]) =>
       revealWorkbench({ kind: 'resource', relatedResources, resource }),
@@ -133,14 +137,27 @@ export function useWorkbenchNavigation({ allSessions, workspaceId }: UseWorkbenc
   const activeRequest =
     workbenchRequest?.endpoint === settings.endpoint ? workbenchRequest : searchRequest;
 
+  const conversationNavigation = useMemo(
+    () => ({
+      onOpenArtifact: openArtifact,
+      onOpenFile: openWorkspaceFile,
+      onOpenFileReference: openWorkspaceFile,
+      onOpenFolder: openWorkspaceFolder,
+      onOpenResource: openWorkspaceResource,
+    }),
+    [openArtifact, openWorkspaceFile, openWorkspaceFolder, openWorkspaceResource],
+  );
+
   return {
     activeRequest,
+    conversationNavigation,
     openArtifact,
     openDiff,
     openParentSession,
     openSubagent,
     openWorkflow,
     openWorkspaceFile,
+    openWorkspaceFolder,
     openWorkspaceResource,
     revealWorkbench,
   };

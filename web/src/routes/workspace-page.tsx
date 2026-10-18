@@ -180,6 +180,7 @@ export function WorkspacePage() {
     openSubagent,
     openWorkflow,
     openWorkspaceFile,
+    conversationNavigation,
     openWorkspaceResource,
     revealWorkbench,
   } = useWorkbenchNavigation({ allSessions: allSessions.data ?? [], workspaceId });
@@ -740,11 +741,8 @@ export function WorkspacePage() {
                       error={transcriptError}
                       loading={transcript.isFetching}
                       onActionCardAction={actionCard.mutateAsync}
-                      onOpenArtifact={openArtifact}
-                      onOpenFile={openWorkspaceFile}
-                      onOpenFileReference={openWorkspaceFile}
+                      {...conversationNavigation}
                       onOpenWork={() => revealWorkbench({ kind: 'resources', section: 'work' })}
-                      onOpenResource={openWorkspaceResource}
                       onOpenReference={(reference) => void openComposerReference(reference)}
                       onInteractionResponse={handleInteractionResponse}
                       forkingMessageId={

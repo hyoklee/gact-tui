@@ -85,6 +85,10 @@ export function ZoomPan({
   const viewportRef = React.useRef<HTMLDivElement>(null);
   const imageRef = React.useRef<HTMLImageElement | null>(null);
   const hitRegionsRef = React.useRef(hitRegions);
+  const selectableHtml = React.useMemo(
+    () => ({ __html: selectableTextSvg ?? '' }),
+    [selectableTextSvg],
+  );
   const selectedRegionIdsRef = React.useRef(selectedRegionIds);
   const onRegionClickRef = React.useRef(onRegionClick);
   const [imageDimensions, setImageDimensions] = React.useState<Dimensions>();
@@ -150,9 +154,17 @@ export function ZoomPan({
 
     const { x, y, scale } = currentRef.current;
     if (textLayerRef.current) {
-      textLayerRef.current.style.width = `${image.naturalWidth}px`;
-      textLayerRef.current.style.height = `${image.naturalHeight}px`;
-      textLayerRef.current.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+      const style = textLayerRef.current.style;
+      const geometry = {
+        width: `${image.naturalWidth}px`,
+        height: `${image.naturalHeight}px`,
+        transform: `translate(${x}px, ${y}px) scale(${scale})`,
+      };
+      // A parent render can replace a callback without changing any pixels.
+      // Redundant style writes would falsely advance the viewer capture epoch.
+      for (const [property, value] of Object.entries(geometry)) {
+        if (style.getPropertyValue(property) !== value) style.setProperty(property, value);
+      }
     }
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
@@ -730,7 +742,7 @@ export function ZoomPan({
                 if (window.getSelection()?.isCollapsed !== false)
                   selectAt(event.clientX, event.clientY, event);
               }}
-              dangerouslySetInnerHTML={{ __html: selectableTextSvg }}
+              dangerouslySetInnerHTML={selectableHtml}
             />
           ) : null}
 
