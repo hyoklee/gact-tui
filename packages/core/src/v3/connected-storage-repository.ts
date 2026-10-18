@@ -1,4 +1,4 @@
-import { ndpSearchSchema } from './ndp-contract.js';
+import { ndpSearchSchema, ndpOrganizationsSchema } from './ndp-contract.js';
 import type { SshRoute } from './infrastructure-contract.js';
 import { z } from 'zod';
 import { A2uiRepository } from './a2ui-repository.js';
@@ -239,7 +239,7 @@ export class ConnectedStorageRepository extends A2uiRepository {
     });
   }
   public searchNdp(
-    input: { query: string; only_groups?: boolean; endpoint_id?: string },
+    input: { query: string; only_groups?: boolean; endpoint_id?: string; organization?: string },
     signal?: AbortSignal,
   ) {
     return this.transport.request({
@@ -248,6 +248,14 @@ export class ConnectedStorageRepository extends A2uiRepository {
       body: input,
       signal,
       decode: (value) => ndpSearchSchema.parse(value),
+    });
+  }
+  public ndpOrganizations(signal?: AbortSignal) {
+    return this.transport.request({
+      method: 'GET',
+      path: '/v1/storage/ndp/organizations',
+      signal,
+      decode: (value) => ndpOrganizationsSchema.parse(value),
     });
   }
   public attachNdp(

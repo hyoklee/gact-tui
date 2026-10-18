@@ -8,6 +8,7 @@ import { NDPSourcePicker } from './ndp-source-picker';
 const fixture = vi.hoisted(() => ({
   repository: {
     searchNdp: vi.fn(),
+    ndpOrganizations: vi.fn(),
     attachNdp: vi.fn(),
     beginSourceDraft: vi.fn(),
     attachSourceFolder: vi.fn(),
@@ -57,10 +58,48 @@ const second = {
 beforeEach(() => {
   vi.resetAllMocks();
   fixture.repository.searchNdp.mockResolvedValue({ datasets: [dataset], warnings: [] });
+  fixture.repository.ndpOrganizations.mockResolvedValue({
+    organizations: [
+      { id: 'earthscope_consortium', endpoint_id: 'ocean', endpoint_name: 'Océan Endpoint' },
+      { id: 'weather', endpoint_id: 'climate', endpoint_name: 'Climate' },
+    ],
+  });
   fixture.repository.attachNdp.mockImplementation(async (_workspace, input) => ({
     id: input.dataset_id,
     label: input.dataset_id,
   }));
+});
+it('filters publishers by name and searches only the selected organization and endpoint', async () => {
+  show();
+  const user = userEvent.setup();
+  await screen.findByRole('button', { name: /Sea observations/ });
+  await user.click(screen.getByRole('combobox', { name: 'Organization filter' }));
+  await user.type(screen.getByPlaceholderText('Find an organization…'), 'earthscope');
+  await user.click(await screen.findByRole('option', { name: /earthscope_consortium/ }));
+  await waitFor(() =>
+    expect(fixture.repository.searchNdp).toHaveBeenCalledWith(
+      {
+        query: '',
+        only_groups: false,
+        organization: 'earthscope_consortium',
+        endpoint_id: 'ocean',
+      },
+      expect.any(AbortSignal),
+    ),
+  );
+  expect(screen.getByRole('combobox', { name: 'Organization filter' })).toHaveTextContent(
+    'earthscope_consortium',
+  );
+});
+it('shows an organization-list failure and retries without blocking dataset browsing', async () => {
+  fixture.repository.ndpOrganizations.mockRejectedValueOnce(new Error('Offline'));
+  show();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('combobox', { name: 'Organization filter' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Organizations unavailable.');
+  await user.click(screen.getByRole('button', { name: 'Retry', exact: true }));
+  expect(await screen.findByRole('option', { name: /earthscope_consortium/ })).toBeVisible();
+  expect(screen.queryByRole('alert')).toBeNull();
 });
 afterEach(() => {
   cleanup();

@@ -15,6 +15,7 @@ import { SourceProviderInfo } from './source-provider-info';
 import { RefreshButton } from './refresh-button';
 import { NDPDatasetRow } from './ndp-dataset-row';
 import { useNdpCatalog } from './use-ndp-catalog';
+import { NDPOrganizationFilter } from './ndp-organization-filter';
 
 type Selection = { dataset: NDPDataset; ids: string[] };
 const datasetKey = (dataset: NDPDataset) => JSON.stringify([dataset.endpoint_id, dataset.id]);
@@ -163,6 +164,13 @@ export function NDPSourcePicker({
         </RefreshButton>
       </form>
       <div className="flex flex-wrap items-center justify-between gap-2">
+        <NDPOrganizationFilter
+          value={catalog.organization}
+          onChange={(choice) => {
+            catalog.setOrganization(choice);
+            setShowSelected(false);
+          }}
+        />
         <select
           aria-label="Endpoint filter"
           className="h-8 max-w-full rounded-md border bg-background px-2 text-sm"

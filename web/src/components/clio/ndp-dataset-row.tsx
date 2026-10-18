@@ -45,6 +45,7 @@ export function NDPDatasetRow({
             </span>
           ) : null}
           <span className="block text-xs text-muted-foreground">
+            {dataset.organization ? `${dataset.organization} · ` : ''}
             {dataset.endpoint_name} · {dataset.resources.length} resource
             {dataset.resources.length === 1 ? '' : 's'}
             {dataset.resources.some((item) => item.format)

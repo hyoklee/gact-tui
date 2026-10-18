@@ -5,6 +5,7 @@ const sea = {
   name: 'coastal_stations_2026',
   title: 'Coastal sea observations',
   description: 'Wave height and station measurements from the coastal research network.',
+  organization: 'earthscope_consortium',
   endpoint_id: 'ocean',
   endpoint_name: 'Ocean Research Endpoint',
   access: null,
@@ -33,6 +34,7 @@ const atmosphere = {
   name: 'NCAR_CESM2_historical_surface_v202610',
   title: 'Historical surface temperatures',
   description: 'Daily temperature measurements from a global climate simulation.',
+  organization: 'climate-research',
   endpoint_id: 'climate',
   endpoint_name: 'Climate Research Endpoint',
   resources: [
@@ -78,8 +80,10 @@ async function catalogFixture(page: Page) {
     await new Promise((resolve) => setTimeout(resolve, 200));
     await route.fulfill({
       json: {
-        datasets: [sea, atmosphere, astro].filter((dataset) =>
-          words.every((word: string) => JSON.stringify(dataset).toLowerCase().includes(word)),
+        datasets: [sea, atmosphere, astro].filter(
+          (dataset) =>
+            (!input.organization || dataset.organization === input.organization) &&
+            words.every((word: string) => JSON.stringify(dataset).toLowerCase().includes(word)),
         ),
         warnings: input.only_groups
           ? ['NDP could not check Endpoint access. Catalog browsing is still available.']
@@ -87,6 +91,24 @@ async function catalogFixture(page: Page) {
       },
     });
   });
+  await page.route('**/v1/storage/ndp/organizations', (route) =>
+    route.fulfill({
+      json: {
+        organizations: [
+          {
+            id: 'earthscope_consortium',
+            endpoint_id: 'ocean',
+            endpoint_name: 'Ocean Research Endpoint',
+          },
+          {
+            id: 'climate-research',
+            endpoint_id: 'climate',
+            endpoint_name: 'Climate Research Endpoint',
+          },
+        ],
+      },
+    }),
+  );
   await page.route('**/v1/workspaces/workspace/sources/ndp', async (route) => {
     selections.push(route.request().postDataJSON());
     await route.fulfill({ json: source });
@@ -216,6 +238,24 @@ test('selections survive filtering and remote result changes', async ({ page }) 
     ['sea', ['stations']],
     ['climate', ['temperatures']],
   ]);
+});
+
+test('organization search narrows datasets without granting organization access', async ({
+  page,
+}, testInfo) => {
+  await catalogFixture(page);
+  await page.goto('/tests/review/ndp-source.html?theme=light');
+  await page.getByRole('combobox', { name: 'Organization filter' }).click();
+  await page.getByPlaceholder('Find an organization…').fill('earthscope');
+  await page.getByRole('option', { name: /earthscope_consortium/ }).click();
+  await expect(page.getByRole('combobox', { name: 'Organization filter' })).toContainText(
+    'earthscope_consortium',
+  );
+  await expect(page.getByRole('button', { name: /Coastal sea observations/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Historical surface temperatures/ })).toHaveCount(
+    0,
+  );
+  await page.screenshot({ path: testInfo.outputPath('ndp-organization.png'), fullPage: true });
 });
 
 test('a large catalog keeps selection actions visible and finds results beyond the rendered page', async ({

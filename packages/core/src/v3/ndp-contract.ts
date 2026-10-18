@@ -5,6 +5,7 @@ export const ndpDatasetSchema = z.object({
   name: z.string(),
   title: z.string(),
   description: z.string(),
+  organization: z.string().optional(),
   endpoint_id: z.string(),
   endpoint_name: z.string(),
   access: z.enum(['viewer', 'request_access']).nullable(),
@@ -24,3 +25,8 @@ export const ndpSearchSchema = z.object({
   warnings: z.array(z.string()),
 });
 export type NDPDataset = z.infer<typeof ndpDatasetSchema>;
+export const ndpOrganizationsSchema = z.object({
+  organizations: z.array(
+    z.object({ id: z.string(), endpoint_id: z.string(), endpoint_name: z.string() }),
+  ),
+});

@@ -4,6 +4,7 @@ import type { ClioRepository, NDPDataset } from '@clio/core/v3';
 import { useRepository } from '@/hooks/use-repository';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { connectionScope } from '@/lib/connection-scope';
+import type { NDPOrganizationChoice } from './ndp-organization-filter';
 
 type Catalog = Awaited<ReturnType<ClioRepository['searchNdp']>>;
 
@@ -25,18 +26,36 @@ export function useNdpCatalog(signedIn: boolean, accountName = '') {
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [onlyGroups, setOnlyGroups] = useState(false);
+  const [organization, setOrganization] = useState<NDPOrganizationChoice | null>(null);
   const groups = signedIn && onlyGroups;
   useEffect(() => {
     const timer = setTimeout(() => setSearch(query.trim()), query.trim() ? 300 : 0);
     return () => clearTimeout(timer);
   }, [query]);
   const account = signedIn ? accountName || 'signed-in' : 'signed-out';
-  const prefix = ['ndp-catalog', scope, account, groups] as const;
+  const prefix = [
+    'ndp-catalog',
+    scope,
+    account,
+    groups,
+    organization?.endpoint_id ?? '',
+    organization?.id ?? '',
+  ] as const;
   const results = useQuery({
     queryKey: [...prefix, search],
-    queryFn: ({ signal }) => repository.searchNdp({ query: search, only_groups: groups }, signal),
+    queryFn: ({ signal }) =>
+      repository.searchNdp(
+        {
+          query: search,
+          only_groups: groups,
+          ...(organization
+            ? { organization: organization.id, endpoint_id: organization.endpoint_id }
+            : {}),
+        },
+        signal,
+      ),
     placeholderData: (previous, previousQuery) =>
-      previousQuery?.queryKey.slice(0, 4).every((key, index) => key === prefix[index])
+      previousQuery?.queryKey.slice(0, prefix.length).every((key, index) => key === prefix[index])
         ? previous
         : undefined,
     staleTime: 60_000,
@@ -64,6 +83,7 @@ export function useNdpCatalog(signedIn: boolean, accountName = '') {
             dataset.title,
             dataset.description,
             dataset.endpoint_name,
+            dataset.organization,
             ...dataset.resources.flatMap((resource) => [resource.name, resource.format]),
           ].join(' '),
         ),
@@ -88,6 +108,8 @@ export function useNdpCatalog(signedIn: boolean, accountName = '') {
     setQuery,
     onlyGroups: groups,
     setOnlyGroups,
+    organization,
+    setOrganization,
     datasets,
     results,
     data,

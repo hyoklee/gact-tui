@@ -9,6 +9,7 @@ import manifest from './manifest.json';
 /**
  * Vendored copies of the official Basic catalog and CLIO's own workspace
  * catalog (clio-schemas 0.3.0, commit `manifest.commit`), shaped exactly like
+ * (Individual sidecar updates record their source in `catalog_source_commits`.)
  * one row of `GET /v1/sessions/{sid}/a2ui/catalogs`
  * (`gact/a2ui_catalogs/routes/a2ui_catalogs.py::_catalog_row`) — for tests
  * that need a realistic registry input without a live server.

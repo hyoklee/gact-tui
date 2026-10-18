@@ -4,8 +4,10 @@ import driveLogo from '../../../../branding/provider-logos/google-drive.png';
 import githubBlack from '../../../../branding/provider-logos/github-black.svg';
 import githubWhite from '../../../../branding/provider-logos/github-white.svg';
 import obsidianLogo from '../../../../branding/provider-logos/obsidian.svg';
+import ndpLight from '../../../../branding/provider-logos/ndp-light.png';
+import ndpDark from '../../../../branding/provider-logos/ndp-dark.png';
 import type { SourceProviderId } from '@clio/core/v3';
-import { DatabaseIcon, FolderIcon, TerminalIcon } from 'lucide-react';
+import { FolderIcon, TerminalIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /** Original provider artwork; protocol-based sources use the shared system glyphs. */
@@ -63,7 +65,18 @@ export function SourceProviderLogo({
           className={cn('object-contain', detail ? 'size-14' : 'size-7')}
         />
       ) : provider === 'ndp' ? (
-        <DatabaseIcon aria-hidden="true" className={detail ? 'size-10' : 'size-5'} />
+        <>
+          <img
+            alt=""
+            src={ndpLight}
+            className={cn('object-contain dark:hidden', detail ? 'w-full' : 'w-14')}
+          />
+          <img
+            alt=""
+            src={ndpDark}
+            className={cn('hidden object-contain dark:block', detail ? 'w-full' : 'w-14')}
+          />
+        </>
       ) : provider === 'sftp' ? (
         <TerminalIcon aria-hidden="true" className={detail ? 'size-10' : 'size-5'} />
       ) : (
