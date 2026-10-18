@@ -1,6 +1,16 @@
 import type { AgentTaskRecord, AsyncProcess, SubagentRun } from '@clio/core/v3';
 import { describe, expect, it } from 'vitest';
-import { agentTaskToSubagent, mergeSessionSubagents } from './session-agent-tasks';
+import { agentTaskToSubagent, matchesRunState, mergeSessionSubagents } from './session-agent-tasks';
+
+describe('Runs state filtering', () => {
+  it('keeps lost-visibility work discoverable as active and needing attention', () => {
+    expect(matchesRunState('task_state_uncertain', 'attention')).toBe(true);
+    expect(matchesRunState('task_state_uncertain', 'active')).toBe(true);
+    expect(matchesRunState('task_state_uncertain', 'completed')).toBe(false);
+    expect(matchesRunState('completed', 'attention')).toBe(false);
+    expect(matchesRunState('running', 'attention')).toBe(false);
+  });
+});
 
 function task(overrides: Partial<AgentTaskRecord>): AgentTaskRecord {
   return {

@@ -2,8 +2,22 @@ import {
   operationalRunStateSchema,
   type AgentTaskRecord,
   type AsyncProcess,
+  type RunState,
   type SubagentRun,
 } from '@clio/core/v3';
+
+/** Filter operational work while keeping unresolved executions visible for inspection. */
+export function matchesRunState(state: RunState, filter: string): boolean {
+  return (
+    filter === 'all' ||
+    state === filter ||
+    (filter === 'active' && !['completed', 'failed', 'cancelled', 'interrupted'].includes(state)) ||
+    (filter === 'attention' &&
+      ['failed', 'interrupted', 'waiting_permission', 'waiting_user', 'task_state_uncertain'].includes(
+        state,
+      ))
+  );
+}
 
 /**
  * Agent aliases use the same operational-state decoder as Runs and Work.

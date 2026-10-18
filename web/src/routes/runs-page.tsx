@@ -78,6 +78,7 @@ import { useConnectionSettings } from '@/providers/connection-provider';
 import { returnRouteFromState, sessionIdFromRoute } from '@/lib/workspace-route-memory';
 import { workflowDescriptor } from '@/components/clio/workflow-tool-presentation';
 import { taskProgressLabel } from '@/components/clio/task-progress-label';
+import { matchesRunState } from '@/lib/session-agent-tasks';
 
 type RunSource = 'agent_task' | 'mcp_task' | 'unknown' | 'workflow';
 const WORKFLOW_SCAN_BATCH = 4;
@@ -409,13 +410,7 @@ export function RunsPage() {
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return rows.filter((row) => {
-      const stateMatches =
-        stateFilter === 'all' ||
-        row.state === stateFilter ||
-        (stateFilter === 'active' &&
-          !['completed', 'failed', 'cancelled', 'interrupted'].includes(row.state)) ||
-        (stateFilter === 'attention' &&
-          ['failed', 'interrupted', 'waiting_permission', 'waiting_user'].includes(row.state));
+      const stateMatches = matchesRunState(row.state, stateFilter);
       const sourceMatches =
         category === 'workflows' || sourceFilter === 'all' || row.source === sourceFilter;
       const searchMatches =
