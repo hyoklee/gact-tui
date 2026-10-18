@@ -23,6 +23,7 @@ import {
   mergeConfig,
   mergeOverlayPaths,
   parseArgv,
+  tauriCommandArgs,
   resolveNativeBrandOverlay,
   resolveOverlayPaths,
 } from '../scripts/run-tauri-branded.mjs';
@@ -275,4 +276,31 @@ test('a caller --config folds into the overlay chain, and the macOS overlay alwa
     rmSync(tmpRoot, { recursive: true, force: true });
     if (hadLocalOverride) renameSync(suspendedPath, localConfigPath);
   }
+});
+
+test('packaged builds pass locked resolution to Cargo after the native CLI config', () => {
+  assert.deepEqual(tauriCommandArgs(['build', '--debug'], ['--config', 'brand.json']), [
+    'build',
+    '--debug',
+    '--config',
+    'brand.json',
+    '--',
+    '--locked',
+  ]);
+  assert.deepEqual(
+    tauriCommandArgs(['build', '--', '--locked', '--offline'], ['--config', 'brand.json']),
+    ['build', '--config', 'brand.json', '--', '--locked', '--offline'],
+  );
+  assert.deepEqual(tauriCommandArgs(['build', '--', '--offline'], []), [
+    'build',
+    '--',
+    '--offline',
+    '--locked',
+  ]);
+  assert.deepEqual(tauriCommandArgs(['dev', '--no-watch'], ['--config', 'brand.json']), [
+    'dev',
+    '--no-watch',
+    '--config',
+    'brand.json',
+  ]);
 });
