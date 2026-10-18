@@ -97,7 +97,7 @@ it('shows an organization-list failure and retries without blocking dataset brow
   const user = userEvent.setup();
   await user.click(screen.getByRole('combobox', { name: 'Organization filter' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Organizations unavailable.');
-  await user.click(screen.getByRole('button', { name: 'Retry', exact: true }));
+  await user.click(screen.getByRole('button', { name: 'Retry' }));
   expect(await screen.findByRole('option', { name: /earthscope_consortium/ })).toBeVisible();
   expect(screen.queryByRole('alert')).toBeNull();
 });
