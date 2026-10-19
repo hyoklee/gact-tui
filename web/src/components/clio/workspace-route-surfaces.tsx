@@ -183,9 +183,11 @@ export function WorkspaceStatusStrip({
   stream,
   sessionId,
   onOpenWork,
+  onInspectTasks,
 }: {
   sessionId?: string;
   onOpenWork?: () => void;
+  onInspectTasks?: () => void;
   activeWorkCount: number;
   unresolvedWorkCount?: number;
   /** Undefined when no turn ever reported a real cost -- shown as a muted
@@ -224,11 +226,11 @@ export function WorkspaceStatusStrip({
           copy there so the two surfaces never duplicate the same pill. */}
       {inTauri() ? null : <LiveConnectionIndicator />}
       {recoveryLabel ? <span title={recoveryDetail}>{recoveryLabel}</span> : null}
-      {unresolvedWorkCount > 0 && onOpenWork ? (
+      {unresolvedWorkCount > 0 && onInspectTasks ? (
         <Button
           aria-label="Inspect unresolved tasks"
           className="h-6 min-w-0 px-0 text-[0.625rem]"
-          onClick={onOpenWork}
+          onClick={onInspectTasks}
           type="button"
           variant="ghost"
         >

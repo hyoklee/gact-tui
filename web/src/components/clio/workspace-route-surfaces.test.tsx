@@ -36,12 +36,14 @@ function renderStrip(props: ComponentProps<typeof WorkspaceStatusStrip>) {
 describe('WorkspaceStatusStrip', () => {
   it('opens unresolved work instead of reporting an idle workspace as empty', () => {
     const open = vi.fn();
+    const openGoals = vi.fn();
     renderStrip({
       activeWorkCount: 0,
       unresolvedWorkCount: 1,
       sessionId: 'lost-visibility',
       sessionState: 'interrupted',
-      onOpenWork: open,
+      onOpenWork: openGoals,
+      onInspectTasks: open,
       stream: 'live',
     });
     const inspection = screen.getByRole('button', { name: 'Inspect unresolved tasks' });
@@ -49,6 +51,7 @@ describe('WorkspaceStatusStrip', () => {
     expect(screen.queryByText('No active work')).not.toBeInTheDocument();
     fireEvent.click(inspection);
     expect(open).toHaveBeenCalledOnce();
+    expect(openGoals).not.toHaveBeenCalled();
   });
 
   it('keeps inspection visible alongside model execution and clears it after settlement', () => {

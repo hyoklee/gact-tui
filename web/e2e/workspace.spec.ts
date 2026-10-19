@@ -93,6 +93,46 @@ async function alignLatestActivityAtTop(page: Page) {
 
 setupWorkspaceBrowser();
 
+test('opens the unresolved task from the status strip in the actual task view', async ({
+  page,
+}) => {
+  await page.route('**/v1/sessions/sess_flat_ndp/async-processes*', async (route) => {
+    await route.fulfill({
+      json: {
+        processes: [
+          {
+            id: 'task_visibility_unresolved',
+            handle: 'task_visibility_unresolved',
+            kind: 'mcp',
+            task_kind: 'MCP',
+            title: 'Prepare dataset',
+            description: 'Prepare the selected dataset for analysis.',
+            status: 'working',
+            raw_status: 'working',
+            live_state: 'task_state_uncertain',
+            effective_status: 'task_state_uncertain',
+            connection_freshness: 'lost',
+            metadata: {},
+          },
+        ],
+      },
+    });
+  });
+  await page.goto(workspaceUrl);
+  const inspect = page.getByRole('button', { name: 'Inspect unresolved tasks' });
+  await expect(inspect).toHaveText('1 task needs inspection');
+  await inspect.click();
+  const canvas = page.getByRole('complementary', { name: 'Workspace canvas' });
+  await expect(canvas.getByRole('tab', { name: 'Evidence', exact: true })).toHaveAttribute(
+    'data-state',
+    'active',
+  );
+  const tasks = canvas.getByRole('button', { name: 'Background tasks, 1 recorded' });
+  if ((await tasks.getAttribute('aria-expanded')) === 'false') await tasks.click();
+  await expect(canvas.getByRole('button', { name: 'Task details: Prepare dataset' })).toBeVisible();
+  await expect(canvas.getByText('MCP · Needs inspection')).toBeVisible();
+});
+
 test('keeps Observability tabs inside the strip and scrolls only their content vertically', async ({
   page,
 }, testInfo) => {

@@ -696,6 +696,7 @@ export function WorkspacePage() {
             <WorkspaceLiveStatusStrip
               activeWorkCount={activeWorkCount}
               unresolvedWorkCount={workspaceRouteState.countWorkNeedingInspection(processes)}
+              onInspectTasks={() => openObservability('evidence')}
               onOpenWork={() => revealWorkbench({ kind: 'resources', section: 'work' })}
               sessionId={sessionId}
               sessionState={session?.state}

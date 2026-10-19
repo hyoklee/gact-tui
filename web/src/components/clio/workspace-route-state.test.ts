@@ -13,16 +13,16 @@ import {
 describe('workspace route state', () => {
   it('keeps uncertain work separate from confirmed activity and honors later settlement', () => {
     const processes = [
-      { live_state: 'working', effective_status: 'task_state_uncertain' },
+      { live_state: 'running', effective_status: 'task_state_uncertain' },
       { live_state: 'task_state_uncertain' },
-      { live_state: 'working', effective_status: 'completed' },
+      { live_state: 'running', effective_status: 'completed' },
       { live_state: 'failed', effective_status: 'failed' },
-    ];
+    ] as const;
     expect(countWorkNeedingInspection(processes)).toBe(2);
     expect(countActiveWork([], [], [], processes)).toBe(0);
     expect(
       countWorkNeedingInspection(
-        processes.map((process) => ({ ...process, effective_status: 'completed' })),
+        processes.map((process) => ({ ...process, effective_status: 'completed' as const })),
       ),
     ).toBe(0);
     expect(countWorkNeedingInspection([])).toBe(0);
