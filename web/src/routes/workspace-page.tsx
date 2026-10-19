@@ -325,6 +325,7 @@ export function WorkspacePage() {
           statusStrip={
             <WorkspaceLiveStatusStrip
               activeWorkCount={workspaceRouteState.countActiveWork(runs, tasks, tools, processes)}
+              unresolvedWorkCount={workspaceRouteState.countWorkNeedingInspection(processes)}
               sessionId={sessionId}
             />
           }
@@ -694,6 +695,7 @@ export function WorkspacePage() {
           statusStrip={
             <WorkspaceLiveStatusStrip
               activeWorkCount={activeWorkCount}
+              unresolvedWorkCount={workspaceRouteState.countWorkNeedingInspection(processes)}
               onOpenWork={() => revealWorkbench({ kind: 'resources', section: 'work' })}
               sessionId={sessionId}
               sessionState={session?.state}

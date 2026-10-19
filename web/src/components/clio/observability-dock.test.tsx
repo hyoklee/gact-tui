@@ -33,6 +33,48 @@ afterEach(() => {
   Reflect.deleteProperty(URL, 'revokeObjectURL');
 });
 
+it('keeps lost task visibility out of settled dock status and follows later completion', () => {
+  const props = {
+    artifacts: [],
+    contextFiles: [],
+    contextFrames: [],
+    diffs: [],
+    messages: [],
+    processes: [
+      {
+        id: 'unresolved-task',
+        kind: 'mcp' as const,
+        title: 'Prepare dataset',
+        status: 'working',
+        live_state: 'task_state_uncertain' as const,
+        effective_status: 'task_state_uncertain' as const,
+        metadata: {},
+      },
+    ],
+    runs: [],
+    subagents: [],
+    tasks: [],
+    tools: [],
+  };
+  const view = render(<ClioObservabilityDock {...props} />);
+  expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent('Needs inspection');
+  expect(document.querySelector('[data-slot="badge"]')).toHaveClass('border-warning/30');
+  expect(screen.queryByText('Settled')).not.toBeInTheDocument();
+  view.rerender(
+    <ClioObservabilityDock
+      {...props}
+      processes={props.processes.map((process) => ({
+        ...process,
+        live_state: 'completed',
+        effective_status: 'completed',
+        status: 'completed',
+      }))}
+    />,
+  );
+  expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent('Settled');
+  expect(screen.queryByText('Needs inspection')).not.toBeInTheDocument();
+});
+
 describe('ClioObservabilityView', () => {
   it('honors a new requested tab even when the same session view is already mounted', async () => {
     const props = {
