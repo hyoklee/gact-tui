@@ -1,6 +1,8 @@
 import type { ViewState } from 'react-map-gl/maplibre';
 import type { ScientificMapPoint } from './scientific-map-view';
 
+export const MAP_BASE_LAYER_ID = 'clio-map-background';
+
 export const rasterStyle = {
   version: 8 as const,
   sources: {
@@ -13,7 +15,18 @@ export const rasterStyle = {
       attribution: '© OpenStreetMap contributors',
     },
   },
-  layers: [{ id: 'openStreetMap', type: 'raster' as const, source: 'openStreetMap' }],
+  layers: [{ id: MAP_BASE_LAYER_ID, type: 'raster' as const, source: 'openStreetMap' }],
+};
+
+/** Archives retain scientific geometry, but do not contain remote basemap tiles. */
+export const offlineStyle = {
+  version: 8 as const,
+  sources: {},
+  layers: [{
+    id: MAP_BASE_LAYER_ID,
+    type: 'background' as const,
+    paint: { 'background-color': '#eef4f3' },
+  }],
 };
 
 export function initialView(
