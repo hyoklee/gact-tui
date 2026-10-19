@@ -241,7 +241,7 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
             <ToolEvidence tools={tools} />
           </EvidenceSection>
         ) : null}
-        {backgroundProcesses.length || props.workPages?.hasMore ? (
+        {backgroundProcesses.length || props.workPages?.hasMore || props.workPages?.history ? (
           <EvidenceSection
             icon={ServerIcon}
             label="Background tasks"

@@ -28,7 +28,7 @@ import { AsyncTaskList, TaskPageContinuation } from '@/components/clio/async-tas
 
 afterEach(cleanup);
 
-it('uses one bounded history read and retains empty-page continuation', async () => {
+it('uses one bounded active-work read and retains empty-page continuation', async () => {
   repository.asyncProcessesPage
     .mockReset()
     .mockResolvedValueOnce({ items: [], cursor: 'next', total: null, revision: 1 })
@@ -49,7 +49,7 @@ it('uses one bounded history read and retains empty-page continuation', async ()
     expect(repository.asyncProcessesPage).toHaveBeenCalledTimes(1);
     expect(repository.asyncProcessesPage).toHaveBeenLastCalledWith(
       'sess',
-      { cursor: undefined, activeOnly: false },
+      { cursor: undefined, activeOnly: true },
       expect.any(AbortSignal),
     );
     await act(async () => {
@@ -64,7 +64,7 @@ it('uses one bounded history read and retains empty-page continuation', async ()
     expect(repository.asyncProcessesPage).toHaveBeenCalledTimes(2);
     expect(repository.asyncProcessesPage).toHaveBeenLastCalledWith(
       'sess',
-      { cursor: 'next', activeOnly: false },
+      { cursor: 'next', activeOnly: true },
       expect.any(AbortSignal),
     );
     expect(repository.sessionAgentTasks).not.toHaveBeenCalled();
@@ -74,7 +74,7 @@ it('uses one bounded history read and retains empty-page continuation', async ()
   }
 });
 
-it('keeps a completed subagent reachable for a confirmed restart from session evidence', async () => {
+it('keeps current work visible independently of fifty historical rows and offers restart on demand', async () => {
   const completed: AsyncProcess = {
     id: 'completed-worker',
     handle: 'task_completed',
@@ -88,20 +88,37 @@ it('keeps a completed subagent reachable for a confirmed restart from session ev
     supported_actions: ['restart'],
     metadata: {},
   };
+  const running: AsyncProcess = {
+    ...completed,
+    id: 'current-worker',
+    handle: 'task_current',
+    title: 'Current analysis',
+    status: 'running',
+    live_state: 'running',
+    effective_status: 'running',
+    supported_actions: ['cancel'],
+  };
+  const old = Array.from({ length: 50 }, (_, index) => ({
+    ...completed,
+    id: `old-${index}`,
+    handle: `task_old_${index}`,
+    title: `Old analysis ${index}`,
+  }));
   repository.asyncProcessesPage.mockReset().mockImplementation(async (_sid, options) => ({
-    items: options.activeOnly ? [] : [completed],
-    cursor: null,
-    total: 1,
+    items: options.activeOnly ? [running] : options.cursor ? [completed] : old,
+    cursor: !options.activeOnly && !options.cursor ? 'later-history' : null,
+    total: options.activeOnly ? 1 : 1005,
     revision: 1,
   }));
   const control = vi.fn(async () => {});
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   function Evidence() {
-    const { processes } = useSessionObservability('sess');
+    const { processes, workPages } = useSessionObservability('sess');
     return (
       <AsyncTaskList
         processes={processes.data?.pages.flatMap((page) => page.items) ?? []}
         onControlTask={control}
+        pagination={workPages}
       />
     );
   }
@@ -111,6 +128,12 @@ it('keeps a completed subagent reachable for a confirmed restart from session ev
     </QueryClientProvider>,
   );
   try {
+    expect(await screen.findByText('Current analysis')).toBeVisible();
+    expect(repository.asyncProcessesPage).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Show completed work' }));
+    expect(await screen.findByText('Old analysis 49')).toBeVisible();
+    expect(screen.getByText('Current analysis')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more completed work' }));
     fireEvent.click(
       await screen.findByRole('button', { name: 'restart Subagent: Completed analysis' }),
     );
@@ -119,6 +142,7 @@ it('keeps a completed subagent reachable for a confirmed restart from session ev
     fireEvent.click(screen.getByRole('button', { name: 'Restart subagent' }));
     await waitFor(() => expect(control).toHaveBeenCalledWith(completed, 'restart'));
     expect(control).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Current analysis')).toBeVisible();
   } finally {
     view.unmount();
     client.clear();

@@ -24,10 +24,25 @@ export interface TaskPageControls {
   hasMore: boolean;
   pending: boolean;
   loadMore: () => Promise<unknown>;
+  history?: {
+    visible: boolean;
+    toggle: () => void;
+    items: readonly AsyncProcess[];
+    hasMore: boolean;
+    pending: boolean;
+    loadMore: () => Promise<unknown>;
+    error: string;
+  };
 }
 
 /** Continue the same read; a page failure leaves the already loaded work visible. */
-export function TaskPageContinuation({ pagination }: { pagination?: TaskPageControls }) {
+export function TaskPageContinuation({
+  pagination,
+  label = 'Load more work',
+}: {
+  pagination?: TaskPageControls;
+  label?: string;
+}) {
   const [error, setError] = useState('');
   if (!pagination?.hasMore) return null;
   return (
@@ -45,7 +60,7 @@ export function TaskPageContinuation({ pagination }: { pagination?: TaskPageCont
           }
         }}
       >
-        {pagination.pending ? 'Loading work…' : 'Load more work'}
+        {pagination.pending ? 'Loading work…' : label}
       </Button>
       {error ? (
         <p role="alert" className="text-sm text-destructive">
@@ -79,6 +94,18 @@ export function AsyncTaskList({
   const [error, setError] = useState('');
   const [restart, setRestart] = useState<AsyncProcess>();
   const [controlling, setControlling] = useState<Record<string, string>>({});
+  const history = pagination?.history;
+  const activeHandles = new Set(processes.map((task) => task.handle ?? task.handle_id ?? task.id));
+  const visibleProcesses = history?.visible
+    ? [
+        ...processes,
+        ...history.items.filter(
+          (task) =>
+            settled.has(task.effective_status ?? task.live_state) &&
+            !activeHandles.has(task.handle ?? task.handle_id ?? task.id),
+        ),
+      ]
+    : processes;
   const control = async (task: AsyncProcess, action: 'pause' | 'resume' | 'restart') => {
     if (!onControlTask) return;
     const handle = task.handle ?? task.handle_id ?? task.id;
@@ -120,7 +147,16 @@ export function AsyncTaskList({
   };
   return (
     <div className="min-w-0 space-y-0.5" aria-label="Background work">
-      {taskActivity(processes, subagents).map((entry) => {
+      {history ? (
+        <Button variant="ghost" size="sm" aria-expanded={history.visible} onClick={history.toggle}>
+          {history.visible ? 'Hide completed work' : 'Show completed work'}
+        </Button>
+      ) : null}
+      {history?.visible && history.pending && !history.items.length ? (
+        <p role="status">Loading completed work…</p>
+      ) : null}
+      {history?.visible && history.error ? <p role="alert">{history.error}</p> : null}
+      {taskActivity(visibleProcesses, subagents).map((entry) => {
         const task = entry.process;
         if (!task)
           return (
@@ -210,6 +246,9 @@ export function AsyncTaskList({
         );
       })}
       <TaskPageContinuation pagination={pagination} />
+      {history?.visible ? (
+        <TaskPageContinuation pagination={history} label="Load more completed work" />
+      ) : null}
       {error ? (
         <p role="alert" className="text-sm text-destructive">
           {error}

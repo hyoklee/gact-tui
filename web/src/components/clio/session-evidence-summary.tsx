@@ -140,7 +140,7 @@ export function SessionEvidenceSummary({
           ))}
         </EvidenceSection>
       ) : null}
-      {activityCount || actions.workPages?.hasMore ? (
+      {activityCount || actions.workPages?.hasMore || actions.workPages?.history ? (
         <EvidenceSection
           compact
           icon={ActivityIcon}
