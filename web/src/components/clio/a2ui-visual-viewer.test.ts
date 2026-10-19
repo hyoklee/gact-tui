@@ -4,6 +4,7 @@ import {
   compactVisualState,
   visualViewState,
   visualCapturePixelRatio,
+  visualMutationsChanged,
 } from './a2ui-visual-viewer';
 
 afterEach(() => {
@@ -12,6 +13,44 @@ afterEach(() => {
 });
 
 describe('real renderer readiness inspection', () => {
+  it('ignores identical renderer writes but detects changes, reversions and replacement', async () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<svg><path d="M0,0L10,10" aria-label="25 observations" /></svg><p>Data</p>';
+    document.body.append(root);
+    const path = root.querySelector('path')!;
+    const text = root.querySelector('p')!.firstChild!;
+    const changed: boolean[] = [];
+    const observer = new MutationObserver((records) =>
+      changed.push(visualMutationsChanged(records)),
+    );
+    observer.observe(root, {
+      subtree: true,
+      attributes: true,
+      attributeOldValue: true,
+      childList: true,
+      characterData: true,
+      characterDataOldValue: true,
+    });
+    path.setAttribute('d', 'M0,0L10,10');
+    path.setAttribute('aria-label', '25 observations');
+    text.nodeValue = 'Data';
+    await Promise.resolve();
+    expect(changed).toEqual([false]);
+    path.setAttribute('d', 'M0,0L20,20');
+    await Promise.resolve();
+    expect(changed.at(-1)).toBe(true);
+    path.setAttribute('d', 'M1,1');
+    path.setAttribute('d', 'M0,0L20,20');
+    await Promise.resolve();
+    expect(changed.at(-1)).toBe(true);
+    text.nodeValue = 'Changed data';
+    await Promise.resolve();
+    expect(changed.at(-1)).toBe(true);
+    root.querySelector('p')!.replaceChildren('Changed data');
+    await Promise.resolve();
+    expect(changed.at(-1)).toBe(true);
+    observer.disconnect();
+  });
   it('captures a tall composed report within the PNG bound at normal and Retina density', () => {
     for (const density of [1, 1.25, 2, 3]) {
       const ratio = visualCapturePixelRatio(660, 3200, density);
