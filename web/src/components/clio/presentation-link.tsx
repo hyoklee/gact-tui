@@ -9,21 +9,31 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { a2uiSurfaceDomId } from './a2ui-presentation';
 import { ConnectedDataSetupLink } from './connected-data-setup-link';
+import { ExternalLinkIcon, PanelRightIcon } from 'lucide-react';
 
 /** Resolve declared result links through the conversation's existing workbench. */
 export function PresentationLink({
   block,
   compact = false,
+  iconOnly = false,
 }: {
   block: ToolPresentationBlock;
   compact?: boolean;
+  iconOnly?: boolean;
 }) {
   const navigation = useContext(PresentationNavigation);
   const uri = block.uri ?? '';
-  if (block.target === 'connected_data') return <ConnectedDataSetupLink block={block} />;
+  if (block.target === 'connected_data')
+    return iconOnly ? null : <ConnectedDataSetupLink block={block} />;
   const label = block.label || block.text || uri;
   const filename = compact && block.target === 'file';
-  const text = filename ? (
+  const text = iconOnly ? (
+    block.target === 'url' ? (
+      <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
+    ) : (
+      <PanelRightIcon aria-hidden="true" className="size-3.5" />
+    )
+  ) : filename ? (
     <span className="flex min-w-0">
       <span className="truncate">{label.slice(0, -12)}</span>
       <span className="shrink-0">{label.slice(-12)}</span>
@@ -31,7 +41,9 @@ export function PresentationLink({
   ) : (
     <span className={compact ? 'truncate' : undefined}>{label}</span>
   );
-  const className = cn('text-sm', compact ? 'min-w-0 max-w-[42ch] shrink truncate' : 'break-words');
+  const className = iconOnly
+    ? 'size-5 shrink-0 justify-center text-muted-foreground hover:text-foreground'
+    : cn('text-sm', compact ? 'min-w-0 max-w-[42ch] shrink truncate' : 'break-words');
   const withTooltip = (element: React.ReactElement) =>
     compact ? (
       <TooltipProvider>
@@ -39,7 +51,7 @@ export function PresentationLink({
           <TooltipTrigger asChild>{element}</TooltipTrigger>
           <TooltipContent className="max-w-sm text-sm">
             <span className="min-w-0 [overflow-wrap:anywhere]">
-              {block.target === 'surface' ? label : uri || label}
+              {iconOnly ? `Open ${label}` : block.target === 'surface' ? label : uri || label}
             </span>
           </TooltipContent>
         </Tooltip>
@@ -82,15 +94,19 @@ export function PresentationLink({
           !compact && 'whitespace-normal',
         )}
         onClick={open}
-        aria-label={label}
-        title={block.target === 'surface' ? label : uri}
+        aria-label={iconOnly ? `Open ${label}` : label}
+        title={iconOnly ? `Open ${label}` : block.target === 'surface' ? label : uri}
       >
         {text}
       </Button>,
     );
   if (block.target === 'url' && /^https?:\/\//iu.test(uri))
     return withTooltip(
-      <ExternalLink className={cn(className, 'underline')} href={uri}>
+      <ExternalLink
+        className={cn(className, 'underline')}
+        href={uri}
+        aria-label={iconOnly ? `Open ${label}` : undefined}
+      >
         {text}
       </ExternalLink>,
     );
@@ -99,11 +115,13 @@ export function PresentationLink({
       <Link
         className={cn(className, 'underline')}
         relative="path"
+        aria-label={iconOnly ? `Open ${label}` : undefined}
         to={`../${encodeURIComponent(uri)}`}
       >
         {text}
       </Link>,
     );
+  if (iconOnly) return null;
   return withTooltip(
     <span className={className} tabIndex={compact ? 0 : undefined}>
       {text}
