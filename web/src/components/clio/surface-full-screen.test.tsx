@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SurfaceFullScreenHost, useSurfaceFullScreen } from './surface-full-screen';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 /**
  * G0: a per-component full-screen host must not delay mounting its children
@@ -47,6 +48,41 @@ afterEach(() => {
 });
 
 describe('SurfaceFullScreenHost', () => {
+  it('focuses the viewer rather than opening a toolbar tooltip, then exits on one Escape', async () => {
+    const user = userEvent.setup();
+    function FullScreenHarness() {
+      const [fullscreen, setFullscreen] = useSurfaceFullScreen();
+      return (
+        <>
+          <button onClick={() => setFullscreen(true)} type="button">
+            Open chart
+          </button>
+          <SurfaceFullScreenHost
+            fullscreen={fullscreen}
+            onOpenChange={setFullscreen}
+            title="Chart"
+            headerExtra={
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button type="button">Capture</button>
+                </TooltipTrigger>
+                <TooltipContent>Capture labelled regions</TooltipContent>
+              </Tooltip>
+            }
+          >
+            <div>observations</div>
+          </SurfaceFullScreenHost>
+        </>
+      );
+    }
+    render(<FullScreenHarness />);
+    await user.click(screen.getByRole('button', { name: 'Open chart' }));
+    expect(screen.getByRole('dialog', { name: 'Chart' })).toHaveFocus();
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('observations')).toBeVisible();
+  });
   it('attaches a child ref to a document-connected node on the FIRST commit, not a later one', () => {
     const seen: HTMLDivElement[] = [];
     render(<Harness onMount={(node) => seen.push(node)} />);

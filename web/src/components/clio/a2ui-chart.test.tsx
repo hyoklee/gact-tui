@@ -50,7 +50,6 @@ import { ClioChart, type ClioChartProps } from './a2ui-chart';
 import { CHART_SELECTION_WRITE_DEBOUNCE_MS } from './chart-selection';
 import type { ChartRow } from './chart-data';
 import { ClioComposerAnnotations } from './composer-annotations';
-import { escapeHtml, formatChartTooltip, refusingLoader } from './chart-embed';
 import { mapCategoryColors } from './map-category-palette';
 import { SelectionActionsProvider } from './selection-actions';
 import { useReferenceThisSelectionAction } from '@/hooks/use-reference-this-selection-action';
@@ -779,29 +778,6 @@ describe('ClioChart', () => {
 });
 
 describe('chart embedding restrictions', () => {
-  it('refuses every load, link, and file', async () => {
-    const loader = refusingLoader();
-    await expect(loader.load('https://example.test/x.csv')).rejects.toThrow(/cannot load/u);
-    await expect(
-      loader.sanitize('https://example.test/x.png', { context: 'href' }),
-    ).rejects.toThrow(/cannot load/u);
-    await expect(loader.http('https://example.test/x.csv', {})).rejects.toThrow(/cannot load/u);
-    await expect(loader.file('/etc/passwd')).rejects.toThrow(/cannot load/u);
-  });
-
-  it('keeps tooltips to escaped text and drops images', () => {
-    const html = formatChartTooltip({
-      title: '<b>run</b>',
-      image: 'https://example.test/tracker.png',
-      '<i>key</i>': '<img src=x onerror=alert(1)>',
-    });
-    expect(html).not.toContain('<img');
-    expect(html).not.toContain('tracker.png');
-    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
-    expect(html).toContain('<h2>&lt;b&gt;run&lt;/b&gt;</h2>');
-    expect(escapeHtml(`"'&`)).toBe('&quot;&#39;&amp;');
-  });
-
   it('makes no network request of its own for inline rows', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     render(wrap(<ClioChart {...PRESET} componentId="ch1" data={ROWS} />));

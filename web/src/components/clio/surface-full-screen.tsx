@@ -71,6 +71,7 @@ export function SurfaceFullScreenHost({
     return node;
   });
   const pendingReference = useRef<(() => void) | undefined>(undefined);
+  const contentRef = useRef<HTMLDivElement>(null);
   const enclosingReference = useContext(SurfaceReferenceContext);
   const referenceAndClose = useCallback(
     (reference: () => void) => {
@@ -98,6 +99,8 @@ export function SurfaceFullScreenHost({
       <Dialog onOpenChange={onOpenChange} open={fullscreen}>
         <DialogContent
           aria-describedby={undefined}
+          ref={contentRef}
+          tabIndex={-1}
           className={
             layout === 'media'
               ? 'group fixed inset-0 h-dvh max-h-none w-screen max-w-none translate-x-0 grid-rows-[minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-none bg-black p-0 text-white ring-0 sm:max-w-none'
@@ -109,6 +112,12 @@ export function SurfaceFullScreenHost({
             pendingReference.current = undefined;
             event.preventDefault();
             reference();
+          }}
+          onOpenAutoFocus={(event) => {
+            // Focusing the first toolbar button opens its tooltip, which then
+            // consumes Escape before the full-screen dialog can close.
+            event.preventDefault();
+            contentRef.current?.focus();
           }}
           showCloseButton={false}
           onInteractOutside={(event) => {

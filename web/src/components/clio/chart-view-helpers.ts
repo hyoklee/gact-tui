@@ -18,7 +18,15 @@ function chartChannelDefinitions(
   const definition = isJsonObject(spec.encoding) ? spec.encoding[channel] : undefined;
   const resolved = isJsonObject(definition) ? definition : inherited;
   if (Array.isArray(spec.layer)) {
-    return spec.layer.flatMap((child) =>
+    // Constant reference rules have no row coordinates. Their missing or
+    // datum-only channels must not disable interaction on the data layers.
+    const children = spec.layer.filter((child) => {
+      if (!isJsonObject(child)) return true;
+      const mark = isJsonObject(child.mark) ? child.mark.type : child.mark;
+      const guides = isJsonObject(child.encoding) ? Object.values(child.encoding) : [];
+      return mark !== 'rule' || guides.some((guide) => isJsonObject(guide) && 'field' in guide);
+    });
+    return children.flatMap((child) =>
       isJsonObject(child) ? chartChannelDefinitions(child, channel, resolved) : [undefined],
     );
   }
