@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { SshHost } from '@/lib/ssh-hosts';
+import { sshHostDestination, type SshHost } from '@/lib/ssh-hosts';
 import { RouteMarker } from './ssh-route-marker';
 import { jumpHostError, reconcileJumpSteps, type JumpStep } from './ssh-route-utils';
 
@@ -89,9 +89,9 @@ export function SshJumpHostList({
         const taken = lastIsDestination
           ? steps.filter((_, row) => row !== index).map((row) => row.host)
           : [];
-        const rowOptions = options.filter((option) => !taken.includes(option.profile ?? ''));
+        const rowOptions = options.filter((option) => !taken.includes(sshHostDestination(option)));
         const stepLabel = step.host
-          ? (options.find((option) => option.profile === step.host)?.label ?? step.host)
+          ? (options.find((option) => sshHostDestination(option) === step.host)?.label ?? step.host)
           : undefined;
         return (
           <SortableItem
@@ -228,8 +228,8 @@ export function SshJumpHostSelect({
   placeholder?: string;
   value: string;
 }) {
-  const jumpOptions = options.filter((option) => option.profile);
-  const known = jumpOptions.some((option) => option.profile === value);
+  const jumpOptions = options.filter((option) => sshHostDestination(option));
+  const known = jumpOptions.some((option) => sshHostDestination(option) === value);
   return (
     <Select disabled={disabled} onValueChange={onChange} value={known ? value : ''}>
       <SelectTrigger
@@ -240,7 +240,7 @@ export function SshJumpHostSelect({
       </SelectTrigger>
       <SelectContent>
         {jumpOptions.map((option) => (
-          <SelectItem key={option.id} value={option.profile ?? option.id}>
+          <SelectItem key={option.id} value={sshHostDestination(option)}>
             {option.label}
           </SelectItem>
         ))}

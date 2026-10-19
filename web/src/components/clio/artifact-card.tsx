@@ -234,14 +234,16 @@ function ArtifactCardContent({
             <ArtifactTitle className="truncate">{displayName}</ArtifactTitle>
           )}
           <ArtifactDescription
-            className="truncate text-xs"
+            className="flex gap-2 truncate text-xs"
             title={artifact.media_type || 'Media type unavailable'}
           >
-            {isDashboardArtifact(artifact)
-              ? 'Dashboard'
-              : fileFormatLabel(artifact.name, artifact.media_type)}
-            {artifact.size === undefined ? '' : ` · ${formatBytes(artifact.size)}`}
-            {artifact.version === undefined ? '' : ` · v${artifact.version}`}
+            <span>
+              {isDashboardArtifact(artifact)
+                ? 'Dashboard'
+                : fileFormatLabel(artifact.name, artifact.media_type)}
+            </span>
+            {artifact.size === undefined ? null : <span>{formatBytes(artifact.size)}</span>}
+            {artifact.version === undefined ? null : <span>v{artifact.version}</span>}
           </ArtifactDescription>
         </div>
         {artifact.session_relation || presentation === 'evidence' ? (

@@ -1,4 +1,5 @@
-import { initialView, rasterStyle } from './map-initial-view';
+import { initialView, MAP_BASE_LAYER_ID, offlineStyle, rasterStyle } from './map-initial-view';
+import { useOfflineArchive } from '@/providers/connection-provider';
 import { MapPinIcon } from 'lucide-react';
 import type { FeatureCollection } from 'geojson';
 import type { ExpressionSpecification, GeoJSONSource, MapLibreMap } from 'maplibre-gl';
@@ -178,6 +179,7 @@ export function ClioScientificMapView({
   points,
   selectedId,
 }: ScientificMapViewProps) {
+  const offlineArchive = useOfflineArchive();
   const viewState = useMemo(() => initialView(points, geometryBounds), [points, geometryBounds]);
   const selected = points.find((point) => point.id === selectedId);
   const [mapError, setMapError] = useState<string>();
@@ -273,7 +275,7 @@ export function ClioScientificMapView({
       // Raster tile requests can fail while the base style and its layer are
       // already usable. `isStyleLoaded()` remains false in that case and would
       // hide every data overlay even though the map itself is visible.
-      if (!map.getLayer('openStreetMap')) return;
+      if (!map.getLayer(MAP_BASE_LAYER_ID)) return;
       pointsLayerOwners.set(map, owner);
       if (!map.getSource(GEOMETRY_SOURCE_ID))
         map.addSource(GEOMETRY_SOURCE_ID, {
@@ -439,7 +441,7 @@ export function ClioScientificMapView({
     // layer is removed only by the view that last claimed it.
     const owner = Symbol('clio-map-points-owner');
     const ensurePointsLayer = () => {
-      if (!map.getLayer('openStreetMap')) return;
+      if (!map.getLayer(MAP_BASE_LAYER_ID)) return;
       pointsLayerOwners.set(map, owner);
       if (!map.getSource(POINTS_SOURCE_ID)) {
         map.addSource(POINTS_SOURCE_ID, {
@@ -673,7 +675,7 @@ export function ClioScientificMapView({
         interactiveLayerIds={
           geometry ? [...GEOMETRY_LAYER_IDS] : manyPoints ? [POINTS_LAYER_ID] : undefined
         }
-        mapStyle={rasterStyle}
+        mapStyle={offlineArchive ? offlineStyle : rasterStyle}
         maxPitch={60}
         maxZoom={16}
         minZoom={1}
@@ -755,6 +757,11 @@ export function ClioScientificMapView({
             width: Math.abs(dragBox.x - dragBox.startX),
           }}
         />
+      ) : null}
+      {offlineArchive ? (
+        <p className="absolute bottom-1 left-2 rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground">
+          Offline map: saved geometry; background tiles are not included.
+        </p>
       ) : null}
       {mapError ? (
         <p

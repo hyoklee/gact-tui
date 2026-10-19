@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -13,6 +13,9 @@ const fixture = vi.hoisted(() => ({
     ndpEndpointCaptures: vi.fn(),
     disconnectNdpEndpoint: vi.fn(),
     updateNdpEndpoint: vi.fn(),
+    infrastructureTargets: vi.fn(),
+    connectedSshProfiles: vi.fn(),
+    createInfrastructureTarget: vi.fn(),
   },
 }));
 vi.mock('@/hooks/use-repository', () => ({ useRepository: () => fixture.repository }));
@@ -57,6 +60,8 @@ const endpoint = {
 };
 beforeEach(() => {
   vi.resetAllMocks();
+  fixture.repository.infrastructureTargets.mockResolvedValue([]);
+  fixture.repository.connectedSshProfiles.mockResolvedValue({ profiles: ['ares'] });
   fixture.repository.ndpEndpointConnections.mockResolvedValue({ endpoints: [endpoint] });
   fixture.repository.connectNdpEndpoint.mockResolvedValue(endpoint);
   fixture.repository.ndpEndpointCaptures.mockResolvedValue({ captures: [] });
@@ -124,10 +129,12 @@ it('connects SSH explicitly and filters the observed operation list', async () =
   show();
   await screen.findByRole('button', { name: 'SSH' });
   fireEvent.click(screen.getByRole('button', { name: 'SSH' }));
+  expect(screen.getByLabelText('API sign-in')).toHaveValue('none');
+  expect(screen.getByText('Your SSH connection is authenticated separately.')).toBeVisible();
+  expect(screen.getByText(/No NDP account token is sent/)).toBeVisible();
   fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Ares' } });
-  fireEvent.change(screen.getByLabelText('SSH profile on connected computer'), {
-    target: { value: 'ares' },
-  });
+  await userEvent.click(await screen.findByRole('combobox', { name: 'Saved SSH host' }));
+  await userEvent.click(await screen.findByRole('option', { name: 'ares' }));
   fireEvent.change(screen.getByLabelText('Remote API URL'), {
     target: { value: 'http://127.0.0.1:8002' },
   });
@@ -137,7 +144,16 @@ it('connects SSH explicitly and filters the observed operation list', async () =
   expect(fixture.repository.connectNdpEndpoint).toHaveBeenCalledWith('ws', {
     name: 'Ares',
     url: 'http://127.0.0.1:8002',
-    ssh_profile: 'ares',
+    ssh_profile: '',
+    ssh_route: {
+      profile: 'ares',
+      host: '',
+      user: '',
+      port: 22,
+      jump_hosts: [],
+      identity_file: '',
+      platform: 'auto',
+    },
     authentication: 'none',
   });
   fireEvent.change(screen.getByLabelText('Search endpoint actions'), {
@@ -145,6 +161,83 @@ it('connects SSH explicitly and filters the observed operation list', async () =
   });
   expect(screen.queryByRole('button', { name: /Find stations/ })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: /Start stream/ })).toBeInTheDocument();
+});
+
+it('uses the shared host dialog for a custom compute destination behind a saved login host', async () => {
+  const user = userEvent.setup();
+  fixture.repository.ndpEndpointConnections.mockResolvedValue({ endpoints: [] });
+  fixture.repository.createInfrastructureTarget.mockImplementation(async (input) => ({
+    ...input,
+    id: 'compute',
+  }));
+  show();
+  await user.click(await screen.findByRole('button', { name: 'SSH' }));
+  await user.type(screen.getByLabelText('Name'), 'Compute endpoint');
+  await user.click(screen.getByRole('combobox', { name: 'Saved SSH host' }));
+  await user.click(await screen.findByRole('option', { name: 'ares' }));
+  await user.click(screen.getByRole('button', { name: 'Add hop' }));
+  expect(screen.getByRole('button', { name: 'Connect' })).toBeDisabled();
+  await user.click(screen.getByRole('button', { name: 'Add SSH host' }));
+  const dialog = within(screen.getByRole('dialog'));
+  await user.type(dialog.getByLabelText('Address'), 'ares-comp-11');
+  await user.type(dialog.getByLabelText('Username'), 'scientist');
+  fireEvent.change(dialog.getByLabelText('Port'), { target: { value: '2222' } });
+  await user.type(dialog.getByLabelText(/^Key file on the connected/), 'D:/keys/science key');
+  expect(dialog.queryByText('Paste a private key')).not.toBeInTheDocument();
+  await user.click(dialog.getByRole('button', { name: 'Save host' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(fixture.repository.connectNdpEndpoint).not.toHaveBeenCalled();
+  await user.type(screen.getByLabelText('Remote API URL'), 'http://127.0.0.1:8002');
+  await user.click(screen.getByRole('button', { name: 'Connect' }));
+  await waitFor(() =>
+    expect(fixture.repository.connectNdpEndpoint).toHaveBeenCalledWith('ws', {
+      name: 'Compute endpoint',
+      url: 'http://127.0.0.1:8002',
+      ssh_profile: '',
+      authentication: 'none',
+      ssh_route: {
+        profile: '',
+        host: 'ares-comp-11',
+        user: 'scientist',
+        port: 2222,
+        jump_hosts: ['ares'],
+        identity_file: 'D:/keys/science key',
+        platform: 'auto',
+      },
+    }),
+  );
+});
+
+it('retains the saved shared host route when selecting a compute connection', async () => {
+  const user = userEvent.setup();
+  fixture.repository.ndpEndpointConnections.mockResolvedValue({ endpoints: [] });
+  fixture.repository.infrastructureTargets.mockResolvedValue([
+    {
+      id: 'compute',
+      kind: 'ssh',
+      label: 'Compute node',
+      ssh: { host: 'compute.example', jump_hosts: ['ares'], port: 2222 },
+    },
+  ]);
+  show();
+  await user.click(await screen.findByRole('button', { name: 'SSH' }));
+  await user.type(screen.getByLabelText('Name'), 'Lab');
+  await user.click(screen.getByRole('combobox', { name: 'Saved SSH host' }));
+  await user.click(await screen.findByRole('option', { name: 'Compute node' }));
+  await user.type(screen.getByLabelText('Remote API URL'), 'http://127.0.0.1:8002');
+  await user.click(screen.getByRole('button', { name: 'Connect' }));
+  await waitFor(() =>
+    expect(fixture.repository.connectNdpEndpoint).toHaveBeenCalledWith(
+      'ws',
+      expect.objectContaining({
+        ssh_route: expect.objectContaining({
+          host: 'compute.example',
+          port: 2222,
+          jump_hosts: ['ares'],
+        }),
+      }),
+    ),
+  );
 });
 
 it('saves endpoint edits without replacing the saved identity', async () => {
@@ -159,11 +252,12 @@ it('saves endpoint edits without replacing the saved identity', async () => {
       name: 'Research endpoint',
       url: endpoint.url,
       ssh_profile: 'ares',
+      ssh_route: null,
       authentication: 'none',
     }),
   );
   expect(
-    await screen.findByRole('option', { name: 'Research endpoint · SSH ares' }),
+    await screen.findByRole('option', { name: 'Research endpoint (SSH ares)' }),
   ).toBeInTheDocument();
 });
 
@@ -202,7 +296,8 @@ it('does not remove an endpoint until its confirmation is accepted', async () =>
 it('reuses the connected NDP account when configuring another endpoint', async () => {
   show();
   fireEvent.click(screen.getByRole('button', { name: 'Connect endpoint' }));
-  fireEvent.change(screen.getByLabelText('Authentication'), { target: { value: 'ndp' } });
+  fireEvent.change(screen.getByLabelText('API sign-in'), { target: { value: 'ndp' } });
+  expect(screen.getByText(/Send your saved NDP account token to this API/)).toBeVisible();
   expect(screen.getByText('NDP account connected')).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Sign in to NDP' })).not.toBeInTheDocument();
 });

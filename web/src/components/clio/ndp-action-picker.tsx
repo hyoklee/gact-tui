@@ -28,9 +28,11 @@ export function NDPActionPicker({
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />
-      <div role="status" className="text-xs text-muted-foreground">
-        {choices.length} {choices.length === 1 ? 'action' : 'actions'} · Search action names, then
-        enter data filters below.
+      <div role="status" className="space-y-1 text-xs text-muted-foreground">
+        <p>
+          {choices.length} {choices.length === 1 ? 'action' : 'actions'}
+        </p>
+        <p>Search action names, then enter data filters below.</p>
       </div>
       <div
         role="group"

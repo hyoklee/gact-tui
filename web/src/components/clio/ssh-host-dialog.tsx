@@ -62,6 +62,7 @@ export function SshHostDialog({
   step,
   via,
   fileConnection,
+  routeConnection,
 }: {
   /**
    * The key a brand-new computer starts with: the previous hop's, since
@@ -86,10 +87,15 @@ export function SshHostDialog({
     test: (host: SshHost, credentials: SftpCredentials) => Promise<void>;
     save: (host: SshHost, credentials: SftpCredentials) => Promise<void>;
   };
+  /** Save a nonsecret route on the connected CLIO; its consumer performs the connection. */
+  routeConnection?: {
+    hostLabel: string;
+    save: (host: SshHost) => Promise<SshHost>;
+  };
 }) {
   // Initialized once per open: the picker remounts this dialog (a new `key`)
   // every time it opens, so the form always starts from `initial`.
-  const [host, setHost] = useState(initial?.host ?? '');
+  const [host, setHost] = useState(initial?.host ?? initial?.profile ?? '');
   const [user, setUser] = useState(initial?.user ?? '');
   const [label, setLabel] = useState(initial?.label ?? '');
   const [port, setPort] = useState(String(initial?.port ?? 22));
@@ -144,6 +150,10 @@ export function SshHostDialog({
     setAuthError(undefined);
     try {
       const candidate = await prepareDraft();
+      if (routeConnection) {
+        onSaved(await routeConnection.save(candidate));
+        return;
+      }
       if (fileConnection) {
         await fileConnection.save(candidate, fileCredentials);
         onSaved(candidate);
@@ -363,7 +373,19 @@ export function SshHostDialog({
               </Field>
             )}
 
-            {fileConnection ? (
+            {routeConnection ? (
+              <Field>
+                <FieldLabel htmlFor="ssh-host-identity-path">
+                  Key file on {routeConnection.hostLabel}
+                </FieldLabel>
+                <Input
+                  id="ssh-host-identity-path"
+                  value={identityFile}
+                  onChange={(event) => setIdentityFile(event.target.value)}
+                  placeholder="Use the SSH agent or OpenSSH configuration"
+                />
+              </Field>
+            ) : fileConnection ? (
               <SftpAuthenticationFields
                 hostLabel={fileConnection.hostLabel}
                 value={fileCredentials}
@@ -465,7 +487,11 @@ export function SshHostDialog({
             </Collapsible>
 
             {authError ? (
-              <DeployFailure details={testLog} reason={authError} title="SSH connection failed" />
+              <DeployFailure
+                details={testLog}
+                reason={authError}
+                title={routeConnection ? 'SSH host could not be saved' : 'SSH connection failed'}
+              />
             ) : null}
           </form>
 
@@ -492,14 +518,16 @@ export function SshHostDialog({
           ) : null}
 
           <DialogFooter>
-            <Button
-              disabled={!host.trim() || saving || testing}
-              onClick={() => void testConnection()}
-              type="button"
-              variant="outline"
-            >
-              {testing ? 'Testing…' : 'Test connection'}
-            </Button>
+            {!routeConnection && (
+              <Button
+                disabled={!host.trim() || saving || testing}
+                onClick={() => void testConnection()}
+                type="button"
+                variant="outline"
+              >
+                {testing ? 'Testing…' : 'Test connection'}
+              </Button>
+            )}
             <Button disabled={!host.trim() || saving} form="ssh-host-form" type="submit">
               {saving ? 'Saving…' : 'Save host'}
             </Button>

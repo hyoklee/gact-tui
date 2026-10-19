@@ -10,6 +10,7 @@ import {
   type ChartCategoryDomains,
 } from './chart-category-colors';
 import { chartSideLegendSpace } from './chart-presentation';
+import { resizeChartView, type ChartSize } from './chart-responsive-layout';
 import {
   bindChartSelection,
   translateChartSelectionValues,
@@ -94,6 +95,15 @@ export function useChartView({
   const boxSelectionBindingRef = useRef<{ dispose: () => void } | undefined>(undefined);
   const dataRefreshCountRef = useRef(0);
   const rowsRef = useRef(displayRows);
+  const sizeRef = useRef<ChartSize>({
+    width: measuredWidth,
+    height: chartHeight,
+    fillHeight: fullscreen,
+  });
+  const resizeRef = useRef<((size: ChartSize) => Promise<void>) | undefined>(undefined);
+  useEffect(() => {
+    sizeRef.current = { width: measuredWidth, height: chartHeight, fillHeight: fullscreen };
+  }, [measuredWidth, chartHeight, fullscreen]);
   const selectionRef = useRef(selectionState);
   const wholeCurveBrushRef = useRef(false);
   const additiveBrushRef = useRef(false);
@@ -133,18 +143,32 @@ export function useChartView({
     const finishRefresh = () => {
       dataRefreshCountRef.current = Math.max(0, dataRefreshCountRef.current - 1);
     };
-    void view.runAsync().then(finishRefresh, (error: unknown) => {
-      finishRefresh();
-      if (viewRef.current === view) {
-        setEmbedError(error instanceof Error ? error.message : String(error));
-      }
-    });
+    void view
+      .runAsync()
+      .finally(finishRefresh)
+      .then(async () => {
+        if (viewRef.current === view) await resizeRef.current?.(sizeRef.current);
+      })
+      .catch((error: unknown) => {
+        if (viewRef.current === view) {
+          setEmbedError(error instanceof Error ? error.message : String(error));
+        }
+      });
   }, [displayRows]);
 
+  useEffect(() => {
+    void resizeRef
+      .current?.({ width: measuredWidth, height: chartHeight, fillHeight: fullscreen })
+      .catch((error: unknown) => {
+        setEmbedError(error instanceof Error ? error.message : String(error));
+      });
+  }, [measuredWidth, chartHeight, fullscreen]);
+
   // One embedded view per chart definition; rows and the selection only update it.
+  const hasWidth = measuredWidth > 0;
   useEffect(() => {
     const node = containerRef.current;
-    if (!node || !categoricalSpec || !hasRows || measuredWidth <= 0) return;
+    if (!node || !categoricalSpec || !hasRows || !hasWidth) return;
     let cancelled = false;
     let finalize: (() => void) | undefined;
     // Snapshotted once, here — `rowsRef.current` can move on during the
@@ -166,13 +190,14 @@ export function useChartView({
       entityField,
       colorField,
     );
+    const initialSize = sizeRef.current;
     const prepared = withDefaultProjectionFit(
       prepareChartSpec(seriesLegend.spec, {
-        height: chartHeight,
+        height: initialSize.height,
         rows: cloneRows(embeddedRows ?? []),
         // Defaults put legends below the plot; only authored side legends
         // consume horizontal space in a narrow docked viewer.
-        width: Math.max(220, measuredWidth - chartSideLegendSpace(seriesLegend.spec)),
+        width: Math.max(220, initialSize.width - chartSideLegendSpace(seriesLegend.spec)),
       }),
       embeddedRows ?? [],
     );
@@ -186,6 +211,23 @@ export function useChartView({
         const view = result.view;
         setEmbedError('');
         viewRef.current = view;
+        let resizeGeneration = 0;
+        const resize = (size: ChartSize) => {
+          const generation = ++resizeGeneration;
+          return resizeChartView(
+            view,
+            result.vgSpec,
+            {
+              ...size,
+              width: Math.max(
+                220,
+                size.width - (result.vgSpec.layout ? 0 : chartSideLegendSpace(seriesLegend.spec)),
+              ),
+            },
+            () => cancelled || generation !== resizeGeneration,
+          );
+        };
+        resizeRef.current = resize;
         // Region capture reads the same rendered Vega view and row set that
         // this component uses, so its box context can name enclosed rows.
         (
@@ -221,6 +263,8 @@ export function useChartView({
           view.data('source', cloneRows(rowsRef.current));
           await view.runAsync();
         }
+        await resize(sizeRef.current);
+        if (cancelled) return;
         const canLink = viewHasSignal(view, param);
         setLinkable(canLink);
         let boxBound = false;
@@ -387,6 +431,7 @@ export function useChartView({
       boxSelectionBindingRef.current?.dispose();
       boxSelectionBindingRef.current = undefined;
       viewRef.current = undefined;
+      resizeRef.current = undefined;
       delete (node as HTMLDivElement & { __clioChart?: unknown }).__clioChart;
       finalize?.();
     };
@@ -407,8 +452,7 @@ export function useChartView({
     entityField,
     fullscreen,
     hasRows,
-    chartHeight,
-    measuredWidth,
+    hasWidth,
     param,
     renderer,
     selectionField,

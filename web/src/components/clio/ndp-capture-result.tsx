@@ -14,8 +14,10 @@ export function NDPCaptureResult({
   return (
     <div aria-label="Saved endpoint data" className="space-y-2 text-sm">
       <p role="status">
-        Saved {capture.bytes_received.toLocaleString()} bytes ·{' '}
-        {capture.stop_reason.replaceAll('_', ' ')}
+        Saved {capture.bytes_received.toLocaleString()} bytes
+        <span className="block text-muted-foreground">
+          {capture.stop_reason.replaceAll('_', ' ')}
+        </span>
       </p>
       <pre className="max-h-44 overflow-auto rounded-md bg-muted/50 p-3 text-xs">
         {capture.preview}

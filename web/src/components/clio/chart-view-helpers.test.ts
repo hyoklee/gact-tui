@@ -56,4 +56,26 @@ describe('authored chart encodings', () => {
     expect(chartAxisType(spec, 'x')).toBe('ordinal');
     expect(chartAxisType(spec, 'y')).toBe('quantitative');
   });
+
+  it('keeps point coordinates beside a field-valued reference rule', () => {
+    const spec = { layer: [
+      { mark: 'rule', transform: [{ filter: 'datum.year === 2024' }],
+        encoding: { y: { field: 'historical_mean', type: 'quantitative' } } },
+      { mark: 'point', encoding },
+    ] };
+    expect(chartChannelField(spec, 'x')).toBe('hour');
+    expect(chartChannelField(spec, 'y')).toBe('reading');
+    expect(chartAxisType(spec, 'y')).toBe('quantitative');
+  });
+
+  it('brushes observed points rather than their percentile band or median tick', () => {
+    const spec = { encoding: { x: encoding.x }, layer: [
+      { mark: 'rule', encoding: { y: { field: 'q25', type: 'quantitative' }, y2: { field: 'q75' } } },
+      { mark: 'tick', encoding: { y: { field: 'median', type: 'quantitative' } } },
+      { mark: 'point', encoding: { y: encoding.y } },
+    ] };
+    expect(chartChannelField(spec, 'x')).toBe('hour');
+    expect(chartChannelField(spec, 'y')).toBe('reading');
+    expect(chartAxisType(spec, 'x')).toBe('ordinal');
+  });
 });
