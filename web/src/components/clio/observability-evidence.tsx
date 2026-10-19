@@ -142,7 +142,7 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
         props.artifacts,
       );
   const hasEvidence = Boolean(
-    (showActivity && props.workPages?.hasMore) ||
+    (showActivity && (props.workPages?.hasMore || props.workPages?.history)) ||
       diffs.length ||
       outputs.length ||
       sources.length ||
@@ -179,6 +179,7 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
           tools={tools}
           subagents={subagents}
           backgroundProcesses={backgroundProcesses}
+          workPages={showActivity ? props.workPages : undefined}
         />
       </>
     );
@@ -241,7 +242,8 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
             <ToolEvidence tools={tools} />
           </EvidenceSection>
         ) : null}
-        {backgroundProcesses.length || props.workPages?.hasMore || props.workPages?.history ? (
+        {showActivity &&
+        (backgroundProcesses.length || props.workPages?.hasMore || props.workPages?.history) ? (
           <EvidenceSection
             icon={ServerIcon}
             label="Background tasks"
