@@ -30,6 +30,7 @@ import { useToolDuration } from './use-tool-duration';
 import { formatDuration } from '@/lib/format';
 import { withTaskWaitPresentation } from './task-wait-presentation';
 import { withTodoPresentation } from './todo-tool-presentation';
+import { withStorageToolPresentation } from './storage-tool-presentation';
 
 export function ClioToolInvocation({
   attention,
@@ -81,7 +82,9 @@ export function ClioToolInvocation({
   const presentedTool = withMemoryPresentation(
     withResourcePresentation(
       withWorkflowPresentation(
-        withSkillFileSubject(withTaskWaitPresentation(withTodoPresentation(tool))),
+        withSkillFileSubject(
+          withTaskWaitPresentation(withTodoPresentation(withStorageToolPresentation(tool))),
+        ),
       ),
       navigation?.resources,
     ),
@@ -146,6 +149,10 @@ export function ClioToolInvocation({
                   ) : null
                 }
               />
+              {subject?.type === 'link' &&
+              ['file', 'resource', 'artifact', 'session', 'url'].includes(subject.target ?? '') ? (
+                <PresentationLink block={subject} compact iconOnly />
+              ) : null}
               {detailsTrigger}
             </div>
             {resultOpen ? (
