@@ -73,7 +73,7 @@ function withOneUnitParam(
       const ordinaryIndex = children.findIndex((child) => {
         const mark = child.mark;
         const type = typeof mark === 'string' ? mark : isJsonObject(mark) ? mark.type : undefined;
-        return !['boxplot', 'errorbar', 'errorband'].includes(String(type));
+        return !['boxplot', 'errorbar', 'errorband', 'rule'].includes(String(type));
       });
       const index = ordinaryIndex >= 0 ? ordinaryIndex : 0;
       return {
@@ -361,9 +361,9 @@ export function withManualChartZoom(
   const param = chartZoomParamName(pointParam);
   return {
     param,
-    // Scale-bound intervals belong to the view that owns the scales. A param
-    // inside the first layer has no access to the parent view's x/y scales.
-    spec: withRootParam(spec, {
+    // Layer-root selections expand into every child and duplicate tuple
+    // signals. A unit selection binds the shared scales exactly once.
+    spec: (Array.isArray(spec.layer) ? withOneUnitParam : withRootParam)(spec, {
       bind: 'scales',
       name: param,
       select: {

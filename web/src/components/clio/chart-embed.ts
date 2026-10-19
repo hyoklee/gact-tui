@@ -83,8 +83,8 @@ export function isSingleViewSpec(spec: Record<string, unknown>): boolean {
 /**
  * The spec as embedded: its rows supplied as the `source` dataset (added
  * here, after the guard, which refuses a producer's own `datasets`), and —
- * for a single plot the producer did not size — fitted to the panel's width
- * and the component's height.
+ * for a single plot — fitted to the actual panel. Authoring dimensions describe
+ * a standalone export, not the size of a docked or full-screen viewer.
  */
 export function prepareChartSpec(
   spec: Record<string, unknown>,
@@ -100,9 +100,9 @@ export function prepareChartSpec(
   if (!('data' in prepared)) prepared.data = { name: DATA_SOURCE_NAME };
   prepared.datasets = { [DATA_SOURCE_NAME]: rows };
   if (isSingleViewSpec(spec)) {
-    if (!('autosize' in prepared)) prepared.autosize = { type: 'fit', contains: 'padding' };
-    if (!('width' in prepared) && width) prepared.width = width;
-    if (!('height' in prepared)) prepared.height = height;
+    prepared.autosize = { type: 'fit', contains: 'padding', resize: true };
+    if (width) prepared.width = width;
+    prepared.height = height;
   }
   return prepared;
 }

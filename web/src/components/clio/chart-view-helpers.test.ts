@@ -42,4 +42,18 @@ describe('authored chart encodings', () => {
     }
     expect(chartChannelField({ mark: 'rule', encoding: { x: { datum: 1 } } }, 'x')).toBeUndefined();
   });
+
+  it('keeps observation coordinates when a constant reference line precedes data layers', () => {
+    const spec = {
+      layer: [
+        { mark: 'rule', encoding: { y: { datum: 12.139, type: 'quantitative' } } },
+        { mark: 'line', encoding },
+        { mark: 'point', encoding },
+      ],
+    };
+    expect(chartChannelField(spec, 'x')).toBe('hour');
+    expect(chartChannelField(spec, 'y')).toBe('reading');
+    expect(chartAxisType(spec, 'x')).toBe('ordinal');
+    expect(chartAxisType(spec, 'y')).toBe('quantitative');
+  });
 });
