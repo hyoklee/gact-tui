@@ -90,6 +90,9 @@ describe('SurfaceFullScreenHost', () => {
     expect(screen.getByText('content')).toBeInTheDocument(); // the SAME content, now inside the dialog
     expect(screen.getAllByText('content')).toHaveLength(1); // never duplicated between hosts
 
+    await user.click(screen.getByText('content'));
+    expect(screen.getByRole('dialog', { name: 'Probe title' })).toBeVisible();
+
     await user.click(screen.getByRole('button', { name: 'Exit full screen' }));
     expect(screen.queryByText('Probe title')).not.toBeInTheDocument();
     expect(screen.getByText('content')).toBeInTheDocument(); // back inline

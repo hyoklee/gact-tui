@@ -217,6 +217,22 @@ describe('ClioMermaidDiagram', () => {
     expect(screen.getByText(SOURCE)).toBeInTheDocument(); // back inline
   });
 
+  it('exits full screen with Escape and keeps the diagram available inline', async () => {
+    const user = userEvent.setup();
+    render(wrap(<ClioMermaidDiagram source={SOURCE} title="Architecture" />));
+    await user.click(screen.getByRole('button', { name: 'Full screen' }));
+    expect(screen.getByRole('dialog', { name: 'Architecture' })).toBeVisible();
+    await user.click(screen.getByText(SOURCE));
+    expect(screen.getByRole('dialog', { name: 'Architecture' })).toBeVisible();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getAllByText(SOURCE)).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Full screen' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
   it('"Reference this" attaches the diagram, naming the source artifact when it has one', async () => {
     const user = userEvent.setup();
     render(

@@ -111,6 +111,12 @@ export function SurfaceFullScreenHost({
             reference();
           }}
           showCloseButton={false}
+          onInteractOutside={(event) => {
+            // Portal children keep their original React ancestry. An interaction
+            // physically inside this host still belongs to the fullscreen view.
+            const target = event.detail.originalEvent.target;
+            if (target instanceof Node && dialogHost.contains(target)) event.preventDefault();
+          }}
         >
           <div
             className={
