@@ -94,7 +94,8 @@ export function NDPEndpointPanel({
       </div>
       {authenticated ? (
         <p role="status" className="text-xs text-muted-foreground">
-          NDP account connected{accountName ? ` · ${accountName}` : ''}
+          NDP account connected
+          {accountName ? <span className="block break-all">{accountName}</span> : null}
         </p>
       ) : null}
       {!authenticated &&
@@ -158,8 +159,10 @@ export function NDPEndpointPanel({
                   {visible.map((row) => (
                     <option key={row.id} value={row.id}>
                       {row.name}
-                      {row.ssh_profile ? ` · SSH ${row.ssh_profile}` : ''}
-                      {row.hidden ? ' · Hidden' : ''}
+                      {row.ssh_route || row.ssh_profile
+                        ? ` (SSH ${row.ssh_route?.profile || row.ssh_route?.host || row.ssh_profile})`
+                        : ''}
+                      {row.hidden ? ' (Hidden)' : ''}
                     </option>
                   ))}
                 </select>

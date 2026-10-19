@@ -12,6 +12,21 @@ const tool: ToolInvocation = {
 };
 
 describe('legacy source task presentation', () => {
+  it('removes legacy capture separators without changing recorded data or failure state', () => {
+    const captured: ToolInvocation = {
+      ...tool,
+      name: 'connected_data_ndp_endpoint_request',
+      state: 'failed',
+      presentation: { summary: '42 bytes captured \u00b7 byte_limit', blocks: [] },
+      output: { bytes_received: 42, stop_reason: 'byte_limit', values: [1.5, 2.5] },
+    };
+    const presented = withStorageToolPresentation(captured);
+    expect(presented.presentation?.summary).toBe('42 bytes captured, byte_limit');
+    expect(presented.state).toBe('failed');
+    expect(presented.output).toBe(captured.output);
+    expect(captured.presentation?.summary).toBe('42 bytes captured \u00b7 byte_limit');
+  });
+
   it('repairs a recorded indexing acceptance without claiming completion or changing its result', () => {
     const presented = withStorageToolPresentation(tool);
     expect(presented.presentation?.summary).toBe('Indexing requested');

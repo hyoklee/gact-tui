@@ -99,6 +99,51 @@ function show(current = endpoint) {
   );
 }
 
+it('samples a declared URL replay despite listing failure and preserves its resume input', async () => {
+  fixture.repository.browseNdpEndpoint.mockRejectedValue(new Error('File listing unavailable'));
+  show({
+    ...endpoint,
+    operations: [
+      operation('GET /data/csv-files'),
+      operation('GET /stream/segment/url', {
+        parameters: [
+          { name: 'url', in: 'query', required: true, schema: { type: 'string' } },
+          { name: 'max_msgs', in: 'query', schema: { type: 'integer' } },
+          { name: 'interval', in: 'query', schema: { type: 'number', minimum: 0 } },
+          { name: 'cursor', in: 'query', schema: { type: 'string' } },
+        ],
+      }),
+    ],
+  });
+  expect(await screen.findByText('File listing unavailable')).toBeVisible();
+  await userEvent.click(screen.getByRole('button', { name: 'Sample CSV from URL' }));
+  await userEvent.type(screen.getByLabelText('CSV URL', { exact: false }), 'https://data.test/a.csv');
+  await userEvent.clear(screen.getByLabelText('Rows to sample'));
+  await userEvent.type(screen.getByLabelText('Rows to sample'), '3');
+  await userEvent.click(screen.getByText('Options', { exact: true }));
+  await userEvent.type(screen.getByLabelText('Seconds between records'), '0.1');
+  await userEvent.click(screen.getByRole('button', { name: 'Save sample' }));
+  await waitFor(() => expect(fixture.repository.requestNdpEndpoint).toHaveBeenCalledTimes(1));
+  await userEvent.type(screen.getByLabelText('Resume cursor'), 'opaque-cursor-3');
+  await userEvent.click(screen.getByRole('button', { name: 'Save sample' }));
+  await waitFor(() =>
+    expect(fixture.repository.requestNdpEndpoint).toHaveBeenLastCalledWith('w', 'ep', {
+      operation_id: 'GET /stream/segment/url',
+      parameters: {
+        url: 'https://data.test/a.csv',
+        max_msgs: 3,
+        interval: 0.1,
+        cursor: 'opaque-cursor-3',
+      },
+      max_seconds: 10,
+      max_events: 100,
+    }),
+  );
+  expect(fixture.repository.browseNdpEndpoint).toHaveBeenCalledTimes(1);
+  await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(await screen.findByText('File listing unavailable')).toBeVisible();
+});
+
 it('loads catalog records automatically, filters data live, and keeps HTTP methods under Advanced', async () => {
   show();
   expect(await screen.findByText('Coastal observations')).toBeVisible();

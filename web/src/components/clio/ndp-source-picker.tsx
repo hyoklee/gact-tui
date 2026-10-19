@@ -112,6 +112,7 @@ function NDPCatalogPicker({
   const count = choices.reduce((sum, choice) => sum + choice.ids.length, 0);
   const datasets = showSelected ? choices.map((choice) => choice.dataset) : catalog.datasets;
   const pageSize = limit.query === catalog.query ? limit.count : 30;
+  const visibleDatasets = datasets.slice(0, pageSize);
   const connect = useMutation({
     mutationFn: async () => {
       const sources: ConnectedSourceState[] = [];
@@ -231,6 +232,8 @@ function NDPCatalogPicker({
       </form>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <NDPOrganizationFilter
+          account={catalog.account}
+          cacheEnabled={catalog.cacheEnabled}
           value={catalog.organization}
           onChange={(choice) => {
             catalog.setOrganization(choice);
@@ -253,9 +256,10 @@ function NDPCatalogPicker({
         </select>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span role="status" aria-live="polite">
-            {catalog.searching
+            {catalog.searching && !catalog.data
               ? 'Searching…'
-              : `${datasets.length}${!showSelected && catalog.data?.total !== undefined && catalog.data.total > datasets.length ? ` of ${catalog.data.total.toLocaleString()}` : ''} dataset${datasets.length === 1 ? '' : 's'}`}
+              : `${visibleDatasets.length}${!showSelected && catalog.data?.total !== undefined && catalog.data.total > visibleDatasets.length ? ` of ${catalog.data.total.toLocaleString()}` : ''} dataset${visibleDatasets.length === 1 ? '' : 's'}`}
+            {catalog.searching && catalog.data ? ' Refreshing…' : ''}
           </span>
           {count > 0 ? (
             <Button
@@ -299,10 +303,11 @@ function NDPCatalogPicker({
         className="max-h-[32dvh] divide-y divide-border/60 overflow-y-auto overscroll-contain pr-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label="NDP datasets"
       >
-        {datasets.slice(0, pageSize).map((dataset) => (
+        {visibleDatasets.map((dataset) => (
           <NDPDatasetRow
-            key={datasetKey(dataset)}
+            key={`${showSelected ? 'selected' : catalog.query.trim() ? 'search' : 'browse'}:${datasetKey(dataset)}`}
             dataset={dataset}
+            defaultOpen={showSelected || Boolean(catalog.query.trim())}
             selected={selected[datasetKey(dataset)]?.ids ?? []}
             disabled={connect.isPending}
             onChange={(id, checked) => select(dataset, id, checked)}

@@ -22,6 +22,20 @@ function submissionResult(output: unknown): Record<string, unknown> | undefined 
 
 /** Repair legacy source receipts using their recorded task acceptance, without rerunning them. */
 export function withStorageToolPresentation(tool: ToolInvocation): ToolInvocation {
+  const captureSummary = tool.presentation?.summary;
+  if (
+    tool.name === 'connected_data_ndp_endpoint_request' &&
+    captureSummary &&
+    /^\d+ bytes captured \u00b7 /u.test(captureSummary)
+  )
+    return {
+      ...tool,
+      presentation: {
+        ...tool.presentation,
+        summary: captureSummary.replace(' \u00b7 ', ', '),
+        blocks: tool.presentation?.blocks ?? [],
+      },
+    };
   if (
     !['connected_data_connect', 'connected_data_download'].includes(tool.name) ||
     tool.state !== 'succeeded'

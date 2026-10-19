@@ -182,16 +182,20 @@ export function NDPEndpointOperationView({
       ) : null}
       {request.data ? (
         <div className="space-y-2" aria-label="Endpoint response">
-          <p role="status" className="text-sm">
-            HTTP {request.data.status_code} · {request.data.bytes_received.toLocaleString()} bytes ·{' '}
-            {request.data.events} stream events · {request.data.stop_reason.replaceAll('_', ' ')}
+          <p role="status" className="flex flex-wrap gap-x-3 text-sm">
+            <span>HTTP {request.data.status_code}</span>{' '}
+            <span>{request.data.bytes_received.toLocaleString()} bytes</span>{' '}
+            <span>{request.data.events} stream events</span>{' '}
+            <span>{request.data.stop_reason.replaceAll('_', ' ')}</span>
           </p>
           <pre className="max-h-52 overflow-auto rounded-md bg-muted/50 p-3 text-xs">
             {request.data.preview}
           </pre>
-          <p className="text-xs text-muted-foreground">
-            {request.data.source_artifact_id ? 'Saved in workspace Sources' : 'Response retained'} ·{' '}
-            {request.data.sha256.slice(0, 12)}
+          <p className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+            <span>
+              {request.data.source_artifact_id ? 'Saved in workspace Sources' : 'Response retained'}
+            </span>{' '}
+            <span>{request.data.sha256.slice(0, 12)}</span>
           </p>
           {request.data.workspace_path ? (
             <Link
@@ -241,7 +245,7 @@ export function NDPEndpointOperationView({
                   ) : (
                     row.operation_id
                   )}{' '}
-                  · {row.bytes_received.toLocaleString()} bytes ·{' '}
+                  <span className="mx-2">{row.bytes_received.toLocaleString()} bytes</span>{' '}
                   {new Date(row.completed_at).toLocaleString()}
                 </li>
               ))}

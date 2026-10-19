@@ -259,11 +259,19 @@ export function ClioChart(props: ClioChartProps) {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [fullscreen, setFullscreen] = useSurfaceFullScreen();
+  const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight);
+  useEffect(() => {
+    if (!fullscreen) return;
+    const measure = () => setViewportHeight(window.innerHeight);
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [fullscreen]);
   const [boxSelectMode, setBoxSelectMode] = useState(false);
   const chartHeight = fullscreen
     ? Math.max(
         height,
-        Math.min(preset === 'boxplot' ? 640 : Number.POSITIVE_INFINITY, window.innerHeight - 180),
+        Math.min(preset === 'boxplot' ? 640 : Number.POSITIVE_INFINITY, viewportHeight - 180),
       )
     : height;
   const boxplotWidthLimit =

@@ -3,6 +3,10 @@ import type { NDPEndpointInput } from '@clio/core/v3';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ConnectedSshHostPicker } from './connected-ssh-host-picker';
+import { sshRouteHost } from '@/lib/ssh-hosts';
+import { sshTargetDefinition } from './managed-service-target-utils';
+import { routeIncompleteMessage } from './ssh-route-utils';
 
 /** Review the actual API route and account destination before saving a connection. */
 export function NDPEndpointEditor({
@@ -24,15 +28,35 @@ export function NDPEndpointEditor({
     name: initial?.name ?? '',
     url: initial?.url ?? '',
     ssh_profile: initial?.ssh_profile ?? '',
+    ssh_route: initial?.ssh_route,
     authentication: initial?.authentication ?? 'none',
   });
-  const [transport, setTransport] = useState(initial?.ssh_profile ? 'ssh' : 'url');
+  const [transport, setTransport] = useState(
+    initial?.ssh_profile || initial?.ssh_route ? 'ssh' : 'url',
+  );
+  const [host, setHost] = useState(() =>
+    initial?.ssh_route
+      ? sshRouteHost(initial.ssh_route)
+      : initial?.ssh_profile
+        ? sshRouteHost({ profile: initial.ssh_profile })
+        : undefined,
+  );
+  const [routeError, setRouteError] = useState<string>();
+  const [routeChanged, setRouteChanged] = useState(false);
   return (
     <form
       className="space-y-3"
       onSubmit={(event) => {
         event.preventDefault();
-        onSave({ ...choice, ssh_profile: transport === 'ssh' ? choice.ssh_profile : '' });
+        if (transport === 'ssh' && (!host || routeError)) return;
+        onSave({
+          ...choice,
+          ssh_profile: transport === 'ssh' && !routeChanged ? (initial?.ssh_profile ?? '') : '',
+          ssh_route:
+            transport === 'ssh' && host && (routeChanged || !initial?.ssh_profile)
+              ? (sshTargetDefinition(host).ssh as NonNullable<NDPEndpointInput['ssh_route']>)
+              : null,
+        });
       }}
     >
       <div className="flex gap-2" aria-label="Endpoint connection method">
@@ -58,15 +82,22 @@ export function NDPEndpointEditor({
         />
       </div>
       {transport === 'ssh' ? (
-        <div className="space-y-1">
-          <Label htmlFor="ndp-endpoint-ssh">SSH profile on connected computer</Label>
-          <Input
-            id="ndp-endpoint-ssh"
-            required
-            value={choice.ssh_profile}
-            placeholder="ares"
-            onChange={(event) => setChoice({ ...choice, ssh_profile: event.target.value })}
+        <div className="space-y-2">
+          <Label>SSH connection route</Label>
+          <ConnectedSshHostPicker
+            value={host}
+            disabled={pending}
+            onChange={(next, completeness) => {
+              setHost(next);
+              setRouteChanged(true);
+              setRouteError(routeIncompleteMessage(completeness));
+            }}
           />
+          {routeError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {routeError}
+            </p>
+          ) : null}
         </div>
       ) : null}
       <div className="space-y-1">
@@ -83,7 +114,7 @@ export function NDPEndpointEditor({
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="ndp-endpoint-auth">Authentication</Label>
+        <Label htmlFor="ndp-endpoint-auth">API sign-in</Label>
         <select
           id="ndp-endpoint-auth"
           className="h-9 w-full rounded-md border bg-background px-2 text-sm"
@@ -94,17 +125,20 @@ export function NDPEndpointEditor({
             onAuthentication(authentication);
           }}
         >
-          <option value="none">Public access</option>
-          <option value="ndp">My NDP account</option>
+          <option value="none">No NDP sign-in</option>
+          <option value="ndp">Use my NDP sign-in</option>
         </select>
       </div>
-      {choice.authentication === 'ndp' ? (
-        <p className="text-xs text-muted-foreground">
-          Use your saved NDP sign-in for this API. Its own access permissions still apply.
-        </p>
-      ) : null}
+      <p className="text-xs text-muted-foreground">
+        {choice.authentication === 'ndp'
+          ? 'Send your saved NDP account token to this API. The Endpoint must accept your account and grant access.'
+          : 'No NDP account token is sent. Only operations available without NDP sign-in can be used.'}
+        {transport === 'ssh' ? (
+          <span className="block">Your SSH connection is authenticated separately.</span>
+        ) : null}
+      </p>
       <div className="flex gap-2">
-        <Button disabled={pending}>
+        <Button disabled={pending || (transport === 'ssh' && (!host || Boolean(routeError)))}>
           {pending ? 'Checking API…' : initial ? 'Save endpoint' : 'Connect'}
         </Button>
         <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>

@@ -427,15 +427,12 @@ function ClioA2UISurfaceContent({
         />
       </div>
     ) : null;
-  const provenance = `Generated UI · ${surfaceKind} · revision ${surface.revision} · state ${surface.state.replaceAll('_', ' ')}`;
   return (
     <section
-      aria-description={provenance}
       aria-label={`Interactive surface, ${surfaceKind}`}
       className="scroll-m-8 min-w-0 focus:outline-2 focus:outline-offset-2 focus:outline-primary"
       id={a2uiSurfaceDomId(surface.id)}
       tabIndex={-1}
-      title={provenance}
     >
       {statusNotice}
       {renderedSurface}

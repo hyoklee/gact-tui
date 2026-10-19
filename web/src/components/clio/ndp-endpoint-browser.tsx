@@ -63,7 +63,7 @@ export function NDPEndpointBrowser({
         },
         signal,
       ),
-    enabled: Boolean(section),
+    enabled: Boolean(section) && !workflow,
     retry: false,
     staleTime: 30_000,
   });
@@ -86,6 +86,7 @@ export function NDPEndpointBrowser({
     if (operation) setWorkflow({ title, operation, parameters, body, stationService });
   };
   const has = (id: string) => endpoint.operations.some((row) => row.id === id);
+  const archivedUrlOperation = ['GET /stream/segment/url', 'GET /pull/url'].find(has);
   const createId =
     tab === 'Organizations'
       ? 'POST /organization'
@@ -113,6 +114,19 @@ export function NDPEndpointBrowser({
     else if (tab === 'Stations')
       action('POST /bridge/sessions', 'Start stream', {}, { sncl_codes: [recordName(row)] });
   };
+  if (workflow)
+    return (
+      <NDPWorkflowForm
+        key={`${workflow.operation.id}/${JSON.stringify(workflow.parameters ?? {})}/${JSON.stringify(workflow.body ?? {})}`}
+        workspaceId={workspaceId}
+        endpoint={endpoint}
+        workflow={workflow}
+        onClose={() => setWorkflow(undefined)}
+        onSaved={() => {
+          if (!workflow.operation.read_only) void listing.refetch();
+        }}
+      />
+    );
   return (
     <div className="space-y-3">
       {sections.length ? (
@@ -191,11 +205,11 @@ export function NDPEndpointBrowser({
               live.
             </p>
           ) : null}
-          {['Files', 'Streams'].includes(tab) && has('GET /pull/url') ? (
+          {['Files', 'Streams'].includes(tab) && archivedUrlOperation ? (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => action('GET /pull/url', 'Sample archived URL', { max_msgs: 100 })}
+              onClick={() => action(archivedUrlOperation, 'Sample archived URL', { max_msgs: 10 })}
             >
               Sample CSV from URL
             </Button>
@@ -206,7 +220,7 @@ export function NDPEndpointBrowser({
               {/401|403|denied|account|role/i.test(listing.error.message) ? (
                 <p className="text-xs">
                   {endpoint.authentication === 'none'
-                    ? 'If access requires your connected NDP account, choose Edit endpoint → My NDP account.'
+                    ? 'If access requires your connected NDP account, choose Edit endpoint → Use my NDP sign-in.'
                     : 'Check this Endpoint’s required identity issuer and role.'}
                 </p>
               ) : null}
@@ -228,7 +242,7 @@ export function NDPEndpointBrowser({
                       ? 'dataset'
                       : 'datasets'
                     : tab.toLowerCase()}
-                  {listing.isFetching ? ' · Updating…' : ''}
+                  {listing.isFetching ? ' Updating…' : ''}
                 </p>
               ) : null}
               {!rows.length && !listing.error ? (
@@ -362,16 +376,6 @@ export function NDPEndpointBrowser({
           under Advanced.
         </p>
       )}
-      {workflow ? (
-        <NDPWorkflowForm
-          key={`${workflow.operation.id}/${JSON.stringify(workflow.parameters ?? {})}/${JSON.stringify(workflow.body ?? {})}`}
-          workspaceId={workspaceId}
-          endpoint={endpoint}
-          workflow={workflow}
-          onClose={() => setWorkflow(undefined)}
-          onSaved={() => void listing.refetch()}
-        />
-      ) : null}
       <details className="border-t pt-3">
         <summary className="cursor-pointer text-xs text-muted-foreground">
           Advanced API tools
