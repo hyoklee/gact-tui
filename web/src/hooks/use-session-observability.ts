@@ -32,7 +32,7 @@ export function useSessionObservability(sessionId: string) {
     queryKey: queryKeys.sessionObservabilityDetail(settings.endpoint, sessionId, 'processes'),
     initialPageParam: undefined as string | undefined,
     queryFn: ({ signal, pageParam }) =>
-      repository.asyncProcessesPage(sessionId, { cursor: pageParam, activeOnly: true }, signal),
+      repository.asyncProcessesPage(sessionId, { cursor: pageParam, activeOnly: false }, signal),
     getNextPageParam: (page) => page.cursor ?? undefined,
     enabled,
   });

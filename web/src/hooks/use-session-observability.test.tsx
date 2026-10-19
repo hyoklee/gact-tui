@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { AsyncProcess } from '@clio/core/v3';
 import {
   act,
   cleanup,
@@ -23,11 +24,11 @@ vi.mock('@/providers/connection-provider', () => ({
   useConnectionSettings: () => ({ settings: { endpoint: 'http://service' } }),
 }));
 import { useSessionObservability } from './use-session-observability';
-import { TaskPageContinuation } from '@/components/clio/async-task-list';
+import { AsyncTaskList, TaskPageContinuation } from '@/components/clio/async-task-list';
 
 afterEach(cleanup);
 
-it('uses one bounded active-work read and retains empty-page continuation', async () => {
+it('uses one bounded history read and retains empty-page continuation', async () => {
   repository.asyncProcessesPage
     .mockReset()
     .mockResolvedValueOnce({ items: [], cursor: 'next', total: null, revision: 1 })
@@ -48,7 +49,7 @@ it('uses one bounded active-work read and retains empty-page continuation', asyn
     expect(repository.asyncProcessesPage).toHaveBeenCalledTimes(1);
     expect(repository.asyncProcessesPage).toHaveBeenLastCalledWith(
       'sess',
-      { cursor: undefined, activeOnly: true },
+      { cursor: undefined, activeOnly: false },
       expect.any(AbortSignal),
     );
     await act(async () => {
@@ -63,12 +64,63 @@ it('uses one bounded active-work read and retains empty-page continuation', asyn
     expect(repository.asyncProcessesPage).toHaveBeenCalledTimes(2);
     expect(repository.asyncProcessesPage).toHaveBeenLastCalledWith(
       'sess',
-      { cursor: 'next', activeOnly: true },
+      { cursor: 'next', activeOnly: false },
       expect.any(AbortSignal),
     );
     expect(repository.sessionAgentTasks).not.toHaveBeenCalled();
   } finally {
     unmount();
+    client.clear();
+  }
+});
+
+it('keeps a completed subagent reachable for a confirmed restart from session evidence', async () => {
+  const completed: AsyncProcess = {
+    id: 'completed-worker',
+    handle: 'task_completed',
+    kind: 'agent',
+    task_kind: 'Subagent',
+    title: 'Completed analysis',
+    description: 'Inspect the retained original assignment',
+    status: 'completed',
+    live_state: 'completed',
+    effective_status: 'completed',
+    supported_actions: ['restart'],
+    metadata: {},
+  };
+  repository.asyncProcessesPage.mockReset().mockImplementation(async (_sid, options) => ({
+    items: options.activeOnly ? [] : [completed],
+    cursor: null,
+    total: 1,
+    revision: 1,
+  }));
+  const control = vi.fn(async () => {});
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  function Evidence() {
+    const { processes } = useSessionObservability('sess');
+    return (
+      <AsyncTaskList
+        processes={processes.data?.pages.flatMap((page) => page.items) ?? []}
+        onControlTask={control}
+      />
+    );
+  }
+  const view = render(
+    <QueryClientProvider client={client}>
+      <Evidence />
+    </QueryClientProvider>,
+  );
+  try {
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'restart Subagent: Completed analysis' }),
+    );
+    expect(control).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(completed.title);
+    fireEvent.click(screen.getByRole('button', { name: 'Restart subagent' }));
+    await waitFor(() => expect(control).toHaveBeenCalledWith(completed, 'restart'));
+    expect(control).toHaveBeenCalledTimes(1);
+  } finally {
+    view.unmount();
     client.clear();
   }
 });
