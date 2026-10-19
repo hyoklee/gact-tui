@@ -42,12 +42,9 @@ export function latestResponseArtifacts(artifacts: readonly Artifact[]): Artifac
     const owner = producer?.['session_id'];
     const key =
       typeof owner === 'string' && owner && artifact.workspace_id && artifact.version
-        ? JSON.stringify([
-            artifact.workspace_id,
-            artifact.name,
-            owner,
-            producer?.['agent_id'] ?? '',
-          ])
+        ? // Reconciliation preserves the producing session but need not record
+          // agent_id. It is still the next version of the same logical file.
+          JSON.stringify([artifact.workspace_id, artifact.name, owner])
         : artifact.id;
     const previous = selected.get(key);
     if (!previous || (artifact.version ?? 0) >= (previous.version ?? 0))
