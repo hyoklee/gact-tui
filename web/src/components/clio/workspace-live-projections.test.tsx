@@ -1,7 +1,7 @@
-import { cleanup, render as renderUi, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render as renderUi, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { Artifact, A2UISurface, PendingCompaction } from '@clio/core/v3';
+import type { Artifact, A2UISurface, AsyncProcess, PendingCompaction } from '@clio/core/v3';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
     surfaces: {},
     tasks: {},
     tools: {},
+    usage: {},
+    cursor: '',
+    stream: 'live',
     active_turns: {} as Record<string, string>,
     responded_turns: {} as Record<string, string>,
   },
@@ -77,10 +80,27 @@ vi.mock('./observability-dock', () => ({
   ),
 }));
 
+vi.mock('./workspace-route-surfaces', () => ({
+  WorkspaceStatusStrip: ({
+    activeWorkCount,
+    unresolvedWorkCount,
+    onInspectTasks,
+  }: {
+    activeWorkCount: number;
+    unresolvedWorkCount: number;
+    onInspectTasks?: () => void;
+  }) => (
+    <button type="button" onClick={onInspectTasks}>
+      {activeWorkCount} active; {unresolvedWorkCount} unresolved
+    </button>
+  ),
+}));
+
 import {
   WorkspaceLiveConversation,
   WorkspaceLiveObservabilityDock,
   WorkspaceLiveObservabilityView,
+  WorkspaceLiveStatusStrip,
 } from './workspace-live-projections';
 
 function render(ui: ReactElement) {
@@ -90,6 +110,34 @@ function render(ui: ReactElement) {
     ),
   });
 }
+
+it('derives inspection and confirmed activity from the same work page and forwards navigation', () => {
+  const task: AsyncProcess = {
+    id: 'uncertain',
+    kind: 'mcp',
+    title: 'Prepare dataset',
+    status: 'working',
+    live_state: 'task_state_uncertain',
+    effective_status: 'task_state_uncertain',
+    metadata: {},
+  };
+  const processes: AsyncProcess[] = [
+    task,
+    { ...task, id: 'queued', live_state: 'queued', effective_status: 'queued' },
+    { ...task, id: 'done', live_state: 'completed', effective_status: 'completed' },
+  ];
+  const inspect = vi.fn();
+  render(
+    <WorkspaceLiveStatusStrip
+      sessionId="status"
+      work={{ runs: [], tasks: [], tools: [], processes }}
+      onInspectTasks={inspect}
+    />,
+  );
+  const status = screen.getByRole('button', { name: '1 active; 1 unresolved' });
+  fireEvent.click(status);
+  expect(inspect).toHaveBeenCalledOnce();
+});
 
 describe('WorkspaceLiveConversation', () => {
   it('passes the session identity before transcript messages have loaded', () => {

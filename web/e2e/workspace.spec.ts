@@ -120,7 +120,7 @@ test('opens the unresolved task from the status strip in the actual task view', 
   });
   await page.goto(workspaceUrl);
   const inspect = page.getByRole('button', { name: 'Inspect unresolved tasks' });
-  await expect(inspect).toHaveText('1 task needs inspection');
+  await expect(inspect).toHaveText(/running; 1 task needs inspection$/);
   await inspect.click();
   const canvas = page.getByRole('complementary', { name: 'Workspace canvas' });
   await expect(canvas.getByRole('tab', { name: 'Evidence', exact: true })).toHaveAttribute(

@@ -324,8 +324,7 @@ export function WorkspacePage() {
           }
           statusStrip={
             <WorkspaceLiveStatusStrip
-              activeWorkCount={workspaceRouteState.countActiveWork(runs, tasks, tools, processes)}
-              unresolvedWorkCount={workspaceRouteState.countWorkNeedingInspection(processes)}
+              work={{ runs, tasks, tools, processes }}
               sessionId={sessionId}
             />
           }
@@ -367,7 +366,6 @@ export function WorkspacePage() {
     session.state === 'running' ? 'running' : send.isPending ? 'queued' : session.state;
   const { pendingMessageIds, cancellablePendingMessageIds } =
     workspaceRouteState.pendingSteerMessageIds(pendingSteers.data ?? []);
-  const activeWorkCount = workspaceRouteState.countActiveWork(runs, tasks, tools, processes);
   const renderComposer = (variant: 'docked' | 'welcome') => (
     <m.div
       className={
@@ -694,8 +692,7 @@ export function WorkspacePage() {
           workbenchRevealKey={workbenchRequest?.key}
           statusStrip={
             <WorkspaceLiveStatusStrip
-              activeWorkCount={activeWorkCount}
-              unresolvedWorkCount={workspaceRouteState.countWorkNeedingInspection(processes)}
+              work={{ runs, tasks, tools, processes }}
               onInspectTasks={() => openObservability('evidence')}
               onOpenWork={() => revealWorkbench({ kind: 'resources', section: 'work' })}
               sessionId={sessionId}
