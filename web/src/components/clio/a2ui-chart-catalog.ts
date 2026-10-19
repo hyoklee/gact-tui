@@ -151,42 +151,52 @@ Object.defineProperty(chartComponentSchema, '_parse', {
 export const ClioChartCatalogComponent = createComponentImplementation(
   { name: 'clio.chart.v1', schema: chartComponentSchema },
   ({ props, context }) =>
-    createElement(
-      BoundDataQuery,
-      {
-        dataContext: context.dataContext,
-        query: props.dataQuery as ChartDataQuery | undefined,
-        // This catalog adapter is a .ts file and passes a render function as children.
-        // oxlint-disable-next-line react/no-children-prop
-        children: (resolvedQuery: ChartDataQuery | undefined) => createElement(
+    createElement(BoundDataQuery, {
+      dataContext: context.dataContext,
+      query: props.dataQuery as ChartDataQuery | undefined,
+      // This catalog adapter is a .ts file and passes a render function as children.
+      // oxlint-disable-next-line react/no-children-prop
+      children: (resolvedQuery: ChartDataQuery | undefined) =>
+        createElement(
           Suspense,
-          { fallback: createElement('div', { 'aria-busy': true, className: 'h-80 animate-pulse rounded-lg bg-muted' }) },
+          {
+            fallback: createElement('div', {
+              'aria-busy': true,
+              className: 'h-80 animate-pulse rounded-lg bg-muted',
+            }),
+          },
           createElement(LazyChart, {
-        accessibility: props.accessibility,
-        colorField: props.colorField,
-        componentId: context.componentModel.id,
-        data: props.data as ChartRow[] | undefined,
-        dataQuery: resolvedQuery,
-        dataUri: props.dataUri,
-        entityField: props.entityField,
-        facetField: props.facetField,
-        height: props.height,
-        preset: props.preset,
-        // The binder resolves `selection` and writes back only when it is bound to a path.
-        selection: props.selection,
-        selectionField: props.selectionField,
-        selectionParam: props.selectionParam,
-        setSelection: isBoundToPath(context.componentModel.properties.selection)
-          ? (props.setSelection as unknown as SelectionWriter)
-          : undefined,
-        spec: props.spec,
-        title: props.title,
-        weight: props.weight,
-        xField: props.xField,
-        xType: props.xType,
-        yField: props.yField,
+            accessibility: props.accessibility,
+            colorField: props.colorField,
+            componentId: context.componentModel.id,
+            data: props.data as ChartRow[] | undefined,
+            dataQuery: resolvedQuery,
+            dataUri: props.dataUri,
+            entityField: props.entityField,
+            facetField: props.facetField,
+            height: props.height,
+            preset: props.preset,
+            // The binder resolves `selection` and writes back only when it is bound to a path.
+            selection: props.selection,
+            // An explicit shared path keeps the preset's entity-key contract even
+            // before any view has written the first selection. Automatic local
+            // observation selection remains owned by the chart renderer.
+            selectionField:
+              props.selectionField ??
+              (isBoundToPath(context.componentModel.properties.selection)
+                ? props.entityField
+                : undefined),
+            selectionParam: props.selectionParam,
+            setSelection: isBoundToPath(context.componentModel.properties.selection)
+              ? (props.setSelection as unknown as SelectionWriter)
+              : undefined,
+            spec: props.spec,
+            title: props.title,
+            weight: props.weight,
+            xField: props.xField,
+            xType: props.xType,
+            yField: props.yField,
           }),
         ),
-      },
-    ),
+    }),
 );

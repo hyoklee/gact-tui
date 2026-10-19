@@ -36,7 +36,10 @@ export async function zoomChartToRows(
     if (!values.length) return undefined;
     const low = Math.min(...values);
     const high = Math.max(...values);
-    const padding = low === high ? Math.max(Math.abs(low) * 0.05, type === 'temporal' ? 3_600_000 : 1) : (high - low) * 0.06;
+    const padding =
+      low === high
+        ? Math.max(Math.abs(low) * 0.05, type === 'temporal' ? 3_600_000 : 1)
+        : (high - low) * 0.06;
     return [low - padding, high + padding];
   };
   const x = domain(xField, xType);
@@ -70,10 +73,15 @@ function withOneUnitParam(
       const ordinaryIndex = children.findIndex((child) => {
         const mark = child.mark;
         const type = typeof mark === 'string' ? mark : isJsonObject(mark) ? mark.type : undefined;
-        return !['boxplot', 'errorbar', 'errorband'].includes(String(type));
+        return !['boxplot', 'errorbar', 'errorband', 'rule'].includes(String(type));
       });
       const index = ordinaryIndex >= 0 ? ordinaryIndex : 0;
-      return { ...spec, [key]: children.map((child, position) => position === index ? withOneUnitParam(child, param) : child) };
+      return {
+        ...spec,
+        [key]: children.map((child, position) =>
+          position === index ? withOneUnitParam(child, param) : child,
+        ),
+      };
     }
   }
   if (('facet' in spec || 'repeat' in spec) && isJsonObject(spec.spec)) {
@@ -100,14 +108,24 @@ export function withChartPointSelection(
   field: string | undefined,
 ): Record<string, unknown> {
   if (!field) return spec;
-  const withToggle = (node: Record<string, unknown>): { node: Record<string, unknown>; found: boolean } => {
+  const withToggle = (
+    node: Record<string, unknown>,
+  ): { node: Record<string, unknown>; found: boolean } => {
     let found = false;
     const next: Record<string, unknown> = { ...node };
     if (Array.isArray(node.params)) {
       next.params = node.params.map((entry) => {
-        if (!isJsonObject(entry) || entry.name !== param || !isJsonObject(entry.select)) return entry;
+        if (!isJsonObject(entry) || entry.name !== param || !isJsonObject(entry.select))
+          return entry;
         found = true;
-        return { ...entry, select: { ...entry.select, fields: [field], toggle: entry.select.toggle ?? 'event.shiftKey' } };
+        return {
+          ...entry,
+          select: {
+            ...entry.select,
+            fields: [field],
+            toggle: entry.select.toggle ?? 'event.shiftKey',
+          },
+        };
       });
     }
     for (const key of NESTED_LIST_KEYS) {
@@ -129,11 +147,59 @@ export function withChartPointSelection(
     return { node: next, found };
   };
   const existing = withToggle(spec);
-  if (existing.found) return existing.node;
-  return withOneUnitParam(spec, {
-    name: param,
-    select: { clear: 'dblclick', fields: [field], on: 'click', toggle: 'event.shiftKey', type: 'point' },
-  });
+  const selected = existing.found
+    ? existing.node
+    : withOneUnitParam(spec, {
+        name: param,
+        select: {
+          clear: 'dblclick',
+          fields: [field],
+          on: 'click',
+          toggle: 'event.shiftKey',
+          type: 'point',
+        },
+      });
+  return withDefaultSelectionFeedback(selected, param);
+}
+
+function withDefaultSelectionFeedback(
+  spec: Record<string, unknown>,
+  param: string,
+): Record<string, unknown> {
+  const next = { ...spec };
+  for (const key of NESTED_LIST_KEYS) {
+    if (Array.isArray(next[key]))
+      next[key] = next[key].map((child) =>
+        isJsonObject(child) ? withDefaultSelectionFeedback(child, param) : child,
+      );
+  }
+  if (isJsonObject(next.spec)) next.spec = withDefaultSelectionFeedback(next.spec, param);
+  const mark = next.mark;
+  const type = typeof mark === 'string' ? mark : isJsonObject(mark) ? mark.type : undefined;
+  const encoding = isJsonObject(next.encoding) ? next.encoding : {};
+  // Preserve authored selection/opacity semantics. For line charts, highlight
+  // the point overlay without regrouping or breaking the line geometry.
+  if (encoding.opacity !== undefined) return next;
+  if (['point', 'circle', 'square'].includes(String(type))) {
+    next.encoding = {
+      ...encoding,
+      opacity: { condition: { param, empty: true, value: 1 }, value: 0.25 },
+    };
+  } else if (type === 'line' && isJsonObject(mark) && mark.point) {
+    const point = isJsonObject(mark.point) ? mark.point : {};
+    if (point.opacity !== undefined) return next;
+    const store = JSON.stringify(`${param}_store`);
+    const active = `!length(data(${store})) || vlSelectionTest(${store}, datum)`;
+    next.mark = {
+      ...mark,
+      point: {
+        ...point,
+        opacity: { expr: `${active} ? 1 : 0.25` },
+        size: point.size ?? { expr: `${active} ? 100 : 56` },
+      },
+    };
+  }
+  return next;
 }
 
 /** Give line and spectra points a forgiving click target while preserving their geometry. */
@@ -185,7 +251,9 @@ export function nearestChartSeriesValue(
     const targetX = cursor.x - originX;
     const targetY = cursor.y - originY;
     let nearest = 12;
-    let value: { series: SelectionValue; point?: SelectionValue; kind: 'point' | 'line' } | undefined;
+    let value:
+      | { series: SelectionValue; point?: SelectionValue; kind: 'point' | 'line' }
+      | undefined;
     const bySeries = new Map<SelectionValue, Array<{ x: number; y: number }>>();
     for (const row of rows) {
       const series = row[seriesField];
@@ -215,9 +283,13 @@ export function nearestChartSeriesValue(
         const b = group[index]!;
         const dx = b.x - a.x;
         const dy = b.y - a.y;
-        const portion = dx || dy
-          ? Math.max(0, Math.min(1, ((targetX - a.x) * dx + (targetY - a.y) * dy) / (dx * dx + dy * dy)))
-          : 0;
+        const portion =
+          dx || dy
+            ? Math.max(
+                0,
+                Math.min(1, ((targetX - a.x) * dx + (targetY - a.y) * dy) / (dx * dx + dy * dy)),
+              )
+            : 0;
         const distance = Math.hypot(targetX - (a.x + portion * dx), targetY - (a.y + portion * dy));
         if (distance <= nearest) {
           nearest = distance;
@@ -251,7 +323,12 @@ export function withChartBoxSelection(
     xField,
     yField,
     active = false,
-  }: { pointParam: string; xField: string | undefined; yField: string | undefined; active?: boolean },
+  }: {
+    pointParam: string;
+    xField: string | undefined;
+    yField: string | undefined;
+    active?: boolean;
+  },
 ): { spec: Record<string, unknown>; param?: string } {
   if (!xField || !yField) return { param: undefined, spec };
   const param = chartBoxSelectionParamName(pointParam);
@@ -284,15 +361,16 @@ export function withManualChartZoom(
   const param = chartZoomParamName(pointParam);
   return {
     param,
-    // Scale-bound intervals belong to the view that owns the scales. A param
-    // inside the first layer has no access to the parent view's x/y scales.
-    spec: withRootParam(spec, {
+    // Layer-root selections expand into every child and duplicate tuple
+    // signals. A unit selection binds the shared scales exactly once.
+    spec: (Array.isArray(spec.layer) ? withOneUnitParam : withRootParam)(spec, {
       bind: 'scales',
       name: param,
       select: {
         clear: 'dblclick',
         encodings: ['x', 'y'],
-        translate: '[pointerdown[event.altKey && !event.shiftKey], window:pointerup] > window:pointermove!',
+        translate:
+          '[pointerdown[event.altKey && !event.shiftKey], window:pointerup] > window:pointermove!',
         type: 'interval',
         zoom: 'wheel![event.ctrlKey]',
       },
@@ -311,11 +389,7 @@ function comparable(raw: unknown, type: ChartAxisType): number | string | undefi
   if (raw === null || raw === undefined) return undefined;
   if (type === 'temporal') {
     const value =
-      raw instanceof Date
-        ? raw.getTime()
-        : typeof raw === 'number'
-          ? raw
-          : Date.parse(String(raw));
+      raw instanceof Date ? raw.getTime() : typeof raw === 'number' ? raw : Date.parse(String(raw));
     return Number.isFinite(value) ? value : undefined;
   }
   if (type === 'quantitative' || typeof raw === 'number') {
@@ -348,20 +422,35 @@ function axisRange(
     return { numeric: first <= second ? [first, second] : [second, first] };
   }
 
-  const categories = [...new Set(rows.map((row) => comparable(row[field], type)).filter(
-    (value): value is string => typeof value === 'string',
-  ))];
+  const categories = [
+    ...new Set(
+      rows
+        .map((row) => comparable(row[field], type))
+        .filter((value): value is string => typeof value === 'string'),
+    ),
+  ];
   const start = categories.indexOf(String(first));
   const end = categories.indexOf(String(second));
   if (start < 0 || end < 0) return undefined;
   return { categories: new Set(categories.slice(Math.min(start, end), Math.max(start, end) + 1)) };
 }
 
-function includes(range: AxisRange, raw: unknown, type: ChartAxisType, rows: readonly ChartRow[], field: string): boolean {
+function includes(
+  range: AxisRange,
+  raw: unknown,
+  type: ChartAxisType,
+  rows: readonly ChartRow[],
+  field: string,
+): boolean {
   const value = comparable(raw, type);
   if (value === undefined) return false;
   if (range.numeric) {
-    return typeof value === 'number' && value >= range.numeric[0] && value <= range.numeric[1];
+    if (typeof value !== 'number') return false;
+    // Scale inversion (notably log/temporal) can round a covered endpoint by
+    // a few ULPs. Keep boundary points without expanding the scientific range.
+    const tolerance =
+      Number.EPSILON * 16 * Math.max(1, Math.abs(value), ...range.numeric.map(Math.abs));
+    return value >= range.numeric[0] - tolerance && value <= range.numeric[1] + tolerance;
   }
   if (range.categories) {
     // Keep `rows` in the signature so the axis range and row values are always

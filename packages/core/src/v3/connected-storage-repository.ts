@@ -42,6 +42,14 @@ const storageSignInSchema = z.object({
 
 /** Trusted setup and approved data on the connected CLIO, never the desktop implicitly. */
 export class ConnectedStorageRepository extends A2uiRepository {
+  /** Explicit OpenSSH aliases on the connected CLIO, without key material or credentials. */
+  public connectedSshProfiles() {
+    return this.transport.request({
+      method: 'GET',
+      path: '/v1/storage/ssh/profiles',
+      decode: (value) => z.object({ profiles: z.array(z.string()) }).parse(value),
+    });
+  }
   /** Account setup never attaches or grants access to workspace notes. */
   public obsidianStatus(signal?: AbortSignal) {
     return this.transport.request({

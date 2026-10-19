@@ -131,6 +131,10 @@ it.each(['link', 'download'])(
       </QueryClientProvider>,
     );
     const user = userEvent.setup();
+    const dataset = await screen.findByRole('button', { name: /Sea observations/ });
+    expect(dataset).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('checkbox', { name: /stations.csv/ })).not.toBeInTheDocument();
+    await user.click(dataset);
     await screen.findByRole('checkbox', { name: /stations.csv/ });
     await user.click(screen.getByRole('checkbox', { name: /stations.csv/ }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));

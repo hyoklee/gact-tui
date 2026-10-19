@@ -98,6 +98,7 @@ export function NDPNestedFields({
       id={prefix}
       required={schema.required === true}
       type={['integer', 'number'].includes(String(schema.type)) ? 'number' : 'text'}
+      step={schema.type === 'number' ? 'any' : schema.type === 'integer' ? 1 : undefined}
       value={String(value ?? '')}
       onChange={(event) =>
         onChange(

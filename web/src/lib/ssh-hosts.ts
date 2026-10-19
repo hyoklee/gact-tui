@@ -1,4 +1,5 @@
 import type { SshProfile } from '@/tauri/ssh-profiles';
+import type { SshRoute } from '@clio/core/v3';
 
 export type SshHost = {
   id: string;
@@ -43,7 +44,26 @@ export function profileSshHosts(profiles: readonly SshProfile[]): SshHost[] {
 
 export function sshHostDestination(host: SshHost): string {
   if (host.profile) return host.profile;
-  return `${host.user ? `${host.user}@` : ''}${host.host ?? ''}`;
+  const address = host.host?.includes(':') ? `[${host.host}]` : (host.host ?? '');
+  return `${host.user ? `${host.user}@` : ''}${address}${host.port !== 22 ? `:${host.port}` : ''}`;
+}
+
+/** Adapt a shared wire route to the editor without losing custom destination fields. */
+export function sshRouteHost(route: Partial<SshRoute>, label?: string): SshHost {
+  const destination = route.profile || route.host || '';
+  return {
+    id: route.profile
+      ? `profile:${route.profile}`
+      : `route:${route.user ?? ''}@${destination}:${route.port ?? 22}`,
+    label: label || destination,
+    profile: route.profile || undefined,
+    host: route.host || undefined,
+    user: route.user || undefined,
+    port: route.port ?? 22,
+    jumpHosts: route.jump_hosts ?? [],
+    identityFile: route.identity_file || undefined,
+    platform: route.platform ?? 'auto',
+  };
 }
 
 /** Whether removing a saved alias invalidates this draft's destination or a jump hop. */

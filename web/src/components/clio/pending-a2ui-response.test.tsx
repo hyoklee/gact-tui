@@ -175,7 +175,7 @@ describe('PendingA2UIResponse', () => {
     expect(screen.getByRole('group', { name: 'EarthScope stations map' })).toBeVisible();
   });
 
-  it('single_instance_survives_fullscreen: a selection made inline is still selected inside — and after — full screen', async () => {
+  it('preserves inline and fullscreen selections when exiting with Escape', async () => {
     const user = userEvent.setup();
     renderPendingA2UI(mapSurface());
 
@@ -198,9 +198,11 @@ describe('PendingA2UIResponse', () => {
       'true',
     );
 
-    await user.click(within(dialog).getByRole('button', { name: 'Exit full screen' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Station 1' }));
+    expect(dialog).toBeVisible();
+    await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Station 2' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Station 1' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );

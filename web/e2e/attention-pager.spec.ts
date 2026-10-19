@@ -166,7 +166,10 @@ for (const theme of ['light', 'dark']) {
         'This session',
       );
       await panel.getByRole('button', { name: 'Allow for session' }).click();
-      await expect(panel.getByText('1 / 1', { exact: true })).toBeVisible();
+      await expect(panel.getByText('1 / 1', { exact: true })).toHaveCount(0);
+      await expect(panel.getByRole('button', { name: 'Previous request' })).toHaveCount(0);
+      await expect(panel.getByRole('button', { name: 'Next request' })).toHaveCount(0);
+      await expect(panel.getByRole('textbox')).toHaveValue('Keep uncertainty visible.');
       expect(submissions[1]).toEqual({ id: 'permission:read', body: { action: 'allow_session' } });
       const bounds = await panel.boundingBox();
       expect(bounds).not.toBeNull();

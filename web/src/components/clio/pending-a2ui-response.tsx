@@ -269,6 +269,10 @@ export function PendingA2UIResponse({
             conversationWidth === 'wide' ? 'sm:max-w-6xl' : 'sm:max-w-4xl',
           )}
           showCloseButton={false}
+          onInteractOutside={(event) => {
+            const target = event.detail.originalEvent.target;
+            if (target instanceof Node && dialogHost?.contains(target)) event.preventDefault();
+          }}
           onCloseAutoFocus={(event) => {
             const reference = pendingReference.current;
             if (!reference) return;

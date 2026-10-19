@@ -66,6 +66,7 @@ export function NDPWorkflowForm({
   const repository = useRepository();
   const client = useQueryClient();
   const { operation } = workflow;
+  const archivedUrl = ['GET /stream/segment/url', 'GET /pull/url'].includes(operation.id);
   const [values, setValues] = useState<NDPRecord>({ ...workflow.parameters });
   const [body, setBody] = useState<NDPRecord>({ ...workflow.body });
   const [review, setReview] = useState(false);
@@ -121,7 +122,11 @@ export function NDPWorkflowForm({
     const value = current[field.name];
     const kind = fieldType(field.schema);
     const title =
-      labels[field.name] ?? String(field.schema.title ?? field.name.replaceAll('_', ' '));
+      archivedUrl && field.name === 'url'
+        ? 'CSV URL'
+        : archivedUrl && field.name === 'cursor'
+          ? 'Resume cursor'
+          : labels[field.name] ?? String(field.schema.title ?? field.name.replaceAll('_', ' '));
     return (
       <div key={`${field.body}/${field.name}`} className="space-y-1">
         <Label htmlFor={`ndp-workflow-${field.name}`}>
@@ -166,6 +171,7 @@ export function NDPWorkflowForm({
             id={`ndp-workflow-${field.name}`}
             required={field.required}
             type={kind === 'number' || kind === 'integer' ? 'number' : 'text'}
+            step={kind === 'number' ? 'any' : kind === 'integer' ? 1 : undefined}
             min={typeof field.schema.minimum === 'number' ? field.schema.minimum : undefined}
             max={typeof field.schema.maximum === 'number' ? field.schema.maximum : undefined}
             value={Array.isArray(value) ? value.join(', ') : String(value ?? '')}
@@ -207,6 +213,12 @@ export function NDPWorkflowForm({
       }}
     >
       <h4 className="font-medium">{workflow.title}</h4>
+      {operation.id === 'GET /stream/segment/url' ? (
+        <p className="text-xs text-muted-foreground">
+          Save a finite segment, then use its completion cursor under Options to continue from the
+          next record. Between requests the read connection is closed; no remote producer is paused.
+        </p>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
         {fields
           .filter(
@@ -311,14 +323,13 @@ export function NDPWorkflowForm({
           <p>
             {workflow.title} on <strong>{endpoint.name}</strong>?
           </p>
-          <p className="text-xs text-muted-foreground break-all">
-            {Object.entries({ ...values, ...body })
-              .map(
-                ([name, value]) =>
-                  `${labels[name] ?? name}: ${Array.isArray(value) ? value.join(', ') : String(value)}`,
-              )
-              .join(' · ')}
-          </p>
+          <div className="space-y-1 text-xs text-muted-foreground break-all">
+            {Object.entries({ ...values, ...body }).map(([name, value]) => (
+              <p key={name}>
+                {labels[name] ?? name}: {Array.isArray(value) ? value.join(', ') : String(value)}
+              </p>
+            ))}
+          </div>
         </div>
       ) : null}
       <div className="flex gap-2">

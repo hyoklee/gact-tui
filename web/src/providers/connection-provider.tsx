@@ -720,3 +720,9 @@ export function useConnectionSettings(): ConnectionContextValue {
   if (!value) throw new Error('useConnectionSettings must be used inside ConnectionProvider');
   return value;
 }
+
+/** Whether this view belongs to an offline archive without network access. */
+// oxlint-disable-next-line react/only-export-components
+export function useOfflineArchive(): boolean {
+  return useContext(ConnectionContext)?.readOnly === true;
+}
