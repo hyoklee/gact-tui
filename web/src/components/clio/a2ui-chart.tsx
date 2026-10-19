@@ -41,7 +41,12 @@ import {
   withChartPointSelection,
   type ChartAxisType,
 } from './chart-box-selection';
-import { chartAxisType, describeChart, isContinuousAxis } from './chart-view-helpers';
+import {
+  chartAxisType,
+  chartChannelField,
+  describeChart,
+  isContinuousAxis,
+} from './chart-view-helpers';
 import { buildSpec, distinctFieldValues } from './chart-spec-build';
 import { DataFilterPopover, type DataFilterField } from './data-filter-popover';
 import { dataViewFlexStyle } from './data-view-layout';
@@ -108,9 +113,14 @@ const DEFAULT_CHART_HEIGHT = 320;
 /** A Vega-Lite chart over inline or artifact rows, with a selection linkable across components. */
 export function ClioChart(props: ClioChartProps) {
   const { accessibility, componentId, height = DEFAULT_CHART_HEIGHT, title, weight } = props;
-  const { colorField, entityField, facetField, preset, xField, xType, yField } = props;
+  const { entityField, facetField, preset, xType } = props;
+  const xField = props.xField ?? chartChannelField(props.spec, 'x');
+  const yField = props.yField ?? chartChannelField(props.spec, 'y');
+  const colorField = props.colorField ?? chartChannelField(props.spec, 'color');
+  const declaredSelectionField =
+    props.selectionField ?? parseSelectionState(props.selection)?.field;
   const autoSelection = useAutoDatasetSelection(props.dataUri);
-  const inlineField = props.selectionField ?? entityField;
+  const inlineField = declaredSelectionField ?? entityField;
   const inlineKey = useMemo(
     () =>
       !props.dataUri && inlineField && props.data
@@ -133,16 +143,18 @@ export function ClioChart(props: ClioChartProps) {
       : (props.selection ?? autoInlineSelection.selection ?? localSelection);
   const param = props.selectionParam ?? CHART_SPEC_RULES.defaultSelectionParam;
   const selectsSeries = preset === 'trajectories' || preset === 'spectra';
+  const needsInlineRowIdentity =
+    selectsSeries || (!props.dataUri && !declaredSelectionField && !inlineKey);
   const inlineRows = useMemo(
     () =>
-      props.data && selectsSeries
+      props.data && needsInlineRowIdentity
         ? props.data.map((row, index) => ({ ...row, __row: row.__row ?? index }))
         : props.data,
-    [props.data, selectsSeries],
+    [props.data, needsInlineRowIdentity],
   );
   const selectionField =
-    props.selectionField ??
-    (selectsSeries || (autoActive && !props.dataQuery?.aggregate) ? '__row' : entityField);
+    declaredSelectionField ??
+    (needsInlineRowIdentity || (autoActive && !props.dataQuery?.aggregate) ? '__row' : entityField);
   // Series geometry stays grouped by the entity even when automatic linking
   // uses __row to share exact observations with maps and tables.
   const markSelectionField = selectionField;
@@ -380,6 +392,18 @@ export function ClioChart(props: ClioChartProps) {
     markSelectionField && selectedMarkValues.length === 1 && !selectsSeries
       ? String(selectedMarkValues[0])
       : '';
+  const selectionCandidateLabel = (candidate: SelectionValue): string => {
+    if (selectsSeries || markSelectionField !== '__row') return String(candidate);
+    const row = rows?.find((item) => item.__row === candidate);
+    const fields = [...new Set([xField, colorField, yField].filter(Boolean))] as string[];
+    const label =
+      row &&
+      fields
+        .map((field) => row[field])
+        .filter(isSelectionValue)
+        .join(', ');
+    return label || `Row ${typeof candidate === 'number' ? candidate + 1 : candidate}`;
+  };
   const handleSelectCandidate = (raw: string) => {
     const value = selectionCandidates.find((candidate) => String(candidate) === raw);
     if (value === undefined) return;
@@ -547,13 +571,19 @@ export function ClioChart(props: ClioChartProps) {
       {linkable && markSelectionField && selectionCandidates.length > 0 ? (
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
-            Select a {selectsSeries ? entityField : markSelectionField} by keyboard
+            Select a{' '}
+            {selectsSeries
+              ? entityField
+              : markSelectionField === '__row'
+                ? 'row'
+                : markSelectionField}{' '}
+            by keyboard
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
             <DropdownMenuRadioGroup onValueChange={handleSelectCandidate} value={selectedCandidate}>
               {selectionCandidates.map((candidate) => (
                 <DropdownMenuRadioItem key={String(candidate)} value={String(candidate)}>
-                  {String(candidate)}
+                  {selectionCandidateLabel(candidate)}
                 </DropdownMenuRadioItem>
               ))}
             </DropdownMenuRadioGroup>

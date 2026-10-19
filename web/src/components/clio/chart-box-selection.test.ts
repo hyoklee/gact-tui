@@ -24,6 +24,24 @@ afterEach(() => {
 });
 
 describe('series selection targets', () => {
+  it('includes log-axis endpoints after floating-point inversion without including nearby outside rows', () => {
+    expect(
+      chartBoxSelectionValues(
+        { hour: ['13:00'], reading: [0.0010000000000000002, 0.01] },
+        {
+          rows: [
+            { __row: 0, hour: '13:00', reading: 0.001 },
+            { __row: 1, hour: '13:00', reading: 0.00099 },
+          ],
+          selectionField: '__row',
+          xField: 'hour',
+          xType: 'ordinal',
+          yField: 'reading',
+          yType: 'quantitative',
+        },
+      ),
+    ).toEqual([0]);
+  });
   it('keeps point clicks precise and Ctrl+Shift additions at curve granularity', () => {
     expect(chartClickSelectionValues([2], [3], false)).toEqual([3]);
     expect(chartClickSelectionValues([2], [3, 4, 5], true)).toEqual([2, 3, 4, 5]);
@@ -31,19 +49,24 @@ describe('series selection targets', () => {
   });
   it('adds Shift toggle to a preset selection and makes line dots easier to click', () => {
     const preset = renderChartPreset('trajectories', {
-      entityField: 'id', selectionParam: 'sel', xField: 'day', yField: 'value',
+      entityField: 'id',
+      selectionParam: 'sel',
+      xField: 'day',
+      yField: 'value',
     });
     const spec = withChartLinePointTargets(withChartPointSelection(preset, 'sel', 'id'));
     expect((spec.mark as Record<string, unknown>).point).toEqual({ filled: true, size: 100 });
     expect((spec.params as Array<Record<string, unknown>>)[0]?.select).toMatchObject({
-      toggle: 'event.shiftKey', fields: ['id'],
+      toggle: 'event.shiftKey',
+      fields: ['id'],
     });
   });
 
   it('reads a series key from nested Vega line and point scenegraph items', () => {
     expect(chartMarkSelectionValue({ datum: { id: 'storm-a' } }, 'id')).toBe('storm-a');
-    expect(chartMarkSelectionValue({ datum: { values: [{ datum: { id: 'storm-b' } }] } }, 'id'))
-      .toBe('storm-b');
+    expect(
+      chartMarkSelectionValue({ datum: { values: [{ datum: { id: 'storm-b' } }] } }, 'id'),
+    ).toBe('storm-b');
     expect(chartMarkSelectionValue({ datum: { unrelated: 2 } }, 'id')).toBeUndefined();
   });
 
@@ -53,33 +76,74 @@ describe('series selection targets', () => {
       scale: () => (value: number) => value,
     } as never;
     const rows = [
-      { id: 'A', __row: 0, x: 0, y: 10 }, { id: 'A', __row: 1, x: 20, y: 10 },
-      { id: 'B', __row: 2, x: 0, y: 40 }, { id: 'B', __row: 3, x: 20, y: 40 },
+      { id: 'A', __row: 0, x: 0, y: 10 },
+      { id: 'A', __row: 1, x: 20, y: 10 },
+      { id: 'B', __row: 2, x: 0, y: 40 },
+      { id: 'B', __row: 3, x: 20, y: 40 },
     ];
-    expect(nearestChartSeriesValue(view, rows, { x: 30, y: 45 }, 'x', 'y', 'id', 'quantitative', '__row'))
-      .toEqual({ series: 'B', point: 3, kind: 'point' });
-    expect(nearestChartSeriesValue(view, rows, { x: 20, y: 15 }, 'x', 'y', 'id', 'quantitative', '__row'))
-      .toEqual({ series: 'A', point: 1, kind: 'point' });
-    expect(nearestChartSeriesValue(view, rows, { x: 20, y: 15 }, 'x', 'y', 'id', 'quantitative'))
-      .toEqual({ series: 'A', kind: 'point' });
-    expect(nearestChartSeriesValue(view, rows, { x: 20, y: 15 }, 'x', 'y', 'id', 'quantitative', '__row'))
-      .not.toBeUndefined();
-    expect(nearestChartSeriesValue(view, rows, { x: 20, y: 90 }, 'x', 'y', 'id', 'quantitative'))
-      .toBeUndefined();
+    expect(
+      nearestChartSeriesValue(
+        view,
+        rows,
+        { x: 30, y: 45 },
+        'x',
+        'y',
+        'id',
+        'quantitative',
+        '__row',
+      ),
+    ).toEqual({ series: 'B', point: 3, kind: 'point' });
+    expect(
+      nearestChartSeriesValue(
+        view,
+        rows,
+        { x: 20, y: 15 },
+        'x',
+        'y',
+        'id',
+        'quantitative',
+        '__row',
+      ),
+    ).toEqual({ series: 'A', point: 1, kind: 'point' });
+    expect(
+      nearestChartSeriesValue(view, rows, { x: 20, y: 15 }, 'x', 'y', 'id', 'quantitative'),
+    ).toEqual({ series: 'A', kind: 'point' });
+    expect(
+      nearestChartSeriesValue(
+        view,
+        rows,
+        { x: 20, y: 15 },
+        'x',
+        'y',
+        'id',
+        'quantitative',
+        '__row',
+      ),
+    ).not.toBeUndefined();
+    expect(
+      nearestChartSeriesValue(view, rows, { x: 20, y: 90 }, 'x', 'y', 'id', 'quantitative'),
+    ).toBeUndefined();
   });
 });
 
 describe('withChartBoxSelection', () => {
   it('compiles a boxplot with its brush on the point layer exactly once', () => {
     const base = renderChartPreset('boxplot', {
-      entityField: 'id', selectionParam: 'sel', xField: 'country', yField: 'latitude',
+      entityField: 'id',
+      selectionParam: 'sel',
+      xField: 'country',
+      yField: 'latitude',
     });
     const result = withChartBoxSelection(base, {
-      pointParam: 'sel', xField: 'country', yField: 'latitude',
+      pointParam: 'sel',
+      xField: 'country',
+      yField: 'latitude',
     });
     const layers = result.spec.layer as Array<Record<string, unknown>>;
     expect(layers[0]?.params).toBeUndefined();
-    expect((layers[1]!.params as Array<{ name: string }>).map((entry) => entry.name)).toContain('sel_box');
+    expect((layers[1]!.params as Array<{ name: string }>).map((entry) => entry.name)).toContain(
+      'sel_box',
+    );
     expect(() => parse(compile(result.spec as unknown as TopLevelSpec).spec)).not.toThrow();
   });
   it('adds a two-dimensional interval param to the first plot unit', () => {
@@ -101,12 +165,12 @@ describe('withChartBoxSelection', () => {
     expect((result.spec.layer as Array<Record<string, unknown>>)[0]!.params).toEqual([
       {
         name: 'sel_box',
-      select: {
-        clear: 'dblclick',
-        encodings: ['x', 'y'],
-        on: '[pointerdown[event.shiftKey || event.ctrlKey || event.metaKey], window:pointerup] > window:pointermove!',
-        type: 'interval',
-      },
+        select: {
+          clear: 'dblclick',
+          encodings: ['x', 'y'],
+          on: '[pointerdown[event.shiftKey || event.ctrlKey || event.metaKey], window:pointerup] > window:pointermove!',
+          type: 'interval',
+        },
       },
     ]);
     expect((result.spec.layer as Array<Record<string, unknown>>)[1]).not.toHaveProperty('params');
@@ -154,9 +218,20 @@ describe('withChartBoxSelection', () => {
   });
 
   it('uses an ordinary drag only while the visible box mode is active', () => {
-    const base = { mark: 'point', encoding: { x: { field: 'x', type: 'quantitative' }, y: { field: 'y', type: 'quantitative' } } };
+    const base = {
+      mark: 'point',
+      encoding: {
+        x: { field: 'x', type: 'quantitative' },
+        y: { field: 'y', type: 'quantitative' },
+      },
+    };
     const passive = withChartBoxSelection(base, { pointParam: 'sel', xField: 'x', yField: 'y' });
-    const active = withChartBoxSelection(base, { pointParam: 'sel', xField: 'x', yField: 'y', active: true });
+    const active = withChartBoxSelection(base, {
+      pointParam: 'sel',
+      xField: 'x',
+      yField: 'y',
+      active: true,
+    });
     expect(JSON.stringify(passive.spec)).toContain('event.shiftKey');
     expect(JSON.stringify(active.spec)).toContain('!event.altKey');
     expect(JSON.stringify(active.spec)).not.toContain('event.shiftKey');
@@ -200,7 +275,10 @@ describe('chartBoxSelectionValues', () => {
     ];
     expect(
       chartBoxSelectionValues(
-        { time: [Date.parse('2026-08-04T00:00:00Z'), Date.parse('2026-08-02T00:00:00Z')], depth: [6, 2] },
+        {
+          time: [Date.parse('2026-08-04T00:00:00Z'), Date.parse('2026-08-02T00:00:00Z')],
+          depth: [6, 2],
+        },
         {
           rows: temporalRows,
           selectionField: 'id',

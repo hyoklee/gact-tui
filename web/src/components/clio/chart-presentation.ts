@@ -17,7 +17,8 @@ export function chartPresentationConfig(dark: boolean) {
       domain: false,
       ticks: false,
       gridColor: grid,
-      gridOpacity: 0.65,
+      gridOpacity: 0.35,
+      tickCount: 4,
       labelColor: muted,
       labelFontSize: 12,
       labelPadding: 8,
@@ -26,6 +27,7 @@ export function chartPresentationConfig(dark: boolean) {
       titleFontWeight: 500 as const,
       titlePadding: 14,
     },
+    axisX: { grid: false, labelAngle: 0, labelOverlap: 'greedy' as const },
     legend: {
       labelColor: muted,
       labelFontSize: 12,
