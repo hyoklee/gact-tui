@@ -24,7 +24,7 @@ import { useA2uiSessionRegistry } from './lib/a2ui/processor-store';
 import { A2uiReferenceSessionProvider } from './lib/a2ui/reference-session';
 import { ClioA2UISurface } from './components/clio/a2ui-surface';
 import './index.css';
-import { setWorkerUrl } from 'maplibre-gl';
+import { configureArchiveMapWorker } from './lib/session-export/map-worker';
 import { TooltipProvider } from './components/ui/tooltip';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 import { vocab } from './lib/brand-vocabulary';
@@ -42,11 +42,7 @@ declare global {
     CLIO_DASHBOARD_DATA?: string;
   }
 }
-setWorkerUrl(
-  URL.createObjectURL(
-    new Blob([import.meta.env.VITE_CLIO_ARCHIVE_MAP_WORKER], { type: 'text/javascript' }),
-  ),
-);
+configureArchiveMapWorker(import.meta.env.VITE_CLIO_ARCHIVE_MAP_WORKER);
 interface TranscriptRow {
   session: { id: string; title: string; metadata?: Record<string, unknown> };
   messages: { id: string; role: string; created_at?: string; parts: RecordedPart[] }[];
