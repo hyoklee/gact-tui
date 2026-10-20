@@ -38,6 +38,7 @@ test('opens children in tabs, uses Shift for the center, and fits evidence equal
   const canvas = page.getByRole('complementary', { name: 'Workspace canvas' });
   await expect(canvas.getByRole('textbox', { name: 'Message this agent' })).toBeVisible();
   await page.getByRole('button', { name: 'Close workspace canvas', exact: true }).click();
+  await expect(canvas).not.toBeVisible();
   await expect(evidence).toBeVisible();
   const reopenedDetails = evidence.getByRole('button', {
     name: 'Task details: Station analysis worker',
