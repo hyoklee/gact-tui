@@ -89,6 +89,36 @@ const child: SubagentRun = {
   task: assignment,
 };
 
+it.each(['cancelled', 'completed'] as const)(
+  'opens a %s child from its Task record without a live subagent projection',
+  async (state) => {
+    const open = vi.fn();
+    const historical: AsyncProcess = {
+      ...task,
+      id: `task_${state}`,
+      handle: `task_${state}`,
+      parent_session_id: 'parent',
+      live_state: state,
+      effective_status: state,
+      status: state,
+      supported_actions: ['restart'],
+    };
+    render(<AsyncTaskList processes={[historical]} subagents={[]} onOpenSubagent={open} />);
+    expect(screen.queryByRole('button', { name: 'Open child conversation Worker #1' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Task details: Worker #1' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Open child conversation Worker #1' }));
+    expect(open).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: historical.handle,
+        session_id: 'parent',
+        child_session_id: 'child',
+        state,
+      }),
+      'canvas',
+    );
+  },
+);
+
 it('shows a question waiting for its answer and reveals the stored answer on demand', async () => {
   const question: AsyncProcess = {
     ...task,

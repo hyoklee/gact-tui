@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { mergeSessionSubagents } from '@/lib/session-agent-tasks';
 import {
   BanIcon,
   CheckCircle2Icon,
@@ -32,6 +33,7 @@ export function TaskActivityRow({
   onOpenSubagent?: ClioEvidenceViewProps['onOpenSubagent'];
 }) {
   const { process: task, subagent } = entry;
+  const conversation = subagent ?? (task ? mergeSessionSubagents([], [task])[0] : undefined);
   const title = task?.title || subagent?.title || 'Task';
   const kind = task?.task_kind ?? (task?.kind === 'agent' || subagent ? 'Subagent' : 'MCP');
   const assignment = task?.description || subagent?.task;
@@ -146,24 +148,24 @@ export function TaskActivityRow({
               {result}
             </div>
           ) : null}
-          {subagent?.child_session_id && onOpenSubagent ? (
+          {conversation?.child_session_id && onOpenSubagent ? (
             <div className="flex flex-wrap items-center gap-1">
               <Button
                 variant="link"
                 size="sm"
                 className="h-8 px-0"
-                aria-label={`Open child conversation ${subagent.title}`}
+                aria-label={`Open child conversation ${conversation.title}`}
                 title={SUBAGENT_OPEN_HINT}
-                onClick={(event) => onOpenSubagent(subagent, subagentOpenTarget(event))}
+                onClick={(event) => onOpenSubagent(conversation, subagentOpenTarget(event))}
               >
                 Open conversation
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={`Open ${subagent.title} in the center`}
+                aria-label={`Open ${conversation.title} in the center`}
                 title="Open in the center"
-                onClick={() => onOpenSubagent(subagent, 'conversation')}
+                onClick={() => onOpenSubagent(conversation, 'conversation')}
               >
                 <PanelRightOpenIcon aria-hidden="true" />
               </Button>
