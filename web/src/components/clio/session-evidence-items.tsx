@@ -20,9 +20,6 @@ import {
   WrenchIcon,
 } from 'lucide-react';
 import { formatBytes, formatDuration } from '@/lib/format';
-import { fileFormatLabel } from '@/lib/media-types';
-import { artifactDisplayName, isDashboardArtifact } from '@/lib/dashboard-presentation';
-import { ArtifactTypeIcon } from './artifact-type-icon';
 import type { ClioEvidenceViewProps } from './observability-evidence';
 import type { EvidenceFile, EvidencePlan } from './session-evidence-projection';
 import { diffStatus, friendlyStatus, type EvidenceSource } from './observability-evidence-sources';
@@ -33,8 +30,7 @@ import { AsyncTaskList } from './async-task-list';
 import { taskActivity } from './task-activity';
 
 import type { SessionRailItem } from './session-rail-layout';
-import { FileIdentityRow } from './file-identity-row';
-import { ClioRelativeTime } from './relative-time';
+import { ArtifactRailRow } from './artifact-rail-row';
 
 export type SessionEvidenceSummaryProps = Pick<
   ClioEvidenceViewProps,
@@ -159,6 +155,7 @@ export function sessionEvidenceItems({
             content: (
               <>
                 <AsyncTaskList
+                  compact
                   processes={childProcesses}
                   subagents={subagents}
                   onOpenSubagent={actions.onOpenSubagent}
@@ -198,6 +195,7 @@ export function sessionEvidenceItems({
             content: (
               <>
                 <AsyncTaskList
+                  compact
                   processes={processes}
                   onOpenSubagent={actions.onOpenSubagent}
                   onCancelTask={actions.onCancelTask}
@@ -266,33 +264,9 @@ export function sessionEvidenceItems({
             content: (
               <>
                 {outputs.map((artifact) => (
-                  <FileIdentityRow
+                  <ArtifactRailRow
                     key={artifact.id}
-                    name={artifactDisplayName(artifact)}
-                    mediaType={artifact.media_type}
-                    className="my-1"
-                    icon={<ArtifactTypeIcon artifact={artifact} badge className="size-9" />}
-                    metadata={
-                      <span className="flex items-center gap-2">
-                        <span>
-                          {[
-                            isDashboardArtifact(artifact)
-                              ? 'Dashboard'
-                              : fileFormatLabel(artifact.name, artifact.media_type),
-                            artifact.size === undefined ? undefined : formatBytes(artifact.size),
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </span>
-                        {artifact.created_at ? (
-                          <ClioRelativeTime
-                            timestamp={artifact.created_at}
-                            label="Created"
-                            compact
-                          />
-                        ) : null}
-                      </span>
-                    }
+                    artifact={artifact}
                     onOpen={
                       actions.onOpenArtifact ? () => actions.onOpenArtifact?.(artifact) : undefined
                     }

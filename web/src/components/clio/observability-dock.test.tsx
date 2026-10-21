@@ -170,15 +170,15 @@ describe('ClioObservabilityView', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Session rail' }));
-    expect(screen.getByRole('dialog', { name: 'Activity and evidence' })).toBeVisible();
+    expect(screen.getByRole('dialog', { name: 'Session rail' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Session rail' })).toHaveAttribute(
       'aria-expanded',
       'true',
     );
     await user.click(screen.getByRole('button', { name: 'Session rail' }));
-    expect(screen.queryByRole('dialog', { name: 'Activity and evidence' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Session rail' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Session rail' }));
-    await user.click(screen.getByRole('button', { name: 'Hide activity and evidence' }));
+    await user.click(screen.getByRole('button', { name: 'Hide session rail' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Session rail' }));
     await user.click(screen.getByRole('button', { name: 'Open full details' }));
@@ -430,7 +430,7 @@ describe('ClioObservabilityView', () => {
     );
 
     expect(screen.getByText('2 background activities')).toBeVisible();
-    const evidenceControl = screen.getByRole('button', { name: 'Session rail' });
+    const evidenceControl = screen.getByRole('button', { name: 'Work rail' });
     expect(within(evidenceControl).getByText('Settled')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Browse child conversations' }));
     await user.click(

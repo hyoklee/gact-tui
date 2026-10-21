@@ -12,13 +12,16 @@ import { useShowcasePlacement } from './use-showcase-placement';
 import { restoreEvidenceFocus } from './evidence-focus';
 import { SessionRailContent } from './session-rail-content';
 import type { ClioObservabilityDockProps } from './observability-dock-shell';
+import type { RailKind } from './session-rail-layout';
 
 /** A compact launcher that stays docked while the transcript has room beside it. */
 export function SessionEvidencePopover({
   evidence,
   children,
+  kind = 'session',
 }: {
   evidence: ClioObservabilityDockProps;
+  kind?: RailKind;
   children: (control: {
     visible: boolean;
     buttonRef: RefObject<HTMLButtonElement | null>;
@@ -28,7 +31,9 @@ export function SessionEvidencePopover({
 }) {
   const selection = useEvidenceSections('evidence-layout', []);
   // Honor existing top/bottom preferences as visible, now that sections have their own controls.
-  const enabled = selection.value.some((value) => ['top', 'bottom', 'open'].includes(value));
+  const enabled = selection.value.some((value) =>
+    (kind === 'session' ? ['top', 'open', 'session'] : ['bottom', 'work']).includes(value),
+  );
   const buttonRef = useRef<HTMLButtonElement>(null);
   const outsideRef = useRef(false);
   const [mode, setMode] = useState<'docked' | 'temporary'>(enabled ? 'docked' : 'temporary');
@@ -52,7 +57,7 @@ export function SessionEvidencePopover({
     if (open) setOpen(false);
     else {
       setMode(measureNow() ? 'docked' : 'temporary');
-      selection.onValueChange(['open']);
+      selection.onValueChange([kind]);
     }
   };
   const openWork = evidence.onOpenWork
@@ -138,15 +143,16 @@ export function SessionEvidencePopover({
                       : `min(${flyoutHeight}px, var(--radix-popover-content-available-height))`,
                 }
           }
-          aria-label="Activity and evidence"
+          aria-label={kind === 'work' ? 'Work rail' : 'Session rail'}
           className={cn(
-            'w-[min(30rem,calc(100vw-2rem))] overflow-hidden gap-0 p-0',
+            'w-[min(22rem,calc(100vw-2rem))] overflow-hidden gap-0 p-0',
             docked
               ? 'bg-transparent shadow-none ring-0'
               : 'max-h-[min(32rem,var(--radix-popover-content-available-height))]',
           )}
         >
           <SessionRailContent
+            kind={kind}
             evidence={{
               ...evidence,
               ...summaryActions,
@@ -180,8 +186,8 @@ export function SessionEvidencePopover({
                   </TooltipProvider>
                 ) : null}
                 <Button
-                  aria-label="Hide activity and evidence"
-                  title="Hide activity and evidence"
+                  aria-label={`Hide ${kind} rail`}
+                  title={`Hide ${kind} rail`}
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => setOpen(false)}

@@ -12,8 +12,8 @@ UI aren't tracked.
 
 - Inspect and control shared background tasks, retain interrupted assignments and
   navigate to their results or child conversations.
-- Arrange the session rail by dragging sections, choose which sections appear,
-  and inspect context usage alongside connected sources and scheduled work.
+- Keep Session and Work in separate rails. Arrange their sections by dragging,
+  inspect context contributors inline and open or download artifacts from compact rows.
 - Use shared date and time controls for schedules and generated forms. Keep
   existing content available during background refreshes and show request state
   for charts, maps, tables and model discovery.
@@ -30,6 +30,10 @@ UI aren't tracked.
 
 ### Fixed
 
+- Give generated-form actions the shared primary, outlined and borderless button
+  styles, with keyboard focus and disabled validation states.
+- Let the welcome screen leave the layout when the first message arrives so the
+  conversation can use the available height.
 - Size authored charts to their available space, including composed charts and
   fullscreen views. Preserve native selection and brush interactions.
 - Render saved map geometry in standalone HTML conversations, including local

@@ -156,7 +156,7 @@ test('shows one latest response output while Evidence retains versions and revie
   for (const name of ['requested.pdf', 'requested.png'])
     await expect(conversation.getByRole('button', { name: `Open ${name}` })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('latest-response.png') });
-  await page.getByRole('button', { name: /^Evidence layout:/ }).click();
+  await page.getByRole('button', { name: 'Session rail', exact: true }).click();
   await page.getByRole('button', { name: 'Open full details' }).click();
   const canvas = page.getByRole('complementary', { name: 'Workspace canvas' });
   await canvas.getByRole('tab', { name: 'Evidence', exact: true }).click();

@@ -67,6 +67,58 @@ const evidence = {
 };
 
 describe('session showcase inventory', () => {
+  it('shows the context breakdown and flat artifact rows in Session, with work kept separate', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <SessionRailContent
+          kind="session"
+          onOpenSource={vi.fn()}
+          evidence={{
+            ...evidence,
+            contextFrames: [],
+            tools: [],
+            runs: [],
+            context: {
+              session_id: 'session',
+              provenance: {
+                source: 'server',
+                observed_at: '2026-10-21T00:00:00Z',
+                stale: false,
+              },
+              used_tokens: 2200,
+              limit_tokens: 10000,
+              categories: { tools: 1000, messages: 1200 },
+            },
+          }}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText('Tool definitions')).toBeVisible();
+    expect(screen.getByText('Messages')).toBeVisible();
+    expect(screen.getByRole('img', { name: 'Context token composition' })).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Tasks section' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Child agents section' })).not.toBeInTheDocument();
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <SessionRailContent
+          kind="work"
+          onOpenSource={vi.fn()}
+          evidence={{
+            ...evidence,
+            contextFrames: [],
+            tools: [],
+            runs: [],
+          }}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole('region', { name: 'Tasks section' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Child agents section' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Context section' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Artifacts section' })).not.toBeInTheDocument();
+    client.clear();
+  });
   it('keeps live questions reachable through the existing workspace answer owner', async () => {
     const interaction: PendingInteraction = {
       id: 'question',
@@ -146,7 +198,7 @@ describe('session showcase inventory', () => {
     expect(repository.connectedSources).toHaveBeenCalledWith('workspace', expect.any(AbortSignal));
     client.clear();
   });
-  it('opens an artifact from a compact row with format, size and timestamp, without an output card', () => {
+  it('opens an artifact from one compact line with a direct download action', () => {
     const onOpenArtifact = vi.fn();
     const artifact = { ...evidence.artifacts[0]!, size: 158, created_at: '2026-10-08T12:00:00Z' };
     renderEvidence({
@@ -158,7 +210,9 @@ describe('session showcase inventory', () => {
     });
     const row = screen.getByRole('button', { name: 'Open Report.docx' });
     expect(row).toHaveTextContent('158 B');
-    expect(row.querySelector('time')).not.toBeNull();
+    expect(row.querySelector('time')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Download Report.docx' })).toBeVisible();
+    expect(document.querySelector('[data-slot="file-identity-row"]')).toBeNull();
     expect(screen.queryByText('Output')).not.toBeInTheDocument();
     expect(document.querySelector('[data-slot="artifact"]')).toBeNull();
     fireEvent.click(row);

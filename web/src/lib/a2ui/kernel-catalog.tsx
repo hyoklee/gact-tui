@@ -8,7 +8,6 @@ import {
 } from '@a2ui/web_core/v0_9';
 import type { ResolvedChildRef } from '@a2ui/web_core/v0_9';
 import {
-  Button as A2UIButton,
   CheckBox,
   Column,
   Card,
@@ -26,6 +25,7 @@ import { GitCompareArrowsIcon, ShieldAlertIcon } from 'lucide-react';
 import { lazy, Suspense, type CSSProperties } from 'react';
 import { z } from 'zod';
 import { ClioDateTimeInput } from '@/components/clio/a2ui-date-time-input';
+import { ClioA2UIButton } from '@/components/clio/a2ui-button';
 import {
   Confirmation,
   ConfirmationAction,
@@ -695,7 +695,7 @@ const KERNEL_COMPONENT_LIST: ReactComponentImplementation[] = [
   ClioCarousel,
   Modal,
   Divider,
-  A2UIButton,
+  ClioA2UIButton,
   TextField,
   CheckBox,
   ClioChoicePicker,

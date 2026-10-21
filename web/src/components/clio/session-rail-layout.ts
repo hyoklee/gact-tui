@@ -22,6 +22,25 @@ export const SESSION_RAIL_SECTIONS = [
 ] as const;
 
 export type SessionRailSectionId = (typeof SESSION_RAIL_SECTIONS)[number]['id'];
+export type RailKind = 'session' | 'work';
+const WORK_SECTIONS: readonly SessionRailSectionId[] = [
+  'goal',
+  'questions',
+  'todos',
+  'background',
+  'child-agents',
+  'plans',
+  'tasks',
+  'schedules',
+  'runs',
+];
+
+/** Session evidence and ongoing work retain separate inventories and launchers. */
+export function railSectionIds(kind: RailKind): SessionRailSectionId[] {
+  return SESSION_RAIL_SECTIONS.map(({ id }) => id).filter(
+    (id) => WORK_SECTIONS.includes(id) === (kind === 'work'),
+  );
+}
 export interface SessionRailItem {
   id: SessionRailSectionId;
   content: ReactNode;

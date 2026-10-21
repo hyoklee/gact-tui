@@ -4,15 +4,14 @@ import { Button } from '@/components/ui/button';
 import { artifactDeliverables } from '@/lib/artifact-presentation';
 import { openHumanQuestions } from '@/lib/inline-question';
 import type { ClioObservabilityDockProps } from './observability-dock-shell';
-import { ClioContextMeter } from './context-meter';
-import { contextTokens } from './context-composition-model';
+import { ContextUsage } from './context-usage';
 import { sessionEvidenceItems } from './session-evidence-items';
 import { sessionFiles, sessionDiffs, sessionPlans } from './session-evidence-projection';
 import { sessionSources } from './observability-evidence-sources';
 import { OpenQuestionList } from './open-question-list';
 import { useQuestionAnswer } from './question-answer-context';
 import { SessionRail } from './session-rail';
-import type { SessionRailItem } from './session-rail-layout';
+import { railSectionIds, type RailKind, type SessionRailItem } from './session-rail-layout';
 import { SessionSummaryRow } from './session-summary-row';
 import { useSessionConnectedSources, useSessionSchedules } from './session-inventory-queries';
 import { useSessionWork } from './use-session-work';
@@ -26,14 +25,16 @@ export function SessionRailContent({
   evidence,
   onOpenSource,
   actions,
+  kind,
 }: {
   evidence: ClioObservabilityDockProps;
   onOpenSource: (source: ConnectedSourceState) => void;
   actions?: ReactNode;
+  kind?: RailKind;
 }) {
-  const connected = useSessionConnectedSources(evidence.workspaceId ?? '');
-  const work = useSessionWork(evidence.sessionId ?? '');
-  const schedules = useSessionSchedules(evidence.sessionId ?? '');
+  const connected = useSessionConnectedSources(kind === 'work' ? '' : (evidence.workspaceId ?? ''));
+  const work = useSessionWork(kind === 'session' ? '' : (evidence.sessionId ?? ''));
+  const schedules = useSessionSchedules(kind === 'session' ? '' : (evidence.sessionId ?? ''));
   const answer = useQuestionAnswer();
   const questions = openHumanQuestions(evidence.interactions ?? answer?.interactions ?? []);
   const todos = work.data?.todos ?? [];
@@ -61,29 +62,18 @@ export function SessionRailContent({
       id: 'context',
       content: (
         <>
-          <ClioContextMeter
-            used={evidence.context?.used_tokens}
-            limit={evidence.context?.limit_tokens}
-            showLabel={false}
-          />
-          <div className="mt-2 flex items-center justify-between gap-2 text-muted-foreground">
-            <span>
-              {evidence.context?.used_tokens === undefined
-                ? 'Usage unavailable'
-                : `${contextTokens(evidence.context.used_tokens)} / ${evidence.context.limit_tokens ? contextTokens(evidence.context.limit_tokens) : 'Limit unknown'}`}
-            </span>
-            {evidence.onOpenCanvas ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-1 text-xs"
-                onClick={() => evidence.onOpenCanvas?.('context')}
-              >
-                View details
-              </Button>
-            ) : null}
-          </div>
+          <ContextUsage compact context={evidence.context} messages={evidence.messages} />
           {evidence.contextError ? <p role="alert">{evidence.contextError}</p> : null}
+          {evidence.onOpenCanvas ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-1 h-6 px-0 text-xs"
+              onClick={() => evidence.onOpenCanvas?.('context')}
+            >
+              Context details
+            </Button>
+          ) : null}
         </>
       ),
     },
@@ -174,5 +164,13 @@ export function SessionRailContent({
         ))
       ),
     });
-  return <SessionRail items={[...inventory, ...items]} actions={actions} />;
+  const sections = kind ? railSectionIds(kind) : undefined;
+  return (
+    <SessionRail
+      items={[...inventory, ...items].filter((item) => !sections || sections.includes(item.id))}
+      sections={sections}
+      title={kind === 'work' ? 'Work' : 'Session'}
+      actions={actions}
+    />
+  );
 }

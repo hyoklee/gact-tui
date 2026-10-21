@@ -14,7 +14,17 @@ import {
 } from './session-rail-layout';
 
 /** Configurable session inventory, backed by the existing evidence and work records. */
-export function SessionRail({ items, actions }: { items: SessionRailItem[]; actions?: ReactNode }) {
+export function SessionRail({
+  items,
+  actions,
+  title = 'Session',
+  sections,
+}: {
+  items: SessionRailItem[];
+  actions?: ReactNode;
+  title?: string;
+  sections?: readonly SessionRailSectionId[];
+}) {
   const { layout, save, reset } = useSessionRailLayout();
   const visible = layout.order.filter(
     (id) => !layout.hidden.includes(id) && items.some((item) => item.id === id),
@@ -29,17 +39,26 @@ export function SessionRail({ items, actions }: { items: SessionRailItem[]; acti
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-slot="session-rail">
       <div className="flex h-9 shrink-0 items-center gap-1 px-1">
-        <span className="mr-auto pl-1 text-xs font-medium">Session</span>
-        <SessionRailCustomize layout={layout} onChange={save} onReset={reset} />
+        <span className="mr-auto pl-1 text-xs font-medium">{title}</span>
+        <SessionRailCustomize
+          layout={layout}
+          onChange={save}
+          onReset={reset}
+          title={title}
+          sections={sections}
+        />
         {actions}
       </div>
-      <div className="clio-scrollbar min-h-0 flex-1 overflow-y-auto px-1 pb-2">
+      <div
+        data-slot="session-rail-scroll"
+        className="clio-scrollbar min-h-0 flex-1 overflow-y-auto px-1 pb-2"
+      >
         <Sortable
           value={visible}
           getItemValue={sectionId}
           strategy="vertical"
           onValueChange={(order) => save(reorderSessionRail(layout, order))}
-          className="grid gap-2"
+          className="grid divide-y divide-border/60"
         >
           {visible.map((id) => (
             <RailCard
@@ -65,7 +84,7 @@ function RailCard({ item, onMove }: { item: SessionRailItem; onMove: (offset: -1
   const label = SESSION_RAIL_SECTIONS.find((section) => section.id === item.id)!.label;
   const [open, setOpen] = useEvidenceDisclosure(
     `session-rail:${item.id}`,
-    ['context', 'goal', 'connected', 'questions', 'todos'].includes(item.id),
+    item.defaultOpen ?? ['context', 'goal', 'connected', 'questions', 'todos'].includes(item.id),
   );
   return (
     <SortableItem
@@ -73,14 +92,14 @@ function RailCard({ item, onMove }: { item: SessionRailItem; onMove: (offset: -1
       role="region"
       tabIndex={-1}
       aria-label={`${label} section`}
-      className="min-w-0 rounded-xl border bg-popover"
+      className="min-w-0"
     >
       <Collapsible open={open} onOpenChange={setOpen}>
-        <div className="flex h-10 items-center pr-1">
+        <div className="group/rail-heading flex h-8 items-center pr-1">
           <CollapsibleTrigger asChild>
             <Button
               variant="ghost"
-              className="h-10 min-w-0 flex-1 justify-start gap-1.5 rounded-xl px-3 text-xs font-medium"
+              className="h-8 min-w-0 flex-1 justify-start gap-1.5 rounded-sm px-2 text-xs font-medium"
               aria-label={`${open ? 'Collapse' : 'Expand'} ${label}`}
             >
               <span className="truncate">{label}</span>
@@ -98,7 +117,7 @@ function RailCard({ item, onMove }: { item: SessionRailItem; onMove: (offset: -1
             <Button
               variant="ghost"
               size="icon-sm"
-              className="size-7 shrink-0 touch-none text-muted-foreground"
+              className="size-6 shrink-0 touch-none text-muted-foreground opacity-0 focus-visible:opacity-100 group-hover/rail-heading:opacity-100"
               aria-label={`Drag ${label}`}
               title={`Drag ${label} to reorder. Alt+Up or Alt+Down to move with the keyboard.`}
               onKeyDown={(event) => {
@@ -113,7 +132,7 @@ function RailCard({ item, onMove }: { item: SessionRailItem; onMove: (offset: -1
             </Button>
           </SortableItemHandle>
         </div>
-        <CollapsibleContent className="min-w-0 px-3 pb-3 text-xs">
+        <CollapsibleContent className="min-w-0 px-2 pb-2 text-xs">
           {item.content}
         </CollapsibleContent>
       </Collapsible>
