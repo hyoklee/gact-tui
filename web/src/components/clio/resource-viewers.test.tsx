@@ -337,6 +337,25 @@ describe('WorkspaceFileView', () => {
     return render(<QueryClientProvider client={queryClient}>{view}</QueryClientProvider>);
   }
 
+  it('shows CSV identity once in the preview control and keeps the count in pagination', async () => {
+    repository.readWorkspaceFile.mockResolvedValue(
+      `station,count\n${Array.from({ length: 25 }, (_, index) => `MTA${index},${index}`).join('\n')}`,
+    );
+    renderFile(
+      <WorkspaceFileView path="stations.csv" mediaType="text/csv" workspaceId="workspace_1" />,
+    );
+    expect(await screen.findByText('MTA0')).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Preview' })).toHaveTextContent('stations.csv');
+    expect(screen.getAllByText('stations.csv', { exact: true })).toHaveLength(1);
+    expect(screen.queryByText('CSV preview')).not.toBeInTheDocument();
+    expect(screen.queryByText(/parsed rows/u)).not.toBeInTheDocument();
+    expect(screen.getByText('1 - 10 of 25')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: '2' }));
+    expect(screen.getByText('11 - 20 of 25')).toBeVisible();
+    expect(screen.getByText('MTA10')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Download file' })).toBeEnabled();
+  });
+
   it.each(['cat.html', 'cat.HTM', 'unlabelled.txt'])(
     'renders HTML %s with its exact source available',
     async (path) => {

@@ -8,7 +8,6 @@ import {
   EyeIcon,
   HistoryIcon,
   GitBranchIcon,
-  FileIcon,
   FileCode2Icon,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -23,13 +22,7 @@ import {
 } from '@/components/ai-elements/code-block';
 import { ContentMarkdown } from './content-markdown';
 import { DOCUMENT_MARKDOWN_CLASS_NAME, normalizeConvertedMarkdown } from '@/lib/document-markdown';
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useRepository } from '@/hooks/use-repository';
@@ -235,12 +228,9 @@ function WorkspaceBinaryView({
 
   return (
     <div className="grid h-full place-items-center p-6">
-      <Empty className="max-w-lg border">
+      <Empty className="max-w-lg">
         <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <FileIcon aria-hidden="true" />
-          </EmptyMedia>
-          <EmptyTitle>{fileName(path)}</EmptyTitle>
+          <EmptyTitle>No inline preview</EmptyTitle>
           <EmptyDescription>
             {mediaType} · {size === undefined ? 'Size unavailable' : formatBytes(size)}
           </EmptyDescription>

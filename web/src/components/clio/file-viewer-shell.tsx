@@ -14,7 +14,7 @@ import { FileViewerActionRegistry, type FileViewerAction } from './file-viewer-a
 import { FileViewerInformationHost } from './file-viewer-context';
 import { fileViewerIdentity, type FileViewerSource } from './file-viewer-source';
 import { FileTypeIcon } from './file-type-icon';
-import { formatBytes } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { ViewerToolbarHost } from './viewer-toolbar-context';
 
 export interface FileViewerTab {
@@ -95,35 +95,37 @@ export function FileViewerShell({
                   className="flex h-10 shrink-0 items-center gap-1 overflow-x-auto overflow-y-hidden border-b px-2"
                   data-slot="viewer-toolbar"
                 >
-                  <span
-                    className="mr-1 flex shrink-0 items-center gap-2 @max-[360px]/viewer:hidden"
-                    title={`${identity.name}${identity.size === undefined ? '' : ` · ${formatBytes(identity.size)}`}`}
-                  >
-                    <FileTypeIcon
-                      name={identity.name}
-                      mediaType={identity.mediaType}
-                      badge
-                      className="size-7"
-                    />
-                  </span>
                   <TabsList
                     aria-label={label}
-                    className="h-full shrink-0 gap-0 bg-transparent p-0 group-data-horizontal/tabs:h-full"
+                    className="h-full min-w-0 flex-1 justify-start gap-0 bg-transparent p-0 group-data-horizontal/tabs:h-full"
                     variant="line"
                   >
                     {tabs.map(({ value: tabValue, label: tabLabel, title, icon: Icon }) => (
                       <TabsTrigger
                         key={tabValue}
-                        className="h-full rounded-none px-2 text-xs data-[state=active]:text-primary dark:data-[state=active]:text-primary after:bg-primary group-data-horizontal/tabs:after:bottom-0 @max-[720px]/viewer:w-7 @max-[720px]/viewer:px-0"
+                        className={cn(
+                          'h-full rounded-none text-xs data-[state=active]:text-primary dark:data-[state=active]:text-primary after:bg-primary group-data-horizontal/tabs:after:bottom-0',
+                          tabValue === 'preview'
+                            ? 'min-w-7 max-w-64 flex-1 justify-start gap-2 px-1'
+                            : 'w-8 flex-none px-0',
+                        )}
                         value={tabValue}
-                        title={title || tabLabel}
+                        title={tabValue === 'preview' ? identity.name : title || tabLabel}
                         aria-label={tabLabel}
                       >
-                        <Icon
-                          aria-hidden="true"
-                          className="hidden size-3.5 @max-[720px]/viewer:block"
-                        />
-                        <span className="@max-[720px]/viewer:sr-only">{tabLabel}</span>
+                        {tabValue === 'preview' ? (
+                          <>
+                            <FileTypeIcon
+                              name={identity.name}
+                              mediaType={identity.mediaType}
+                              badge
+                              className="size-6 shrink-0"
+                            />
+                            <span className="truncate">{identity.name}</span>
+                          </>
+                        ) : (
+                          <Icon aria-hidden="true" className="size-3.5" />
+                        )}
                       </TabsTrigger>
                     ))}
                   </TabsList>
