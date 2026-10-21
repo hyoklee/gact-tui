@@ -177,7 +177,7 @@ describe('TranscriptResourceAttachment availability', () => {
       />,
     );
 
-    const attachment = screen.getByText('paper.pdf').closest('[data-slot="hover-card-trigger"]');
+    const attachment = screen.getByText('paper.pdf').closest('[data-file-row]');
     expect(attachment).not.toBeNull();
     expect(screen.getByRole('img', { name: 'Attachment status: Processing' })).toBeVisible();
     await user.hover(attachment!);
