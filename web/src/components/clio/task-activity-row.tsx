@@ -26,11 +26,13 @@ export function TaskActivityRow({
   status,
   actions,
   onOpenSubagent,
+  compact = false,
 }: {
   entry: TaskActivity;
   status: string;
   actions?: ReactNode;
   onOpenSubagent?: ClioEvidenceViewProps['onOpenSubagent'];
+  compact?: boolean;
 }) {
   const { process: task, subagent } = entry;
   const conversation = subagent ?? (task ? mergeSessionSubagents([], [task])[0] : undefined);
@@ -81,17 +83,23 @@ export function TaskActivityRow({
             type="button"
             aria-label={`Task details: ${title}`}
             title={title}
-            className="flex min-h-14 min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-left outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
+            className={`flex min-w-0 flex-1 cursor-pointer items-center rounded-sm text-left outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring ${compact ? 'h-8 gap-1.5 px-1' : 'min-h-14 gap-2.5 px-2 py-2'}`}
           >
             <Icon
               aria-hidden="true"
               className={`size-4 shrink-0 ${running ? 'animate-spin text-primary motion-reduce:animate-none' : status === 'completed' ? 'text-success' : settled.has(status) && status !== 'cancelled' ? 'text-destructive' : 'text-muted-foreground'}`}
             />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">{title}</span>
-              <span className="block truncate text-xs text-muted-foreground">
-                {kind} · {label}
-                {progress && progress !== label ? ` — ${progress}` : ''}
+            <span className={`min-w-0 flex-1 ${compact ? 'flex items-baseline gap-2' : ''}`}>
+              <span
+                className={`block truncate ${compact ? 'flex-1 text-xs' : 'text-sm font-medium'}`}
+              >
+                {title}
+              </span>
+              <span
+                className={`block truncate text-muted-foreground ${compact ? 'max-w-[40%] text-[10px]' : 'text-xs'}`}
+              >
+                {compact ? label : `${kind} · ${label}`}
+                {!compact && progress && progress !== label ? ` — ${progress}` : ''}
               </span>
             </span>
             <ChevronRightIcon
