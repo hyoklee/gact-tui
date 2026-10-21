@@ -1,4 +1,3 @@
-import { subagentOpenTarget } from './subagent-navigation';
 import type {
   Artifact,
   AsyncProcess,
@@ -62,6 +61,10 @@ export type SessionEvidenceSummaryProps = Pick<
   backgroundProcesses: readonly AsyncProcess[];
 };
 
+function isChildTask(process: AsyncProcess): boolean {
+  return process.task_kind === 'Subagent' || (!process.task_kind && process.kind === 'agent');
+}
+
 /** Shared row content for the compact inventory and configurable session rail. */
 export function sessionEvidenceItems({
   outputs,
@@ -76,7 +79,23 @@ export function sessionEvidenceItems({
   backgroundProcesses,
   ...actions
 }: SessionEvidenceSummaryProps): SessionRailItem[] {
-  const activityCount = taskActivity(backgroundProcesses, subagents).length;
+  const childProcesses = backgroundProcesses.filter(isChildTask);
+  const processes = backgroundProcesses.filter((process) => !isChildTask(process));
+  const childCount = taskActivity(childProcesses, subagents).length;
+  const history = actions.workPages?.history;
+  const childHistory = history?.items.filter(isChildTask) ?? [];
+  const backgroundPages = actions.workPages && {
+    ...actions.workPages,
+    history: history && {
+      ...history,
+      items: history.items.filter((process) => !isChildTask(process)),
+    },
+  };
+  const childPages = actions.workPages && {
+    ...actions.workPages,
+    hasMore: false,
+    history: history && { ...history, items: childHistory },
+  };
   return [
     ...(runs.length
       ? [
@@ -130,28 +149,23 @@ export function sessionEvidenceItems({
           },
         ]
       : []),
-    ...(subagents.length
+    ...(childCount || (history?.visible && childHistory.length)
       ? [
           {
             id: 'child-agents' as const,
             icon: BoxesIcon,
-            count: subagents.length,
+            count: childCount,
             defaultOpen: true,
             content: (
               <>
-                {subagents.map((agent) => (
-                  <SessionSummaryRow
-                    key={agent.id}
-                    icon={<BoxesIcon />}
-                    label={agent.title}
-                    metadata={clioStatusLabel(agent.state)}
-                    onOpen={
-                      agent.child_session_id && actions.onOpenSubagent
-                        ? (event) => actions.onOpenSubagent?.(agent, subagentOpenTarget(event))
-                        : undefined
-                    }
-                  />
-                ))}
+                <AsyncTaskList
+                  processes={childProcesses}
+                  subagents={subagents}
+                  onOpenSubagent={actions.onOpenSubagent}
+                  onCancelTask={actions.onCancelTask}
+                  onControlTask={actions.onControlTask}
+                  pagination={childPages}
+                />
               </>
             ),
           },
@@ -174,22 +188,21 @@ export function sessionEvidenceItems({
           },
         ]
       : []),
-    ...(activityCount || actions.workPages?.hasMore || actions.workPages?.history
+    ...(processes.length || actions.workPages?.hasMore || actions.workPages?.history
       ? [
           {
             id: 'background' as const,
             icon: ServerIcon,
-            count: activityCount,
+            count: processes.length,
             defaultOpen: true,
             content: (
               <>
                 <AsyncTaskList
-                  processes={backgroundProcesses}
-                  subagents={subagents}
+                  processes={processes}
                   onOpenSubagent={actions.onOpenSubagent}
                   onCancelTask={actions.onCancelTask}
                   onControlTask={actions.onControlTask}
-                  pagination={actions.workPages}
+                  pagination={backgroundPages}
                 />
               </>
             ),

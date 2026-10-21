@@ -6,6 +6,7 @@ import { RetryIcon, RemoveIcon } from '@/lib/icon-vocabulary';
 import type { ResourcePipelineStages } from './resource-availability';
 import { ResourcePipelineSummaryIcon } from './resource-pipeline-status';
 import { FileIdentityRow } from './file-identity-row';
+import type { HTMLAttributes } from 'react';
 
 /** Reflect actual transfer bytes and pipeline states; never synthesize completion. */
 export function AttachmentQueueRow({
@@ -17,7 +18,8 @@ export function AttachmentQueueRow({
   onOpen,
   onRemove,
   onRetry,
-}: {
+  ...props
+}: HTMLAttributes<HTMLDivElement> & {
   name: string;
   mediaType: string;
   size?: number;
@@ -47,6 +49,7 @@ export function AttachmentQueueRow({
         : stages.overallLabel;
   return (
     <FileIdentityRow
+      {...props}
       name={name}
       mediaType={mediaType}
       onOpen={onOpen}

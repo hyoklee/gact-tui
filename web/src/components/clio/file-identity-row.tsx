@@ -41,6 +41,7 @@ export function FileIdentityRow({
   );
   return (
     <div
+      {...props}
       data-slot="file-identity-row"
       data-file-row=""
       className={cn(
@@ -48,7 +49,6 @@ export function FileIdentityRow({
         fileRowTint(name, mediaType),
         className,
       )}
-      {...props}
     >
       <span className="grid size-10 shrink-0 place-items-center">
         {icon ?? <FileTypeIcon name={name} mediaType={mediaType} badge className="size-9" />}
