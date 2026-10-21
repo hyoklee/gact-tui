@@ -42,7 +42,6 @@ import {
 import { getChildAgentAssignment } from './child-agent-presentation';
 import { ClioInteractiveRow } from './interactive-row';
 import { SessionEvidencePopover } from './session-evidence-popover';
-import { EvidenceLayoutIcon } from './evidence-layout-icon';
 import { ClioStatus, clioStatusLabel, type ClioStatusValue } from './status';
 import { getToolPresentation } from './tool-presentation';
 import type { SubagentOpenTarget } from './subagent-card';
@@ -185,32 +184,21 @@ export function ClioObservabilityDock(props: ClioObservabilityDockProps) {
   return (
     <div className="flex min-w-0 items-center gap-1" data-slot="composer-evidence">
       <SessionEvidencePopover evidence={props}>
-        {({ layout, visible, buttonRef, panelId, cycle }) => (
+        {({ visible, buttonRef, panelId, toggle }) => (
           <Button
             ref={buttonRef}
-            aria-label={`Evidence layout: ${layout.charAt(0).toUpperCase() + layout.slice(1)}`}
+            aria-label="Session rail"
             aria-expanded={visible}
             aria-controls={panelId}
             aria-haspopup="dialog"
-            data-evidence-layout={layout}
-            onClick={() => cycle(1)}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              cycle(-1);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-                event.preventDefault();
-                cycle(event.key === 'ArrowLeft' ? -1 : 1);
-              }
-            }}
+            onClick={toggle}
             className="h-7 min-w-0 gap-1.5 rounded-md px-1.5 text-xs text-muted-foreground hover:text-foreground"
             size={props.toolbar ? 'icon-sm' : 'sm'}
-            title={`Evidence: ${layout}. Click for next layout; right-click for previous. ${dockLabel}`}
+            title={`${visible ? 'Hide' : 'Show'} session rail`}
             type="button"
             variant="ghost"
           >
-            <EvidenceLayoutIcon layout={layout} />
+            <PanelRightOpenIcon className="size-4" />
             <span
               className={
                 props.toolbar

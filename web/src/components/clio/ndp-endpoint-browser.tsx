@@ -19,6 +19,7 @@ import {
   type NDPRecord,
 } from './ndp-endpoint-data';
 import { NDPWorkflowForm, type NDPWorkflow } from './ndp-workflow-form';
+import { NDPSdkStreamActions } from './ndp-sdk-stream-actions';
 
 /** Browse data domains first; the API console remains an optional diagnostic surface. */
 export function NDPEndpointBrowser({
@@ -95,9 +96,11 @@ export function NDPEndpointBrowser({
         : tab === 'Catalog'
           ? 'POST /dataset'
           : tab === 'Streams' || tab === 'Stations'
-            ? tab === 'Streams' && has('POST /streams')
-              ? 'POST /streams'
-              : 'POST /bridge/sessions'
+            ? tab === 'Streams' && has('SDK streaming_v2.open')
+              ? 'SDK streaming_v2.open'
+              : tab === 'Streams' && has('POST /streams')
+                ? 'POST /streams'
+                : 'POST /bridge/sessions'
             : '';
   const createTitle =
     tab === 'Organizations'
@@ -106,9 +109,11 @@ export function NDPEndpointBrowser({
         ? 'Register service'
         : tab === 'Catalog'
           ? 'Create dataset'
-          : has('POST /streams')
-            ? 'Open stream view'
-            : 'Start stream';
+          : has('SDK streaming_v2.open')
+            ? 'Open stream reader'
+            : has('POST /streams')
+              ? 'Open stream view'
+              : 'Start stream';
   const sample = (row: NDPRecord) => {
     if (tab === 'Files')
       action('GET /pull/file/{filename}', 'Sample archived data', {
@@ -129,7 +134,8 @@ export function NDPEndpointBrowser({
         onSaved={() => {
           if (
             !workflow.operation.read_only ||
-            workflow.operation.id === 'GET /streams/{stream_id}/segment'
+            workflow.operation.id === 'GET /streams/{stream_id}/segment' ||
+            workflow.operation.id.startsWith('SDK streaming_v2.')
           )
             void listing.refetch();
         }}
@@ -304,7 +310,9 @@ export function NDPEndpointBrowser({
                           {tab === 'Files' ? 'Sample' : 'Start stream'}
                         </Button>
                       ) : null}
-                      {tab === 'Streams' && has('GET /streams/{stream_id}/segment') ? (
+                      {tab === 'Streams' && has('SDK streaming_v2.read') ? (
+                        <NDPSdkStreamActions row={row} action={action} />
+                      ) : tab === 'Streams' && has('GET /streams/{stream_id}/segment') ? (
                         <div className="flex shrink-0 gap-1">
                           <Button
                             variant="outline"
@@ -383,16 +391,22 @@ export function NDPEndpointBrowser({
                                 {String(resource.format ?? '')}
                               </span>
                               {String(resource.format).toLowerCase() === 'kafka' &&
-                              has('POST /streams') ? (
+                              (has('SDK streaming_v2.open') || has('POST /streams')) ? (
                                 <Button
                                   variant="outline"
                                   size="sm"
                                   onClick={() =>
                                     action(
-                                      'POST /streams',
+                                      has('SDK streaming_v2.open')
+                                        ? 'SDK streaming_v2.open'
+                                        : 'POST /streams',
                                       `Read ${recordName(resource)}`,
-                                      {},
-                                      { resource_id: String(resource.id), start: 'earliest' },
+                                      has('SDK streaming_v2.open')
+                                        ? { resource_id: String(resource.id), start: 'earliest' }
+                                        : {},
+                                      has('SDK streaming_v2.open')
+                                        ? undefined
+                                        : { resource_id: String(resource.id), start: 'earliest' },
                                     )
                                   }
                                 >

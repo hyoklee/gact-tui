@@ -7,13 +7,16 @@ function readerState(capture: NDPEndpointCapture): string | null {
   if (
     typeof capture.preview !== 'string' ||
     capture.preview_truncated ||
-    !capture.operation_id?.includes('/streams')
+    !(
+      capture.operation_id?.includes('/streams') ||
+      capture.operation_id?.startsWith('SDK streaming_v2.')
+    )
   )
     return null;
   try {
     const response: unknown = JSON.parse(capture.preview);
     if (response && typeof response === 'object' && 'state' in response) {
-      return response.state === 'ready'
+      return response.state === 'ready' || response.state === 'active'
         ? 'Stream reader ready. Checkpoint saved.'
         : response.state === 'stopped'
           ? 'Stream reader stopped. Checkpoint preserved.'
