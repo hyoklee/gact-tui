@@ -1195,6 +1195,11 @@ test('keeps summarization in collapsed activity and discloses its exact received
   await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
   await expect(compactionRow.getByText('Automatic')).toBeVisible();
   await expect(compactionRow.locator('pre')).toHaveCount(0);
+  const information = compactionRow.getByRole('button', {
+    name: 'Technical details for Summarization',
+    exact: true,
+  });
+  await expect(information).toBeVisible();
   // Scroll the row to the top of the viewport: it sits near the tail of the
   // transcript, close enough to the composer that the floating "Agent needs
   // your response" queue (docked at the bottom) would otherwise cover it.
@@ -1220,10 +1225,13 @@ test('keeps summarization in collapsed activity and discloses its exact received
   await expect(
     compactionRow.getByText(/derived displacement series before this checkpoint/),
   ).toBeVisible();
-  await compactionRow.getByRole('button', { name: 'Open exact details' }).click();
-  await expect(page.getByRole('dialog', { name: 'Summarization', exact: true })).toContainText(
-    'derived displacement series before this checkpoint',
-  );
+  await information.click();
+  const details = page.getByRole('dialog', {
+    name: 'Summarization: Technical details',
+    exact: true,
+  });
+  await expect(details).toContainText('derived displacement series before this checkpoint');
+  await expect(details.locator('pre')).toContainText('EarthScope station evidence ledger');
   await page.keyboard.press('Escape');
   await disclosure.click();
   await expect(compactionRow.locator('pre')).toHaveCount(0);
