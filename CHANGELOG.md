@@ -12,7 +12,7 @@ UI aren't tracked.
 
 - Inspect and control shared background tasks, retain interrupted assignments and
   navigate to their results or child conversations.
-- Keep Session and Work in separate rails. Arrange their sections by dragging,
+- Keep Session and Work in separate rails. Arrange their sections in Customize,
   inspect context contributors inline and open or download artifacts from compact rows.
 - Use shared date and time controls for schedules and generated forms. Keep
   existing content available during background refreshes and show request state
@@ -30,6 +30,10 @@ UI aren't tracked.
 
 ### Fixed
 
+- Keep reordering in Customize and preserve expanded section content when moving
+  rows. Give file views one filename header and compact Versions/Lineage controls.
+- Align collapsed navigation icons and keep hover previews temporary after ordinary
+  navigation clicks. Only explicit pinning keeps navigation open.
 - Give generated-form actions the shared primary, outlined and borderless button
   styles, with keyboard focus and disabled validation states.
 - Let the welcome screen leave the layout when the first message arrives so the
