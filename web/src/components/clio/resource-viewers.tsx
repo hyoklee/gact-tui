@@ -10,7 +10,7 @@ import {
   GitBranchIcon,
   FileCode2Icon,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useContext, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   CodeBlock,
@@ -42,6 +42,8 @@ import { isHtmlFile } from './html-preview-policy';
 import { ClioPdfPreview } from './pdf-preview';
 import { ResourceLoading, ResourceUnavailable } from './resource-states';
 import { FileViewerShell } from './file-viewer-shell';
+import { FileViewerInformationHost } from './file-viewer-context';
+import { ViewerToolbarContent } from './viewer-toolbar';
 import { ImageResourceView } from './image-resource-view';
 import { DashboardResourceView } from './dashboard-view';
 export { ImageResourceView } from './image-resource-view';
@@ -52,6 +54,7 @@ export function WorkspaceFileView({
   size,
   mediaType,
   initialPage,
+  embedded = false,
 }: {
   workspaceId: string;
   path: string;
@@ -60,6 +63,8 @@ export function WorkspaceFileView({
   /** PDF only: the page to open on, when the caller already knows which page
    * matters (e.g. the page range an agent's view_pdf call actually viewed). */
   initialPage?: number;
+  /** The enclosing tool-result card already owns the file identity. */
+  embedded?: boolean;
 }) {
   const detected = mediaType || inferredWorkspaceMediaType(path);
   const html =
@@ -83,6 +88,7 @@ export function WorkspaceFileView({
   return (
     <FileViewerShell
       source={{ kind: 'workspace', workspaceId, path, mediaType: detected, size }}
+      showIdentity={!embedded}
       tabs={[
         { value: 'preview', label: 'Preview', icon: EyeIcon, content: preview },
         ...(html
@@ -464,6 +470,7 @@ export function TextResourceView({
   mediaType?: string;
   htmlView?: 'preview' | 'source';
 }) {
+  const sharedHeader = useContext(FileViewerInformationHost) !== undefined;
   if (content === undefined && !error)
     return <ResourceLoading className="p-4" label={`Loading ${fileName(path)}`} />;
   if (error)
@@ -497,15 +504,21 @@ export function TextResourceView({
         language={languageForPath(path)}
         showLineNumbers
       >
-        <CodeBlockHeader>
-          <CodeBlockTitle>
-            <FileCode2Icon aria-hidden="true" className="size-4 shrink-0" />
-            <CodeBlockFilename>{path}</CodeBlockFilename>
-          </CodeBlockTitle>
-          <CodeBlockActions>
+        {sharedHeader ? (
+          <ViewerToolbarContent>
             <CodeBlockCopyButton aria-label={`Copy ${fileName(path)}`} size="icon-xs" />
-          </CodeBlockActions>
-        </CodeBlockHeader>
+          </ViewerToolbarContent>
+        ) : (
+          <CodeBlockHeader>
+            <CodeBlockTitle>
+              <FileCode2Icon aria-hidden="true" className="size-4 shrink-0" />
+              <CodeBlockFilename>{path}</CodeBlockFilename>
+            </CodeBlockTitle>
+            <CodeBlockActions>
+              <CodeBlockCopyButton aria-label={`Copy ${fileName(path)}`} size="icon-xs" />
+            </CodeBlockActions>
+          </CodeBlockHeader>
+        )}
       </CodeBlock>
     </div>
   );

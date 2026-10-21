@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { TransportError } from '@clio/core/v3';
@@ -355,6 +355,32 @@ describe('WorkspaceFileView', () => {
     expect(screen.getByText('MTA10')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Download file' })).toBeEnabled();
   });
+
+  it.each([
+    ['notes.md', 'text/markdown', '# Field notes'],
+    ['status.json', 'application/json', '{"state":"ready"}'],
+    ['stations.json', 'application/json', '[{"station":"MTA1","count":25}]'],
+    ['pipeline.py', 'text/x-python', 'print("ready")'],
+  ])(
+    'shows one file identity for %s while retaining its source view',
+    async (name, mediaType, content) => {
+      repository.readWorkspaceFile.mockResolvedValue(content);
+      renderFile(<WorkspaceFileView path={name} mediaType={mediaType} workspaceId="workspace_1" />);
+      await waitFor(() =>
+        expect(screen.queryByLabelText(`Loading ${name}`)).not.toBeInTheDocument(),
+      );
+      expect(screen.getAllByText(name, { exact: true })).toHaveLength(1);
+      const toolbar = document.querySelector('[data-slot="viewer-toolbar"]') as HTMLElement;
+      expect(
+        within(toolbar).getByRole('tab', { name: 'Preview', selected: true }),
+      ).toHaveTextContent(name);
+      const source = screen.queryByRole('tab', { name: 'Source' });
+      if (source) await userEvent.click(source);
+      expect(document.querySelector('pre')).toHaveTextContent(content);
+      expect(screen.getByRole('button', { name: `Copy ${name}` })).toBeVisible();
+      expect(screen.getAllByText(name, { exact: true })).toHaveLength(1);
+    },
+  );
 
   it.each(['cat.html', 'cat.HTM', 'unlabelled.txt'])(
     'renders HTML %s with its exact source available',
