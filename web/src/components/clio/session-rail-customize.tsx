@@ -77,8 +77,8 @@ export function SessionRailCustomize({
                 <SortableItemHandle asChild>
                   <Button
                     variant="ghost"
-                    size="icon-sm"
-                    className="size-7 shrink-0 touch-none cursor-grab text-muted-foreground active:cursor-grabbing"
+                    size="sm"
+                    className="h-9 min-w-0 flex-1 justify-start gap-2 px-2 touch-none cursor-grab active:cursor-grabbing"
                     aria-label={`Drag ${label} in layout`}
                     title="Drag to reorder. Alt+Up or Alt+Down moves with the keyboard."
                     onKeyDown={(event) => {
@@ -90,14 +90,15 @@ export function SessionRailCustomize({
                       }
                     }}
                   >
-                    <GripVerticalIcon aria-hidden="true" className="size-3.5" />
+                    <GripVerticalIcon
+                      aria-hidden="true"
+                      className="size-3.5 shrink-0 text-muted-foreground"
+                    />
+                    <span className={`truncate ${included ? '' : 'text-muted-foreground'}`}>
+                      {label}
+                    </span>
                   </Button>
                 </SortableItemHandle>
-                <span
-                  className={`min-w-0 flex-1 truncate px-2 text-xs ${included ? '' : 'text-muted-foreground'}`}
-                >
-                  {label}
-                </span>
                 <Button
                   size="icon-sm"
                   variant="ghost"

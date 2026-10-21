@@ -112,6 +112,58 @@ test('temporary Session links survive technical-dialog dismissal and open source
   ).toBeVisible();
 });
 
+for (const width of [1920, 390]) {
+  test(`Customize reorders expanded sections without losing content or the draft at ${width}px`, async ({
+    page,
+  }) => {
+    await openSession(page, width);
+    const input = page.locator('[data-slot="clio-composer-stack"] [contenteditable="true"]');
+    await input.fill('Keep this draft while I arrange the rail.');
+    await page.getByRole('button', { name: 'Session rail', exact: true }).click();
+    const panel = page.getByRole('dialog', { name: 'Session rail', exact: true });
+    await expect(panel.getByRole('region', { name: 'Files section', exact: true })).toBeVisible();
+    const sectionOrder = () =>
+      panel
+        .getByRole('region', { name: / section$/ })
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')));
+    const originalOrder = await sectionOrder();
+    const expectedOrder = originalOrder.filter((name) => name !== 'Context section');
+    expectedOrder.splice(expectedOrder.indexOf('Files section') + 1, 0, 'Context section');
+    const context = panel.getByRole('region', { name: 'Context section', exact: true });
+    await expect(
+      context.getByRole('button', { name: 'Collapse Context', exact: true }),
+    ).toBeVisible();
+    await expect(panel.getByRole('button', { name: /^Drag / })).toHaveCount(0);
+    await panel.getByRole('button', { name: 'Customize rail', exact: true }).click();
+    const customize = page.getByRole('dialog', { name: 'Customize session rail', exact: true });
+    const source = customize.getByRole('button', { name: 'Drag Context in layout', exact: true });
+    const target = customize.getByRole('button', { name: 'Drag Files in layout', exact: true });
+    const from = (await source.boundingBox())!;
+    const to = (await target.boundingBox())!;
+    expect(from.width).toBeGreaterThan(180);
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 + 12, { steps: 3 });
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
+    await page.mouse.up();
+    await expect.poll(sectionOrder).toEqual(expectedOrder);
+    await page.keyboard.press('Escape');
+    await expect(customize).toHaveCount(0);
+    await expect(
+      context.getByRole('button', { name: 'Collapse Context', exact: true }),
+    ).toBeVisible();
+    await expect(context.getByRole('region', { name: 'Context usage', exact: true })).toBeVisible();
+    await panel.getByRole('button', { name: 'Hide session rail', exact: true }).click();
+    await expect(input).toHaveText('Keep this draft while I arrange the rail.');
+    await page.reload();
+    await page.getByRole('button', { name: 'Session rail', exact: true }).click();
+    await expect.poll(sectionOrder).toEqual(expectedOrder);
+    await expect(
+      context.getByRole('button', { name: 'Collapse Context', exact: true }),
+    ).toBeVisible();
+  });
+}
+
 for (const density of ['both', 'work']) {
   test(`dense ${density} inventories use a single scrolling rail without nested cards`, async ({
     page,

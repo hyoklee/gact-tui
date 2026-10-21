@@ -71,18 +71,23 @@ it('recovers from malformed storage and keeps additions to empty sections for la
   expect(screen.getByRole('region', { name: 'Files section' })).toBeVisible();
 });
 
-it('moves a focused handle with Alt and the arrow keys without opening or collapsing its section', async () => {
+it('keeps reordering in Customize and preserves expanded content through keyboard moves', async () => {
   const user = userEvent.setup();
   render(<SessionRail items={items} />);
-  screen.getByRole('button', { name: 'Drag Context' }).focus();
-  await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
+  expect(screen.queryByRole('button', { name: /^Drag / })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Customize rail' }));
+  screen.getByRole('button', { name: 'Drag Context in layout' }).focus();
+  for (let step = 0; step < 6; step++) await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
   expect(screen.getAllByRole('region').map((node) => node.getAttribute('aria-label'))).toEqual([
     'Background tasks section',
     'Context section',
     'Files section',
   ]);
   expect(screen.getByRole('button', { name: 'Collapse Context' })).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Drag Context' })).toHaveFocus();
-  await user.keyboard('{Alt>}{ArrowUp}{/Alt}');
+  expect(screen.getByRole('button', { name: 'Drag Context in layout' })).toHaveFocus();
+  expect(screen.getByText('Real usage summary')).toBeVisible();
+  for (let step = 0; step < 6; step++) await user.keyboard('{Alt>}{ArrowUp}{/Alt}');
   expect(screen.getAllByRole('region')[0]).toHaveAttribute('aria-label', 'Context section');
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('button', { name: /^Drag / })).not.toBeInTheDocument();
 });
