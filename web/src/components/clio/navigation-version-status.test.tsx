@@ -153,7 +153,10 @@ describe('SystemVersionStatus', () => {
     expect(
       within(screen.getByTestId('version-row-desktop')).queryByRole('button'),
     ).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Up to date' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Check for updates' })).toHaveLength(1);
+    expect(screen.getByRole('status', { name: 'Update status' })).toHaveTextContent(
+      `${vocab.agent} is up to date`,
+    );
   });
 
   it('never picks a newer backend feed instead of the signed app release', async () => {
@@ -168,7 +171,9 @@ describe('SystemVersionStatus', () => {
     await waitFor(() => expect(desktop.install).toHaveBeenCalledOnce());
     expect(repository.latestRelease).not.toHaveBeenCalled();
     expect(updateManagedClio).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Update' })).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('version-row-agent')).queryByRole('button'),
+    ).not.toBeInTheDocument();
   });
 
   it('locks the single action throughout an update', async () => {
@@ -179,7 +184,7 @@ describe('SystemVersionStatus', () => {
     };
     renderStatus();
     fireEvent.click(await screen.findByRole('button', { name: 'Software update available' }));
-    expect(await screen.findByRole('button', { name: `Update ${vocab.agent}` })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: 'Updating' })).toBeDisabled();
     expect(
       within(screen.getByTestId('version-row-agent')).queryByRole('button'),
     ).not.toBeInTheDocument();
@@ -209,7 +214,10 @@ describe('SystemVersionStatus', () => {
     fireEvent.click(trigger);
 
     const desktopRow = within(await screen.findByTestId('version-row-desktop'));
-    expect(await desktopRow.findByText('Checking…')).toBeVisible();
+    expect(screen.getByRole('status', { name: 'Update status' })).toHaveTextContent(
+      'Checking for updates',
+    );
+    expect(screen.getByRole('button', { name: 'Check for updates' })).toBeDisabled();
     expect(desktopRow.queryByText('Up to date')).not.toBeInTheDocument();
   });
 
@@ -221,7 +229,10 @@ describe('SystemVersionStatus', () => {
     fireEvent.click(trigger);
 
     const desktopRow = within(await screen.findByTestId('version-row-desktop'));
-    expect(await desktopRow.findByText('Not checked')).toBeVisible();
+    expect(screen.getByRole('status', { name: 'Update status' })).toHaveTextContent(
+      'Updates not checked',
+    );
+    expect(screen.getByRole('button', { name: 'Check for updates' })).toBeEnabled();
     expect(desktopRow.queryByText('Up to date')).not.toBeInTheDocument();
   });
 
@@ -237,10 +248,10 @@ describe('SystemVersionStatus', () => {
     fireEvent.click(trigger);
 
     const desktopRow = within(await screen.findByTestId('version-row-desktop'));
-    expect(await desktopRow.findByText('Needs attention')).toBeVisible();
-    expect(
-      desktopRow.getByText('The update was rejected: its signature did not match.'),
-    ).toBeVisible();
+    expect(screen.getByRole('status', { name: 'Update status' })).toHaveTextContent(
+      'Update needs attention',
+    );
+    expect(screen.getByText('The update was rejected: its signature did not match.')).toBeVisible();
     expect(desktopRow.queryByText('Up to date')).not.toBeInTheDocument();
   });
 
@@ -255,12 +266,10 @@ describe('SystemVersionStatus', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Could not check for updates' }));
 
     const desktopRow = within(await screen.findByTestId('version-row-desktop'));
-    expect(await desktopRow.findByText('Could not check')).toBeVisible();
-    expect(
-      desktopRow.getByText(
-        'Could not check for updates: the latest release is still being published.',
-      ),
-    ).toBeVisible();
+    expect(screen.getByRole('status', { name: 'Update status' })).toHaveTextContent(
+      'Could not check for updates',
+    );
+    expect(screen.getByText('The latest release is still being published.')).toBeVisible();
     expect(desktopRow.queryByText('Needs attention')).not.toBeInTheDocument();
   });
 
@@ -281,17 +290,17 @@ describe('SystemVersionStatus', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Could not check for updates' }));
 
     const agentRow = within(await screen.findByTestId('version-row-agent'));
-    expect(await agentRow.findByText('Could not check')).toBeVisible();
-    expect(
-      agentRow.getByText(
-        'Could not check for updates: the latest release is still being published.',
-      ),
-    ).toBeVisible();
+    expect(screen.getByRole('status', { name: 'Update status' })).toHaveTextContent(
+      'Could not check for updates',
+    );
+    expect(screen.getByText('The latest release is still being published.')).toBeVisible();
     expect(agentRow.queryByText('Not checked')).not.toBeInTheDocument();
     expect(agentRow.queryByText('Up to date')).not.toBeInTheDocument();
     // The desktop row itself has a real, current check -- untouched by the
     // agent row's missing release feed.
-    expect(within(screen.getByTestId('version-row-desktop')).getByText('Web build')).toBeVisible();
+    expect(
+      within(screen.getByTestId('version-row-desktop')).getByText('Web interface'),
+    ).toBeVisible();
   });
 
   it('says the release server could not be reached for any other failure', async () => {
@@ -310,12 +319,7 @@ describe('SystemVersionStatus', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Could not check for updates' }));
 
-    const agentRow = within(await screen.findByTestId('version-row-agent'));
-    expect(
-      await agentRow.findByText(
-        'Could not check for updates: the release server could not be reached.',
-      ),
-    ).toBeVisible();
+    expect(await screen.findByText('The release server could not be reached.')).toBeVisible();
   });
 });
 
@@ -356,12 +360,13 @@ describe('SystemVersionStatus in a plain browser', () => {
 
     const productRow = within(await screen.findByTestId('version-row-desktop'));
     expect(productRow.getByText('v0.11.2.25')).toBeVisible();
-    expect(productRow.getByText('Web build')).toBeVisible();
-    expect(productRow.getByText('Update checks run in the desktop app.')).toBeVisible();
+    expect(productRow.getByText('Web interface')).toBeVisible();
     expect(productRow.queryByText('Not checked')).not.toBeInTheDocument();
     expect(productRow.queryByText('Checking…')).not.toBeInTheDocument();
     expect(productRow.queryByRole('button')).not.toBeInTheDocument();
-    expect(within(screen.getByTestId('version-row-agent')).getByText('Up to date')).toBeVisible();
+    expect(screen.getByRole('status', { name: 'Update status' })).toHaveTextContent(
+      `${vocab.agent} is up to date`,
+    );
   });
 
   it('settles on the agent state, never an endless check, when the agent has no version', async () => {

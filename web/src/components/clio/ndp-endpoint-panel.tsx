@@ -4,24 +4,26 @@ import type { NDPEndpointConnection, NDPEndpointInput } from '@clio/core/v3';
 import { ArrowLeftIcon } from 'lucide-react';
 import { AddIcon } from '@/lib/icon-vocabulary';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRepository } from '@/hooks/use-repository';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { connectionScope } from '@/lib/connection-scope';
-import { NDPEndpointOperationView } from './ndp-endpoint-operation';
+import { NDPEndpointBrowser } from './ndp-endpoint-browser';
+import { NDPEndpointEditor } from './ndp-endpoint-editor';
+import { NDPEndpointActions } from './ndp-endpoint-actions';
 import { ConnectedAccountSignIn } from './connected-source-auth';
 
-/** Connect to a running remote API and operate it through the connected CLIO. */
+/** Save and manage API connections independently of catalog file selections. */
 export function NDPEndpointPanel({
   workspaceId,
   onBack,
   signedIn = false,
+  accountName,
 }: {
   workspaceId: string;
   onBack: () => void;
   signedIn?: boolean;
+  accountName?: string;
 }) {
   const repository = useRepository();
   const client = useQueryClient();
@@ -29,34 +31,49 @@ export function NDPEndpointPanel({
   const key = ['ndp-endpoints', connectionScope(settings), workspaceId];
   const endpoints = useQuery({
     queryKey: key,
-    queryFn: ({ signal }) => repository.ndpEndpointConnections(workspaceId, signal),
+    queryFn: ({ signal }) => repository.ndpEndpointConnections(workspaceId, signal, true),
   });
-  const [selected, setSelected] = useState<string>('');
+  const [selected, setSelected] = useState('');
   const [accountReady, setAccountReady] = useState(false);
-  const [adding, setAdding] = useState(false);
-  const [transport, setTransport] = useState('url');
-  const [choice, setChoice] = useState<NDPEndpointInput>({
-    name: '',
-    url: '',
-    ssh_profile: '',
-    authentication: 'none',
-  });
-  const connect = useMutation({
-    mutationFn: () =>
-      repository.connectNdpEndpoint(workspaceId, {
-        ...choice,
-        ssh_profile: transport === 'ssh' ? choice.ssh_profile : '',
-      }),
+  const [showHidden, setShowHidden] = useState(false);
+  const [editor, setEditor] = useState<'add' | NDPEndpointConnection>();
+  const [needsAccount, setNeedsAccount] = useState(false);
+  const remember = (endpoint: NDPEndpointConnection) => {
+    client.setQueryData(key, (old: { endpoints: NDPEndpointConnection[] } | undefined) => ({
+      endpoints: [...(old?.endpoints ?? []).filter((row) => row.id !== endpoint.id), endpoint],
+    }));
+  };
+  const save = useMutation({
+    mutationFn: (input: NDPEndpointInput) =>
+      editor && editor !== 'add'
+        ? repository.updateNdpEndpoint(workspaceId, editor.id, input)
+        : repository.connectNdpEndpoint(workspaceId, input),
     onSuccess: (endpoint) => {
-      client.setQueryData(key, (old: { endpoints: NDPEndpointConnection[] } | undefined) => ({
-        endpoints: [...(old?.endpoints ?? []).filter((row) => row.id !== endpoint.id), endpoint],
-      }));
+      remember(endpoint);
       setSelected(endpoint.id);
-      setAdding(false);
+      setEditor(undefined);
     },
   });
-  const active =
-    endpoints.data?.endpoints.find((row) => row.id === selected) ?? endpoints.data?.endpoints[0];
+  const visibility = useMutation({
+    mutationFn: ({ endpoint, hidden }: { endpoint: NDPEndpointConnection; hidden: boolean }) =>
+      repository.updateNdpEndpoint(workspaceId, endpoint.id, { hidden }),
+    onSuccess: remember,
+  });
+  const remove = useMutation({
+    mutationFn: (endpoint: NDPEndpointConnection) =>
+      repository.disconnectNdpEndpoint(workspaceId, endpoint.id),
+    onSuccess: (_, endpoint) => {
+      client.setQueryData(key, (old: { endpoints: NDPEndpointConnection[] } | undefined) => ({
+        endpoints: (old?.endpoints ?? []).filter((row) => row.id !== endpoint.id),
+      }));
+      setSelected('');
+    },
+  });
+  const all = endpoints.data?.endpoints ?? [];
+  const visible = all.filter((row) => showHidden || !row.hidden);
+  const active = visible.find((row) => row.id === selected) ?? visible[0];
+  const editing = editor || (!all.length && !endpoints.isPending);
+  const authenticated = signedIn || accountReady;
   return (
     <section aria-label="NDP endpoints" className="space-y-4">
       <Button variant="ghost" size="sm" onClick={onBack}>
@@ -64,140 +81,116 @@ export function NDPEndpointPanel({
       </Button>
       <div className="flex items-center justify-between gap-3">
         <h3 className="font-medium">Endpoints & streams</h3>
-        <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            save.reset();
+            setEditor('add');
+          }}
+        >
           <AddIcon /> Connect endpoint
         </Button>
       </div>
-      {endpoints.isPending ? <Skeleton className="h-10 w-full" /> : null}
-      {endpoints.error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {endpoints.error.message}
+      {authenticated ? (
+        <p role="status" className="text-xs text-muted-foreground">
+          NDP account connected
+          {accountName ? <span className="block break-all">{accountName}</span> : null}
         </p>
       ) : null}
-      {!signedIn &&
-      !accountReady &&
-      (active?.authentication === 'ndp' || choice.authentication === 'ndp') ? (
+      {!authenticated &&
+      (needsAccount ||
+        active?.authentication === 'ndp' ||
+        (editor && editor !== 'add' && editor.authentication === 'ndp')) ? (
         <ConnectedAccountSignIn
           provider="ndp"
           onComplete={() => {
             setAccountReady(true);
+            setNeedsAccount(false);
             void client.invalidateQueries({
               queryKey: ['connected-storage', connectionScope(settings)],
             });
           }}
         />
       ) : null}
-      {adding || (!active && !endpoints.isPending) ? (
-        <form
-          className="space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            connect.mutate();
+      {endpoints.isPending ? <Skeleton className="h-10 w-full" /> : null}
+      {endpoints.error || visibility.error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {(endpoints.error ?? visibility.error)?.message}
+        </p>
+      ) : null}
+      {editing ? (
+        <NDPEndpointEditor
+          key={typeof editor === 'object' ? editor.id : 'add'}
+          initial={typeof editor === 'object' ? editor : undefined}
+          pending={save.isPending}
+          error={save.error}
+          onSave={(input) => save.mutate(input)}
+          onAuthentication={(value) => setNeedsAccount(value === 'ndp')}
+          onCancel={() => {
+            setEditor(undefined);
+            setNeedsAccount(false);
+            if (!all.length) onBack();
           }}
-        >
-          <div className="flex gap-2" aria-label="Endpoint connection method">
+        />
+      ) : (
+        <>
+          {all.some((row) => row.hidden) ? (
             <Button
-              type="button"
-              variant={transport === 'url' ? 'secondary' : 'ghost'}
-              onClick={() => setTransport('url')}
+              size="sm"
+              variant="ghost"
+              aria-pressed={showHidden}
+              onClick={() => setShowHidden(!showHidden)}
             >
-              Direct URL
+              {showHidden
+                ? 'Hide hidden endpoints'
+                : `Show hidden endpoints (${all.filter((row) => row.hidden).length})`}
             </Button>
-            <Button
-              type="button"
-              variant={transport === 'ssh' ? 'secondary' : 'ghost'}
-              onClick={() => setTransport('ssh')}
-            >
-              SSH
-            </Button>
-          </div>
-          <Label htmlFor="ndp-endpoint-name">Name</Label>
-          <Input
-            id="ndp-endpoint-name"
-            required
-            value={choice.name}
-            onChange={(event) => setChoice({ ...choice, name: event.target.value })}
-            placeholder="Ares NDP"
-          />
-          {transport === 'ssh' ? (
+          ) : null}
+          {active ? (
             <>
-              <Label htmlFor="ndp-endpoint-ssh">SSH profile on connected computer</Label>
-              <Input
-                id="ndp-endpoint-ssh"
-                required
-                value={choice.ssh_profile}
-                placeholder="ares"
-                onChange={(event) => setChoice({ ...choice, ssh_profile: event.target.value })}
+              <div className="flex items-center gap-1">
+                <select
+                  aria-label="Connected endpoint"
+                  className="h-9 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm"
+                  value={active.id}
+                  onChange={(event) => setSelected(event.target.value)}
+                >
+                  {visible.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.name}
+                      {row.ssh_route || row.ssh_profile
+                        ? ` (SSH ${row.ssh_route?.profile || row.ssh_route?.host || row.ssh_profile})`
+                        : ''}
+                      {row.hidden ? ' (Hidden)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <NDPEndpointActions
+                  key={active.id}
+                  endpoint={active}
+                  pending={visibility.isPending || remove.isPending}
+                  onEdit={() => {
+                    save.reset();
+                    setEditor(active);
+                  }}
+                  onHidden={(hidden) => visibility.mutate({ endpoint: active, hidden })}
+                  onRemove={() => remove.mutateAsync(active)}
+                />
+              </div>
+              <NDPEndpointBrowser
+                key={`${active.id}/${active.observed_at}`}
+                workspaceId={workspaceId}
+                endpoint={active}
               />
             </>
-          ) : null}
-          <Label htmlFor="ndp-endpoint-url">
-            {transport === 'ssh' ? 'Remote API URL' : 'API URL'}
-          </Label>
-          <Input
-            id="ndp-endpoint-url"
-            type="url"
-            required
-            value={choice.url}
-            placeholder={transport === 'ssh' ? 'http://127.0.0.1:8002' : 'https://host/gnss'}
-            onChange={(event) => setChoice({ ...choice, url: event.target.value })}
-          />
-          <Label htmlFor="ndp-endpoint-auth">Authentication</Label>
-          <select
-            id="ndp-endpoint-auth"
-            className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-            value={choice.authentication}
-            onChange={(event) =>
-              setChoice({ ...choice, authentication: event.target.value as 'none' | 'ndp' })
-            }
-          >
-            <option value="none">Public access</option>
-            <option value="ndp">My NDP account</option>
-          </select>
-          {choice.authentication === 'ndp' ? (
-            <p className="text-xs text-muted-foreground">
-              Your NDP token will be sent to this API through the selected connection.
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No visible endpoints. Connect an API or show hidden connections.
             </p>
-          ) : null}
-          <div className="flex gap-2">
-            <Button disabled={connect.isPending}>
-              {connect.isPending ? 'Discovering operations…' : 'Connect'}
-            </Button>
-            {active ? (
-              <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
-                Cancel
-              </Button>
-            ) : null}
-          </div>
-          {connect.error ? (
-            <p role="alert" className="text-sm text-destructive">
-              {connect.error.message}
-            </p>
-          ) : null}
-        </form>
-      ) : active ? (
-        <>
-          <select
-            aria-label="Connected endpoint"
-            className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-            value={active.id}
-            onChange={(event) => setSelected(event.target.value)}
-          >
-            {endpoints.data?.endpoints.map((row) => (
-              <option key={row.id} value={row.id}>
-                {row.name}
-                {row.ssh_profile ? ` · SSH ${row.ssh_profile}` : ''}
-              </option>
-            ))}
-          </select>
-          <NDPEndpointOperationView
-            key={active.id}
-            workspaceId={workspaceId}
-            endpoint={active}
-            onChanged={() => void client.invalidateQueries({ queryKey: key })}
-          />
+          )}
         </>
-      ) : null}
+      )}
     </section>
   );
 }

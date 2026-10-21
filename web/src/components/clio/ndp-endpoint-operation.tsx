@@ -9,20 +9,18 @@ import { Textarea } from '@/components/ui/textarea';
 import { useRepository } from '@/hooks/use-repository';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { connectionScope } from '@/lib/connection-scope';
+import { NDPActionPicker } from './ndp-action-picker';
 
 /** Run observed operations with explicit bounded capture and visible remote side effects. */
 export function NDPEndpointOperationView({
   workspaceId,
   endpoint,
-  onChanged,
 }: {
   workspaceId: string;
   endpoint: NDPEndpointConnection;
-  onChanged: () => void;
 }) {
   const repository = useRepository();
   const { settings } = useConnectionSettings();
-  const [filter, setFilter] = useState('');
   const [operationId, setOperationId] = useState('');
   const [parameters, setParameters] = useState<Record<string, string>>({});
   const [body, setBody] = useState('');
@@ -33,11 +31,6 @@ export function NDPEndpointOperationView({
     queryKey: ['ndp-captures', connectionScope(settings), workspaceId, endpoint.id],
     queryFn: () => repository.ndpEndpointCaptures(workspaceId, endpoint.id),
   });
-  const choices = endpoint.operations.filter(
-    (row) =>
-      row.id === operationId ||
-      `${row.summary} ${row.id}`.toLowerCase().includes(filter.toLowerCase()),
-  );
   const operation = endpoint.operations.find((row) => row.id === operationId);
   const request = useMutation({
     mutationFn: async () => {
@@ -75,43 +68,22 @@ export function NDPEndpointOperationView({
       void history.refetch();
     },
   });
-  const disconnect = useMutation({
-    mutationFn: () => repository.disconnectNdpEndpoint(workspaceId, endpoint.id),
-    onSuccess: onChanged,
-  });
   return (
     <div className="space-y-3">
-      <div className="flex items-start justify-between gap-2">
+      <div>
         <p className="break-all text-xs text-muted-foreground">{endpoint.url}</p>
-        <Button size="sm" variant="ghost" onClick={() => disconnect.mutate()}>
-          Disconnect
-        </Button>
       </div>
-      <Input
-        aria-label="Filter endpoint operations"
-        placeholder="Find stations, streams, sessions…"
-        value={filter}
-        onChange={(event) => setFilter(event.target.value)}
-      />
-      <select
-        aria-label="Endpoint operation"
-        className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+      <NDPActionPicker
+        operations={endpoint.operations}
         value={operationId}
-        onChange={(event) => {
-          setOperationId(event.target.value);
+        onChange={(id) => {
+          setOperationId(id);
           setParameters({});
           setBody('');
           setConfirm(false);
           request.reset();
         }}
-      >
-        <option value="">Choose an operation</option>
-        {choices.map((row) => (
-          <option value={row.id} key={row.id}>
-            {row.method} · {row.summary}
-          </option>
-        ))}
-      </select>
+      />
       {operation ? (
         <form
           className="space-y-3"
@@ -121,6 +93,7 @@ export function NDPEndpointOperationView({
             else request.mutate();
           }}
         >
+          <h4 className="font-medium">{operation.summary}</h4>
           <p className="text-xs text-muted-foreground whitespace-pre-wrap">
             {operation.description}
           </p>
@@ -158,30 +131,33 @@ export function NDPEndpointOperationView({
               />
             </div>
           ) : null}
-          <div className="flex gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="ndp-capture-seconds">Capture seconds</Label>
-              <Input
-                id="ndp-capture-seconds"
-                type="number"
-                min={1}
-                max={30}
-                value={seconds}
-                onChange={(event) => setSeconds(Number(event.target.value))}
-              />
+          <details className="text-xs">
+            <summary className="cursor-pointer text-muted-foreground">Response limits</summary>
+            <div className="mt-2 flex gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="ndp-capture-seconds">Capture seconds</Label>
+                <Input
+                  id="ndp-capture-seconds"
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={seconds}
+                  onChange={(event) => setSeconds(Number(event.target.value))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="ndp-capture-events">Max stream events</Label>
+                <Input
+                  id="ndp-capture-events"
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={events}
+                  onChange={(event) => setEvents(Number(event.target.value))}
+                />
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="ndp-capture-events">Max stream events</Label>
-              <Input
-                id="ndp-capture-events"
-                type="number"
-                min={1}
-                max={1000}
-                value={events}
-                onChange={(event) => setEvents(Number(event.target.value))}
-              />
-            </div>
-          </div>
+          </details>
           {confirm ? (
             <p role="alert" className="text-sm">
               Run {operation.method} {operation.path} on {endpoint.name}? This can change remote
@@ -194,28 +170,32 @@ export function NDPEndpointOperationView({
               : confirm
                 ? 'Confirm operation'
                 : operation.read_only
-                  ? 'Run & capture'
-                  : 'Review operation'}
+                  ? 'Run and save response'
+                  : 'Review action'}
           </Button>
         </form>
       ) : null}
-      {request.error || history.error || disconnect.error ? (
+      {request.error || history.error ? (
         <p role="alert" className="text-sm text-destructive">
-          {(request.error ?? history.error ?? disconnect.error)?.message}
+          {(request.error ?? history.error)?.message}
         </p>
       ) : null}
       {request.data ? (
         <div className="space-y-2" aria-label="Endpoint response">
-          <p role="status" className="text-sm">
-            HTTP {request.data.status_code} · {request.data.bytes_received.toLocaleString()} bytes ·{' '}
-            {request.data.events} stream events · {request.data.stop_reason.replaceAll('_', ' ')}
+          <p role="status" className="flex flex-wrap gap-x-3 text-sm">
+            <span>HTTP {request.data.status_code}</span>{' '}
+            <span>{request.data.bytes_received.toLocaleString()} bytes</span>{' '}
+            <span>{request.data.events} stream events</span>{' '}
+            <span>{request.data.stop_reason.replaceAll('_', ' ')}</span>
           </p>
           <pre className="max-h-52 overflow-auto rounded-md bg-muted/50 p-3 text-xs">
             {request.data.preview}
           </pre>
-          <p className="text-xs text-muted-foreground">
-            {request.data.source_artifact_id ? 'Saved in workspace Sources' : 'Response retained'} ·{' '}
-            {request.data.sha256.slice(0, 12)}
+          <p className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+            <span>
+              {request.data.source_artifact_id ? 'Saved in workspace Sources' : 'Response retained'}
+            </span>{' '}
+            <span>{request.data.sha256.slice(0, 12)}</span>
           </p>
           {request.data.workspace_path ? (
             <Link
@@ -265,7 +245,7 @@ export function NDPEndpointOperationView({
                   ) : (
                     row.operation_id
                   )}{' '}
-                  · {row.bytes_received.toLocaleString()} bytes ·{' '}
+                  <span className="mx-2">{row.bytes_received.toLocaleString()} bytes</span>{' '}
                   {new Date(row.completed_at).toLocaleString()}
                 </li>
               ))}

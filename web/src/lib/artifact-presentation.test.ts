@@ -78,6 +78,35 @@ describe('document preview presentation', () => {
       ]),
     ).toHaveLength(2);
   });
+  it('folds a reconciled revision with its producing session while retaining other sessions and all evidence', () => {
+    const original: Artifact = {
+      id: 'image-v1',
+      session_id: 'parent',
+      workspace_id: 'workspace',
+      name: 'map.png',
+      uri: 'artifact://workspace/map.png@v1',
+      media_type: 'image/png',
+      version: 1,
+      producer: { designation: 'agent-proposed', session_id: 'child-a', agent_id: 'main' },
+    };
+    const reconciled: Artifact = {
+      ...original,
+      id: 'image-v2',
+      version: 2,
+      producer: { designation: 'reconcile-observed', session_id: 'child-a' },
+    };
+    const independent: Artifact = {
+      ...reconciled,
+      id: 'other-session',
+      producer: { session_id: 'child-b' },
+    };
+    const evidence = [original, reconciled, independent];
+    expect(latestResponseArtifacts(evidence).map((item) => item.id)).toEqual([
+      'image-v2',
+      'other-session',
+    ]);
+    expect(evidence.map((item) => item.id)).toEqual(['image-v1', 'image-v2', 'other-session']);
+  });
   it('uses recorded purpose while preserving requested images/PDFs and explicitly re-designated response links', () => {
     const pdf: Artifact = {
       id: 'pdf',

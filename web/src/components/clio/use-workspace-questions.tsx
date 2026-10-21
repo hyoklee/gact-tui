@@ -11,6 +11,7 @@ import { ClioPendingInteractions, type ClioPendingInteractionsProps } from './pe
 import { AgentQuestionDialog } from './agent-question-dialog';
 import { revealPendingInteraction } from './interaction-control';
 import { useQuestionAnswering } from './use-question-answering';
+import { useQuestionDrafts } from './question-answer-context';
 import * as workspaceRouteState from './workspace-route-state';
 import {
   embedsQuestionSurface,
@@ -27,6 +28,8 @@ interface UseWorkspaceQuestionsInput {
   interactions: readonly PendingInteraction[];
   tools: readonly ToolInvocation[];
   messages: readonly Message[];
+  sessionId: string;
+  endpoint: string;
   focusComposer: () => void;
   /** Answer one interaction through its own response route. */
   respondInteraction: (input: {
@@ -50,6 +53,8 @@ export function useWorkspaceQuestions({
   interactions,
   tools,
   messages,
+  sessionId,
+  endpoint,
   focusComposer,
   respondInteraction,
   send,
@@ -60,9 +65,12 @@ export function useWorkspaceQuestions({
   questionAnswering: ReturnType<typeof useQuestionAnswering>;
   pendingInteractionsPanel: ReactNode;
 } {
-  const sessionId = tray.viewedSessionId;
-  const drafts = useMemo(() => createAttentionDraftStore(sessionId), [sessionId]);
+  const drafts = useMemo(
+    () => createAttentionDraftStore(JSON.stringify([endpoint, sessionId])),
+    [endpoint, sessionId],
+  );
   const [openedId, setOpenedId] = useState<string>();
+  const responseDrafts = useQuestionDrafts(endpoint, sessionId, interactions);
   const [surfaceTarget, setSurfaceTarget] = useState<SurfaceQuestionTarget>();
   const openSurfaceQuestion = useCallback(
     (interaction: PendingInteraction) => {
@@ -125,6 +133,7 @@ export function useWorkspaceQuestions({
       ...questionAnswering,
       context: {
         ...questionAnswering.context,
+        responseDrafts,
         interactions,
         openQuestion: (interaction: PendingInteraction) => {
           if (interaction.source.surface_id && !embedsQuestionSurface(interaction))

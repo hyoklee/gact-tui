@@ -23,6 +23,7 @@ export function SshConnectionRoute({
   onSlotsChange,
   options,
   slots,
+  originLabel = 'This computer',
 }: {
   disabled?: boolean;
   onConfigure: (step: SshRouteStep) => void;
@@ -31,6 +32,7 @@ export function SshConnectionRoute({
   options: SshHost[];
   /** Hop references in connection order, `''` for a row not filled in yet. */
   slots: string[];
+  originLabel?: string;
 }) {
   const step = (index: number) => ({ index, isDestination: index === slots.length - 1 });
   return (
@@ -39,8 +41,8 @@ export function SshConnectionRoute({
         {/* The starting point is fixed: no grip, never reordered. */}
         <span aria-hidden="true" />
         <RouteMarker bottom kind="start" top={false} />
-        <span className="truncate text-sm text-muted-foreground" title="localhost">
-          This computer
+        <span className="truncate text-sm text-muted-foreground" title={originLabel}>
+          {originLabel}
         </span>
       </div>
 

@@ -32,7 +32,7 @@ describe('SSH hosts', () => {
       identityFile: 'D:/keys/id_ed25519',
       installRoot: '/mnt/common/alice/clio',
     });
-    expect(sshHostDestination(manual)).toBe('alice@login.utah.example');
+    expect(sshHostDestination(manual)).toBe('alice@login.utah.example:2202');
     expect(manual).toMatchObject({
       host: 'login.utah.example',
       user: 'alice',

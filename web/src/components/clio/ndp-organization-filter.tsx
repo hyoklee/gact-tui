@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { ndpOrganizationsSchema } from '@clio/core/v3';
 import { CheckIcon, ChevronsUpDownIcon } from 'lucide-react';
 import { useRepository } from '@/hooks/use-repository';
+import { useNdpCache } from '@/hooks/use-ndp-cache';
+import { ndpSearchText } from './use-ndp-catalog';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { connectionScope } from '@/lib/connection-scope';
 import { Button } from '@/components/ui/button';
@@ -20,18 +23,25 @@ export type NDPOrganizationChoice = { id: string; endpoint_id: string };
 export function NDPOrganizationFilter({
   value,
   onChange,
+  account = 'signed-out',
+  cacheEnabled = true,
 }: {
   value: NDPOrganizationChoice | null;
   onChange: (choice: NDPOrganizationChoice | null) => void;
+  account?: string;
+  cacheEnabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const repository = useRepository();
   const { settings } = useConnectionSettings();
+  const queryKey = ['ndp-organizations', connectionScope(settings), account];
+  const cacheReady = useNdpCache(queryKey, ndpOrganizationsSchema, cacheEnabled);
   const organizations = useQuery({
-    queryKey: ['ndp-organizations', connectionScope(settings)],
+    queryKey,
     queryFn: ({ signal }) => repository.ndpOrganizations(signal),
-    enabled: open,
-    staleTime: 300_000,
+    enabled: open && cacheReady,
+    staleTime: 0,
+    refetchOnMount: 'always',
     retry: false,
   });
   const select = (choice: NDPOrganizationChoice | null) => {
@@ -39,7 +49,7 @@ export function NDPOrganizationFilter({
     setOpen(false);
   };
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover modal open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -53,23 +63,36 @@ export function NDPOrganizationFilter({
           <ChevronsUpDownIcon />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)] p-0">
-        <Command>
+      <PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)] overflow-hidden p-0">
+        <Command
+          className="h-auto min-h-0"
+          filter={(text, query) =>
+            ndpSearchText(query)
+              .split(/\s+/)
+              .every((token) => ndpSearchText(text).includes(token))
+              ? 1
+              : 0
+          }
+        >
           <CommandInput placeholder="Find an organization…" />
-          {organizations.isFetching && !organizations.data ? (
+          {organizations.isFetching || !cacheReady ? (
             <p role="status" className="px-3 py-2 text-sm text-muted-foreground">
-              Loading organizations…
+              {organizations.data ? 'Refreshing organizations…' : 'Loading organizations…'}
             </p>
           ) : null}
           {organizations.isError ? (
             <div role="alert" className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-              <span>Organizations unavailable.</span>
+              <span>
+                {organizations.data
+                  ? 'Could not refresh. Showing saved organizations.'
+                  : 'Organizations unavailable.'}
+              </span>
               <Button variant="ghost" size="sm" onClick={() => void organizations.refetch()}>
                 Retry
               </Button>
             </div>
           ) : null}
-          <CommandList>
+          <CommandList className="min-h-0 max-h-[min(18rem,40dvh)] touch-pan-y overscroll-contain">
             <CommandEmpty>No matching organizations.</CommandEmpty>
             <CommandItem onSelect={() => select(null)}>
               All organizations{!value ? <CheckIcon className="ml-auto" /> : null}

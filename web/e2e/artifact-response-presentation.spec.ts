@@ -147,7 +147,10 @@ test('shows one latest response output while Evidence retains versions and revie
   await expect(
     conversation.getByRole('button', { name: 'Open sunflower-garden.html', exact: true }),
   ).toHaveCount(1);
-  await expect(conversation.getByText('HTML · 512 B · v2', { exact: true })).toBeVisible();
+  await expect(conversation.locator('p[title="text/html"]')).toHaveText(/HTML\s*512 B\s*v2/u);
+  await expect(
+    conversation.locator('p[title="text/html"]').getByText('v1', { exact: true }),
+  ).toHaveCount(0);
   await expect(conversation.getByRole('button', { name: 'Open review.png' })).toHaveCount(0);
   await expect(conversation.getByRole('button', { name: 'Open working.pdf' })).toHaveCount(0);
   for (const name of ['requested.pdf', 'requested.png'])
@@ -161,8 +164,12 @@ test('shows one latest response output while Evidence retains versions and revie
   await expect(
     canvas.getByRole('button', { name: 'Open sunflower-garden.html', exact: true }),
   ).toHaveCount(2);
-  await expect(canvas.getByText('HTML · 512 B · v1', { exact: true })).toBeVisible();
-  await expect(canvas.getByText('HTML · 512 B · v2', { exact: true })).toBeVisible();
+  await expect(canvas.locator('p[title="text/html"]').filter({ hasText: /v1$/u })).toHaveText(
+    /HTML\s*512 B\s*v1/u,
+  );
+  await expect(canvas.locator('p[title="text/html"]').filter({ hasText: /v2$/u })).toHaveText(
+    /HTML\s*512 B\s*v2/u,
+  );
   await expect(canvas.getByText('Verification', { exact: true })).toBeVisible();
   await expect(canvas.getByText('Intermediate', { exact: true })).toBeVisible();
   await expect(canvas.getByRole('button', { name: 'Open review.png' })).toBeVisible();

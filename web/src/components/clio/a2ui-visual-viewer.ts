@@ -272,6 +272,20 @@ export function visualCapturePixelRatio(width: number, height: number, density: 
   return Math.min(Math.max(density, 1), 2, 4096 / width, 4096 / height);
 }
 
+/** Renderer reassignments of identical SVG attributes do not change the displayed view. */
+export function visualMutationsChanged(records: MutationRecord[]): boolean {
+  return records.some((record) => {
+    if (record.type === 'attributes') {
+      const target = record.target as Element;
+      return (
+        record.oldValue !== target.getAttributeNS(record.attributeNamespace, record.attributeName!)
+      );
+    }
+    if (record.type === 'characterData') return record.oldValue !== record.target.nodeValue;
+    return true;
+  });
+}
+
 /** One lease per mounted renderer; polling is serialized and stops on unmount. */
 export function useA2uiVisualViewer(
   root: RefObject<HTMLDivElement | null>,
@@ -290,14 +304,16 @@ export function useA2uiVisualViewer(
     let timer = 0;
     let unsupported = false;
     let fingerprint = '';
-    const observer = new MutationObserver(() => {
-      epoch.current += 1;
+    const observer = new MutationObserver((records) => {
+      if (visualMutationsChanged(records)) epoch.current += 1;
     });
     observer.observe(node, {
       subtree: true,
       attributes: true,
+      attributeOldValue: true,
       childList: true,
       characterData: true,
+      characterDataOldValue: true,
     });
     const report = (): A2uiViewerReport => {
       const state = { ...visualViewState(node), ...boundControls(surface, model) };

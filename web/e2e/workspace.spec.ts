@@ -93,6 +93,46 @@ async function alignLatestActivityAtTop(page: Page) {
 
 setupWorkspaceBrowser();
 
+test('opens the unresolved task from the status strip in the actual task view', async ({
+  page,
+}) => {
+  await page.route('**/v1/sessions/sess_flat_ndp/async-processes*', async (route) => {
+    await route.fulfill({
+      json: {
+        processes: [
+          {
+            id: 'task_visibility_unresolved',
+            handle: 'task_visibility_unresolved',
+            kind: 'mcp',
+            task_kind: 'MCP',
+            title: 'Prepare dataset',
+            description: 'Prepare the selected dataset for analysis.',
+            status: 'working',
+            raw_status: 'working',
+            live_state: 'task_state_uncertain',
+            effective_status: 'task_state_uncertain',
+            connection_freshness: 'lost',
+            metadata: {},
+          },
+        ],
+      },
+    });
+  });
+  await page.goto(workspaceUrl);
+  const inspect = page.getByRole('button', { name: 'Inspect unresolved tasks' });
+  await expect(inspect).toHaveText(/running; 1 task needs inspection$/);
+  await inspect.click();
+  const canvas = page.getByRole('complementary', { name: 'Workspace canvas' });
+  await expect(canvas.getByRole('tab', { name: 'Evidence', exact: true })).toHaveAttribute(
+    'data-state',
+    'active',
+  );
+  const tasks = canvas.getByRole('button', { name: 'Background tasks, 1 recorded' });
+  if ((await tasks.getAttribute('aria-expanded')) === 'false') await tasks.click();
+  await expect(canvas.getByRole('button', { name: 'Task details: Prepare dataset' })).toBeVisible();
+  await expect(canvas.getByText('MCP · Needs inspection')).toBeVisible();
+});
+
 test('keeps Observability tabs inside the strip and scrolls only their content vertically', async ({
   page,
 }, testInfo) => {
@@ -1155,6 +1195,11 @@ test('keeps summarization in collapsed activity and discloses its exact received
   await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
   await expect(compactionRow.getByText('Automatic')).toBeVisible();
   await expect(compactionRow.locator('pre')).toHaveCount(0);
+  const information = compactionRow.getByRole('button', {
+    name: 'Technical details for Summarization',
+    exact: true,
+  });
+  await expect(information).toBeVisible();
   // Scroll the row to the top of the viewport: it sits near the tail of the
   // transcript, close enough to the composer that the floating "Agent needs
   // your response" queue (docked at the bottom) would otherwise cover it.
@@ -1180,10 +1225,13 @@ test('keeps summarization in collapsed activity and discloses its exact received
   await expect(
     compactionRow.getByText(/derived displacement series before this checkpoint/),
   ).toBeVisible();
-  await compactionRow.getByRole('button', { name: 'Open exact details' }).click();
-  await expect(page.getByRole('dialog', { name: 'Summarization', exact: true })).toContainText(
-    'derived displacement series before this checkpoint',
-  );
+  await information.click();
+  const details = page.getByRole('dialog', {
+    name: 'Summarization: Technical details',
+    exact: true,
+  });
+  await expect(details).toContainText('derived displacement series before this checkpoint');
+  await expect(details.locator('pre')).toContainText('EarthScope station evidence ledger');
   await page.keyboard.press('Escape');
   await disclosure.click();
   await expect(compactionRow.locator('pre')).toHaveCount(0);

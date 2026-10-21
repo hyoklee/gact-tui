@@ -36,6 +36,7 @@ import {
   type ComponentType,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { Root as DismissableLayer } from '@radix-ui/react-dismissable-layer';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -258,6 +259,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
     const [activeTabId, setActiveTabId] = useState<string>(initialState.activeTabId);
     const [maximized, setMaximized] = useState(false);
     const [maximizeHost, setMaximizeHost] = useState<Element | null>(null);
+    const maximizeButtonRef = useRef<HTMLButtonElement>(null);
     const activeTabRef = useRef<HTMLDivElement>(null);
     const tabStripRef = useRef<HTMLDivElement>(null);
 
@@ -462,18 +464,6 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
 
     useImperativeHandle(ref, () => ({ open: openRequest }), [openRequest]);
 
-    useEffect(() => {
-      if (!maximized) return;
-      const restore = (event: KeyboardEvent) => {
-        if (event.key !== 'Escape') return;
-        event.preventDefault();
-        event.stopPropagation();
-        setMaximized(false);
-      };
-      window.addEventListener('keydown', restore, true);
-      return () => window.removeEventListener('keydown', restore, true);
-    }, [maximized]);
-
     const canvas = (
       <aside
         aria-label="Workspace canvas"
@@ -633,6 +623,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
             />
             <Button
               aria-label={maximized ? 'Restore canvas beside conversation' : 'Maximize canvas'}
+              ref={maximizeButtonRef}
               className="relative z-10 size-7 shrink-0 rounded-md"
               onClick={(event) => {
                 setMaximizeHost(
@@ -745,7 +736,25 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
         {/* Keep request delivery outside the portal: maximizing remounts its
             contents and must not replay a previously handled open request. */}
         <WorkbenchRequestDispatcher onOpen={openRequest} requestedOpen={requestedOpen} />
-        {maximized ? createPortal(canvas, maximizeHost ?? document.body) : canvas}
+        {maximized
+          ? createPortal(
+              <DismissableLayer
+                asChild
+                onEscapeKeyDown={(event) => {
+                  // Closing a child can expose this layer during the same key
+                  // event. A handled Escape must never dismiss its parent too.
+                  if (event.defaultPrevented) return;
+                  event.preventDefault();
+                  setMaximized(false);
+                  requestAnimationFrame(() => maximizeButtonRef.current?.focus());
+                }}
+                onInteractOutside={(event) => event.preventDefault()}
+              >
+                {canvas}
+              </DismissableLayer>,
+              maximizeHost ?? document.body,
+            )
+          : canvas}
       </>
     );
   },

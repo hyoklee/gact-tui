@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ExternalLink } from '@/components/ui/external-link';
 import { prepareExternalUrl } from '@/tauri/external-url';
 import { useStorageSignInPoll } from './use-storage-sign-in-poll';
+import { vocab } from '@/lib/brand-vocabulary';
 
 type Repository = Pick<ClioRepository, 'startSourceSignIn' | 'completeSourceSignIn'> &
   Partial<Pick<ClioRepository, 'cancelSourceSignIn'>>;
@@ -111,7 +112,7 @@ export function NDPDeviceAuth({
             {start.isPending ? 'Opening NDP…' : 'Sign in to NDP'}
           </Button>
           <p className="text-xs text-muted-foreground">
-            Your NDP account is shared across workspaces.
+            Connect {vocab.agent} using your existing NDP login. Reused across workspaces.
           </p>
         </div>
       )}

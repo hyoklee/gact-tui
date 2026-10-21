@@ -122,6 +122,7 @@ it.each(['link', 'download'])(
       >
         <ConnectedSourcePicker
           workspaceId="w"
+          sessionId="session_ndp"
           open
           initialProviderId="ndp"
           onOpenChange={vi.fn()}
@@ -130,20 +131,24 @@ it.each(['link', 'download'])(
       </QueryClientProvider>,
     );
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: /Sea observations/ }));
+    const dataset = await screen.findByRole('button', { name: /Sea observations/ });
+    expect(dataset).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('checkbox', { name: /stations.csv/ })).not.toBeInTheDocument();
+    await user.click(dataset);
+    await screen.findByRole('checkbox', { name: /stations.csv/ });
     await user.click(screen.getByRole('checkbox', { name: /stations.csv/ }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(
       await screen.findByRole('heading', { name: 'How do you want to use these files?' }),
     ).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Download all' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Link folder' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Download selected files' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Link selected files' })).toBeVisible();
     expect(fixture.repository.linkConnectedSource).not.toHaveBeenCalled();
     expect(fixture.repository.transferConnectedSource).not.toHaveBeenCalled();
     expect(onSelect).not.toHaveBeenCalled();
     expect(screen.queryByText(/Nothing is downloaded/)).not.toBeInTheDocument();
     if (choice === 'link') {
-      await user.click(screen.getByRole('button', { name: 'Link folder' }));
+      await user.click(screen.getByRole('button', { name: 'Link selected files' }));
       await waitFor(() => expect(onSelect).toHaveBeenCalledOnce());
       expect(fixture.repository.linkConnectedSource).toHaveBeenCalledWith(
         'w',
@@ -151,11 +156,11 @@ it.each(['link', 'download'])(
         false,
         'draft',
         { access: 'read_only', confirm_remote: false },
-        undefined,
+        'session_ndp',
       );
       expect(fixture.repository.transferConnectedSource).not.toHaveBeenCalled();
     } else {
-      await user.click(screen.getByRole('button', { name: 'Download all' }));
+      await user.click(screen.getByRole('button', { name: 'Download selected files' }));
       await waitFor(() =>
         expect(fixture.repository.transferConnectedSource).toHaveBeenCalledWith(
           'w',
@@ -163,7 +168,7 @@ it.each(['link', 'download'])(
           undefined,
           'draft',
           'editable',
-          undefined,
+          'session_ndp',
         ),
       );
       expect(fixture.repository.linkConnectedSource).not.toHaveBeenCalled();

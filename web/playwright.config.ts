@@ -2,6 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 
 const fixturePort = Number.parseInt(process.env['CLIO_FIXTURE_PORT'] ?? '18799', 10);
 const previewPort = Number.parseInt(process.env['CLIO_PREVIEW_PORT'] ?? '4173', 10);
+const archiveMapPort = Number.parseInt(process.env['CLIO_ARCHIVE_MAP_PORT'] ?? '18849', 10);
+if (!Number.isSafeInteger(archiveMapPort) || archiveMapPort < 1 || archiveMapPort > 65535)
+  throw new Error('Invalid archive map fixture port');
 
 if (!Number.isSafeInteger(fixturePort) || fixturePort < 1 || fixturePort > 65_535) {
   throw new Error(`Invalid CLIO_FIXTURE_PORT: ${process.env['CLIO_FIXTURE_PORT'] ?? ''}`);
@@ -27,6 +30,13 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: [
+    {
+      command: 'node e2e/archive-map-server.mjs',
+      env: { CLIO_ARCHIVE_MAP_PORT: String(archiveMapPort) },
+      port: archiveMapPort,
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
     {
       command: 'node e2e/fixture-server.mjs',
       env: { CLIO_FIXTURE_PORT: String(fixturePort) },

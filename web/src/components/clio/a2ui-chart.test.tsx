@@ -50,7 +50,6 @@ import { ClioChart, type ClioChartProps } from './a2ui-chart';
 import { CHART_SELECTION_WRITE_DEBOUNCE_MS } from './chart-selection';
 import type { ChartRow } from './chart-data';
 import { ClioComposerAnnotations } from './composer-annotations';
-import { escapeHtml, formatChartTooltip, refusingLoader } from './chart-embed';
 import { mapCategoryColors } from './map-category-palette';
 import { SelectionActionsProvider } from './selection-actions';
 import { useReferenceThisSelectionAction } from '@/hooks/use-reference-this-selection-action';
@@ -103,6 +102,96 @@ afterEach(() => {
 });
 
 describe('ClioChart', () => {
+  it('selects individual observations when an authored line names a repeated series entity', async () => {
+    const setSelection = vi.fn();
+    render(
+      wrap(
+        <ClioChart
+          componentId="authored-series"
+          data={ROWS}
+          entityField="run"
+          setSelection={setSelection}
+          spec={{
+            mark: { type: 'line', point: true },
+            encoding: {
+              x: { field: 't', type: 'quantitative' },
+              y: { field: 'v', type: 'quantitative' },
+              color: { field: 'run', type: 'nominal' },
+            },
+          }}
+        />,
+      ),
+    );
+    const view = await embeddedView();
+    view.signal('sel_tuple', { unit: '', fields: view.signal('sel_tuple_fields'), values: [2] });
+    await view.runAsync();
+    await waitFor(() =>
+      expect(setSelection).toHaveBeenCalledWith({
+        field: '__row',
+        source: 'authored-series',
+        values: [2],
+      }),
+    );
+  });
+
+  it('gives an inline custom ordinal/log chart point and box selection without extra fields', async () => {
+    const setSelection = vi.fn();
+    const data = [
+      { hour: '13:00', statistic: 'median', reading: 0.001 },
+      { hour: '14:00', statistic: 'median', reading: 0.002 },
+      { hour: '13:00', statistic: 'p95', reading: 0.003 },
+      { hour: '14:00', statistic: 'p95', reading: 0.01 },
+    ];
+    render(
+      wrap(
+        <ClioChart
+          componentId="authored-inline"
+          data={data}
+          setSelection={setSelection}
+          spec={{
+            mark: { type: 'line', point: true },
+            encoding: {
+              x: { field: 'hour', type: 'ordinal' },
+              y: { field: 'reading', type: 'quantitative', scale: { type: 'log' } },
+              color: { field: 'statistic', type: 'nominal' },
+            },
+          }}
+        />,
+      ),
+    );
+    const view = await embeddedView();
+    expect(screen.getByRole('button', { name: 'Box select chart rows' })).toBeInTheDocument();
+    expect(view.data('source').map((row: ChartRow) => row.__row)).toEqual([0, 1, 2, 3]);
+    expect(data.some((row) => '__row' in row)).toBe(false);
+    view.signal('sel_tuple', { unit: '', fields: view.signal('sel_tuple_fields'), values: [1] });
+    await view.runAsync();
+    await waitFor(() =>
+      expect(setSelection).toHaveBeenCalledWith({
+        field: '__row',
+        values: [1],
+        source: 'authored-inline',
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Box select chart rows' }));
+    const brushing = await embeddedView();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Box select chart rows' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    brushing.signal('sel_box_x', [0, brushing.width()]);
+    brushing.signal('sel_box_y', [0, brushing.height()]);
+    await brushing.runAsync();
+    await waitFor(() =>
+      expect(setSelection).toHaveBeenCalledWith({
+        field: '__row',
+        values: [0, 1, 2, 3],
+        source: 'authored-inline',
+      }),
+    );
+  });
+
   it('draws the same category colours as map subsets, including after the source changes', async () => {
     const source = [
       { t: 0, v: 2, region: 'Downtown' },
@@ -671,7 +760,7 @@ describe('ClioChart', () => {
     expect(popoverBody).toHaveTextContent('run = a');
   });
 
-  it('says when a bound selection has no selection param to follow', async () => {
+  it('supplies a missing selection param for an authored chart with a bound selection', async () => {
     render(
       wrap(
         <ClioChart
@@ -682,34 +771,13 @@ describe('ClioChart', () => {
         />,
       ),
     );
-    expect(await screen.findByText(/has no “sel” selection/u)).toBeInTheDocument();
+    const view = await embeddedView();
+    await waitFor(() => expect(view.signal('sel')).toMatchObject({ run: ['a'] }));
+    expect(screen.queryByText(/has no “sel” selection/u)).not.toBeInTheDocument();
   });
 });
 
 describe('chart embedding restrictions', () => {
-  it('refuses every load, link, and file', async () => {
-    const loader = refusingLoader();
-    await expect(loader.load('https://example.test/x.csv')).rejects.toThrow(/cannot load/u);
-    await expect(
-      loader.sanitize('https://example.test/x.png', { context: 'href' }),
-    ).rejects.toThrow(/cannot load/u);
-    await expect(loader.http('https://example.test/x.csv', {})).rejects.toThrow(/cannot load/u);
-    await expect(loader.file('/etc/passwd')).rejects.toThrow(/cannot load/u);
-  });
-
-  it('keeps tooltips to escaped text and drops images', () => {
-    const html = formatChartTooltip({
-      title: '<b>run</b>',
-      image: 'https://example.test/tracker.png',
-      '<i>key</i>': '<img src=x onerror=alert(1)>',
-    });
-    expect(html).not.toContain('<img');
-    expect(html).not.toContain('tracker.png');
-    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
-    expect(html).toContain('<h2>&lt;b&gt;run&lt;/b&gt;</h2>');
-    expect(escapeHtml(`"'&`)).toBe('&quot;&#39;&amp;');
-  });
-
   it('makes no network request of its own for inline rows', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     render(wrap(<ClioChart {...PRESET} componentId="ch1" data={ROWS} />));

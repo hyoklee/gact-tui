@@ -2,6 +2,9 @@ import { fireEvent, render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const archiveMode = vi.hoisted(() => ({ current: false }));
+vi.mock('@/providers/connection-provider', () => ({ useOfflineArchive: () => archiveMode.current }));
+
 /**
  * `react-map-gl/maplibre`'s `<Map>` needs a real WebGL canvas maplibre-gl
  * cannot get from jsdom, so the rectangle-selection gesture (pointer capture,
@@ -48,7 +51,7 @@ const fakeMap = vi.hoisted(() => {
       sources.set(id, record);
     }),
     removeSource: vi.fn((id: string) => sources.delete(id)),
-    getLayer: vi.fn((id: string) => id === 'openStreetMap' ? { id } : layers.get(id)),
+    getLayer: vi.fn((id: string) => id === 'clio-map-background' ? { id } : layers.get(id)),
     addLayer: vi.fn((spec: { id: string; type: string; source: string; paint?: unknown }) => {
       layers.set(spec.id, spec);
     }),
@@ -110,12 +113,31 @@ function stubContainerRect(element: Element) {
 }
 
 afterEach(() => {
+  archiveMode.current = false;
   vi.clearAllMocks();
   fakeMap.__sources.clear();
   fakeMap.__layers.clear();
 });
 
 describe('ClioScientificMapView zone selection', () => {
+  it('keeps geometry layers in offline archives without requesting background tiles', () => {
+    archiveMode.current = true;
+    const geometry = { type: 'FeatureCollection' as const, features: [{
+      type: 'Feature' as const, id: 'lake', properties: {},
+      geometry: { type: 'Polygon' as const, coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+    }] };
+    const view = render(<ClioScientificMapView points={POINTS} geometry={geometry} onSelect={vi.fn()} />);
+    const style = capturedMapProps.current?.mapStyle as { sources: Record<string, unknown>; layers: unknown[] };
+    expect(style.sources).toEqual({});
+    expect(JSON.stringify(style)).not.toContain('https://');
+    expect(fakeMap.__sources.get('clio-map-geometry')?.data).toMatchObject({ features: [{ id: 'lake' }] });
+    expect(view.getByText('Offline map: saved geometry; background tiles are not included.')).toBeVisible();
+  });
+
+  it('uses the normal reference basemap for live sessions', () => {
+    render(<ClioScientificMapView points={POINTS} onSelect={vi.fn()} />);
+    expect(JSON.stringify(capturedMapProps.current?.mapStyle)).toContain('https://tile.openstreetmap.org');
+  });
   it('can hit a rendered trajectory dot or segment when the map hit index is stale', () => {
     const geometry = { type: 'FeatureCollection' as const, features: [
       { type: 'Feature' as const, id: 'inside-1', properties: {}, geometry: {

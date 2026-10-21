@@ -1,11 +1,20 @@
 import { test, expect, type Page } from '@playwright/test';
 
+// Component regression fixture only: the account and catalog are synthetic.
+// These screenshots do not qualify the deployed Attach dialog or NDP access.
+
 for (const variant of ['light', 'dark', 'mobile']) {
-  test(`operates an existing SSH endpoint with capture and explicit mutation review (${variant})`, async ({
+  test(`fixture SSH endpoint capture and explicit mutation review (${variant})`, async ({
     page,
   }) => {
     if (variant === 'mobile') await page.setViewportSize({ width: 390, height: 844 });
     await catalogFixture(page);
+    await page.route('**/v1/infrastructure/targets', (route) =>
+      route.fulfill({ json: { targets: [] } }),
+    );
+    await page.route('**/v1/storage/ssh/profiles', (route) =>
+      route.fulfill({ json: { profiles: ['ares'] } }),
+    );
     const methods: string[] = [];
     let connected = false;
     const endpoint = {
@@ -72,7 +81,16 @@ for (const variant of ['light', 'dark', 'mobile']) {
         expect(route.request().postDataJSON()).toEqual({
           name: 'Ares endpoint',
           url: 'http://127.0.0.1:8002',
-          ssh_profile: 'ares',
+          ssh_profile: '',
+          ssh_route: {
+            profile: 'ares',
+            host: '',
+            user: '',
+            port: 22,
+            jump_hosts: [],
+            identity_file: '',
+            platform: 'auto',
+          },
           authentication: 'none',
         });
         connected = true;
@@ -84,23 +102,28 @@ for (const variant of ['light', 'dark', 'mobile']) {
     await page.getByRole('button', { name: 'Endpoints & streams', exact: true }).click();
     await page.getByRole('button', { name: 'SSH', exact: true }).click();
     await page.getByLabel('Name', { exact: true }).fill('Ares endpoint');
-    await page.getByLabel('SSH profile on connected computer').fill('ares');
+    await page.getByRole('combobox', { name: 'Saved SSH host', exact: true }).click();
+    await page.getByRole('option', { name: 'ares', exact: true }).click();
     await page.getByLabel('Remote API URL').fill('http://127.0.0.1:8002');
     await page.getByRole('button', { name: 'Connect', exact: true }).click();
-    await page.getByLabel('Endpoint operation', { exact: true }).selectOption('GET /stations');
+    await page.getByText('Advanced API tools', { exact: true }).click();
+    await page.getByRole('button', { name: /Find stations/ }).click();
     await page.getByLabel('limit', { exact: true }).fill('3');
-    await page.getByRole('button', { name: 'Run & capture' }).click();
+    await page.getByRole('button', { name: 'Run and save response' }).click();
     await expect(page.getByRole('link', { name: 'Open captured response' })).toBeVisible();
     await expect(page.getByLabel('Endpoint response')).toContainText('ANMO,1.2');
-    await page.getByLabel('Endpoint operation', { exact: true }).selectOption('POST /sessions');
+    await page.getByRole('button', { name: /Start stream/ }).click();
     await page.getByLabel('Request JSON').fill('{"sncl_codes":["ANMO"]}');
-    await page.getByRole('button', { name: 'Review operation' }).click();
+    await page.getByRole('button', { name: 'Review action' }).click();
     expect(methods).toEqual(['GET /stations']);
     await page.getByRole('button', { name: 'Confirm operation' }).click();
     await expect.poll(() => methods.length).toBe(2);
     const evidence = process.env.CLIO_REVIEW_EVIDENCE;
     if (evidence)
-      await page.screenshot({ path: `${evidence}/ndp-endpoint-${variant}.png`, fullPage: true });
+      await page.screenshot({
+        path: `${evidence}/fixture-ndp-endpoint-${variant}.png`,
+        fullPage: true,
+      });
   });
 }
 
@@ -270,7 +293,7 @@ async function catalogFixture(page: Page) {
   return { selections, searches, isLinked: () => linked };
 }
 
-test('live catalog filtering, selection and the shared source review render in both themes and on mobile', async ({
+test('fixture catalog filtering, selection and the shared source review render in both themes and on mobile', async ({
   page,
 }, testInfo) => {
   const errors: string[] = [];
@@ -283,7 +306,10 @@ test('live catalog filtering, selection and the shared source review render in b
     await expect(
       page.getByRole('button', { name: /Historical surface temperatures/ }),
     ).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath(`ndp-browse-${theme}.png`), fullPage: true });
+    await page.screenshot({
+      path: testInfo.outputPath(`fixture-ndp-browse-${theme}.png`),
+      fullPage: true,
+    });
     await page.getByRole('textbox', { name: 'Search NDP datasets' }).fill('station');
     await expect(page.getByRole('button', { name: /Historical surface temperatures/ })).toHaveCount(
       0,
@@ -293,7 +319,10 @@ test('live catalog filtering, selection and the shared source review render in b
     await page.getByRole('checkbox', { name: /Ocean wave heights.nc/ }).check();
     await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
     await expect(page.getByText(/Nothing is downloaded/)).toHaveCount(0);
-    await page.screenshot({ path: testInfo.outputPath(`ndp-${theme}.png`), fullPage: true });
+    await page.screenshot({
+      path: testInfo.outputPath(`fixture-ndp-${theme}.png`),
+      fullPage: true,
+    });
   }
   expect(fixture.selections).toEqual([]);
   expect(fixture.isLinked()).toBe(false);
@@ -301,15 +330,18 @@ test('live catalog filtering, selection and the shared source review render in b
   await expect(
     page.getByRole('heading', { name: 'How do you want to use these files?' }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Download all' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Download selected files' })).toBeVisible();
   await expect(page.getByText('stations.csv', { exact: true })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
   expect(fixture.selections).toEqual([
     { endpoint_id: 'ocean', dataset_id: 'sea', resource_ids: ['stations', 'waves'] },
   ]);
   expect(fixture.isLinked()).toBe(false);
-  await page.screenshot({ path: testInfo.outputPath('ndp-source-review.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Link folder' }).click();
+  await page.screenshot({
+    path: testInfo.outputPath('fixture-ndp-source-review.png'),
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: 'Link selected files' }).click();
   await expect(page.getByText('Attached: Coastal sea observations')).toBeVisible();
   expect(fixture.isLinked()).toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -318,11 +350,11 @@ test('live catalog filtering, selection and the shared source review render in b
   await expect(page.getByRole('checkbox', { name: /Station measurements.csv/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue' })).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath('ndp-mobile.png'), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('fixture-ndp-mobile.png'), fullPage: true });
   expect(errors).toEqual([]);
 });
 
-test('selections survive filtering and remote result changes', async ({ page }) => {
+test('fixture selections survive filtering and remote result changes', async ({ page }) => {
   const fixture = await catalogFixture(page);
   await page.goto('/tests/review/ndp-source.html');
   await page.getByRole('textbox', { name: 'Search NDP datasets' }).fill('station');
@@ -344,7 +376,7 @@ test('selections survive filtering and remote result changes', async ({ page }) 
   ]);
 });
 
-test('organization search narrows datasets without granting organization access', async ({
+test('fixture organization search narrows datasets without granting organization access', async ({
   page,
 }, testInfo) => {
   await catalogFixture(page);
@@ -359,10 +391,13 @@ test('organization search narrows datasets without granting organization access'
   await expect(page.getByRole('button', { name: /Historical surface temperatures/ })).toHaveCount(
     0,
   );
-  await page.screenshot({ path: testInfo.outputPath('ndp-organization.png'), fullPage: true });
+  await page.screenshot({
+    path: testInfo.outputPath('fixture-ndp-organization.png'),
+    fullPage: true,
+  });
 });
 
-test('a large catalog keeps selection actions visible and finds results beyond the rendered page', async ({
+test('fixture large catalog keeps selection actions visible and finds results beyond the rendered page', async ({
   page,
 }) => {
   await catalogFixture(page);
@@ -381,11 +416,15 @@ test('a large catalog keeps selection actions visible and finds results beyond t
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/tests/review/ndp-source.html');
-  await expect(page.getByRole('button', { name: /Catalog example 0 / })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Catalog example 0', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue' })).toBeInViewport();
-  await expect(page.getByRole('button', { name: /Catalog example 39 / })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Catalog example 39', exact: true })).toHaveCount(
+    0,
+  );
   await page.getByRole('button', { name: 'Show more datasets' }).click();
-  await expect(page.getByRole('button', { name: /Catalog example 39 / })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Catalog example 39', exact: true })).toHaveCount(
+    1,
+  );
   await expect(page.getByRole('button', { name: 'Continue' })).toBeInViewport();
   await page.getByRole('textbox', { name: 'Search NDP datasets' }).fill('39');
   await expect(page.getByRole('checkbox', { name: /39-data.csv/ })).toBeVisible();

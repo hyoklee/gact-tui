@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { profileSshHosts, sshHostDestination, type SshHost } from '@/lib/ssh-hosts';
 import { listSshProfiles, setSshProfileRoute } from '@/tauri/ssh-profiles';
+import { vocab } from '@/lib/brand-vocabulary';
 import { SshConnectionRoute, type SshRouteStep } from './ssh-connection-route';
 import { SshHostDialog } from './ssh-host-dialog';
 import {
@@ -29,15 +30,23 @@ export function SshHostPicker({
   disabled = false,
   onChange,
   value,
+  hostSource,
 }: {
   disabled?: boolean;
   onChange: (host: SshHost | undefined, route: SshRouteCompleteness) => void;
   value?: SshHost;
+  /** The same route UI can use the connected CLIO's inventory instead of Desktop's. */
+  hostSource?: {
+    label: string;
+    hosts: SshHost[];
+    save: (host: SshHost) => Promise<SshHost>;
+  };
 }) {
   const profiles = useQuery({
     queryKey: ['managed-service-ssh-profiles'],
     queryFn: listSshProfiles,
     staleTime: 60_000,
+    enabled: !hostSource,
   });
   // The last opened step stays in place while the dialog animates closed;
   // a fresh key per open resets the form to that step's computer.
@@ -65,7 +74,10 @@ export function SshHostPicker({
     // adopting the one these rows produced.
     if (routeKey(value) !== emittedKey) setSlots(routeSlots(value));
   }
-  const options = useMemo(() => profileSshHosts(profiles.data ?? []), [profiles.data]);
+  const options = useMemo(
+    () => hostSource?.hosts ?? profileSshHosts(profiles.data ?? []),
+    [hostSource?.hosts, profiles.data],
+  );
   const visibleOptions = useMemo(
     () =>
       value && !options.some((candidate) => candidate.id === value.id)
@@ -80,7 +92,11 @@ export function SshHostPicker({
    * modified, so the edited route applies to this deployment only — and says so.
    */
   const changeSlots = async (nextSlots: string[], known: readonly SshHost[] = visibleOptions) => {
-    const normalized = nextSlots.length ? nextSlots : [''];
+    let normalized = nextSlots.length ? nextSlots : [''];
+    if (normalized.length === 1 && normalized[0] && normalized[0] !== slots.at(-1)) {
+      const destination = resolveRouteHop(normalized[0], known);
+      if (destination.jumpHosts?.length) normalized = routeSlots(destination);
+    }
     const next = routeFromSlots(normalized, (ref) => resolveRouteHop(ref, known));
     setSlots(normalized);
     setEmittedKey(routeKey(next));
@@ -93,6 +109,7 @@ export function SshHostPicker({
       next.id === value.id &&
       JSON.stringify(next.jumpHosts ?? []) !== JSON.stringify(value.jumpHosts ?? []);
     if (!routeChanged || !next.profile) return;
+    if (hostSource) return;
     if (!next.managed) {
       setRouteNotice(
         `This route is used for this deployment only; your OpenSSH configuration is unchanged.`,
@@ -141,6 +158,7 @@ export function SshHostPicker({
         onSlotsChange={(next) => void changeSlots(next)}
         options={visibleOptions}
         slots={slots}
+        originLabel={hostSource ? `Connected ${vocab.agent}` : undefined}
       />
 
       {routeError ? (
@@ -164,13 +182,16 @@ export function SshHostPicker({
         onOpenChange={setDialogOpen}
         onSaved={async (saved) => {
           setDialogOpen(false);
-          await profiles.refetch();
+          if (!hostSource) await profiles.refetch();
           placeSaved(saved, dialog.step);
         }}
         open={dialogOpen}
         options={visibleOptions}
         step={dialog.step}
         via={dialog.via}
+        routeConnection={
+          hostSource ? { hostLabel: hostSource.label, save: hostSource.save } : undefined
+        }
       />
     </div>
   );

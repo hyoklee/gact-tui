@@ -24,7 +24,7 @@ import { useA2uiSessionRegistry } from './lib/a2ui/processor-store';
 import { A2uiReferenceSessionProvider } from './lib/a2ui/reference-session';
 import { ClioA2UISurface } from './components/clio/a2ui-surface';
 import './index.css';
-import { setWorkerUrl } from 'maplibre-gl';
+import { configureArchiveMapWorker } from './lib/session-export/map-worker';
 import { TooltipProvider } from './components/ui/tooltip';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 import { vocab } from './lib/brand-vocabulary';
@@ -42,11 +42,7 @@ declare global {
     CLIO_DASHBOARD_DATA?: string;
   }
 }
-setWorkerUrl(
-  URL.createObjectURL(
-    new Blob([import.meta.env.VITE_CLIO_ARCHIVE_MAP_WORKER], { type: 'text/javascript' }),
-  ),
-);
+configureArchiveMapWorker(import.meta.env.VITE_CLIO_ARCHIVE_MAP_WORKER);
 interface TranscriptRow {
   session: { id: string; title: string; metadata?: Record<string, unknown> };
   messages: { id: string; role: string; created_at?: string; parts: RecordedPart[] }[];
@@ -128,7 +124,7 @@ export function Review() {
   const tools = rows.reduce((count, row) => count + row.tool_records.length, 0);
   const skills = rows.reduce((count, row) => count + row.loaded_skills.length, 0);
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-6 text-foreground">
+    <main className="mx-auto min-w-0 max-w-5xl space-y-6 p-4 text-foreground sm:p-6">
       <header className="border-b pb-6">
         <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
           {vocab.product} · Session archive
@@ -163,19 +159,19 @@ export function Review() {
         }}
       >
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <TabsList className="h-10">
-            <TabsTrigger className="px-4" value="conversation">
+          <TabsList className="h-auto max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto">
+            <TabsTrigger className="h-auto whitespace-normal px-3 py-2" value="conversation">
               Conversation & activity
             </TabsTrigger>
-            <TabsTrigger className="px-4" value="results">
+            <TabsTrigger className="h-auto whitespace-normal px-3 py-2" value="results">
               Results
             </TabsTrigger>
             {data.manifest.mode !== 'transcript' && (
-              <TabsTrigger className="px-4" value="files">
+              <TabsTrigger className="h-auto whitespace-normal px-3 py-2" value="files">
                 Files
               </TabsTrigger>
             )}
-            <TabsTrigger className="px-4" value="evidence">
+            <TabsTrigger className="h-auto whitespace-normal px-3 py-2" value="evidence">
               Evidence & skills
             </TabsTrigger>
           </TabsList>

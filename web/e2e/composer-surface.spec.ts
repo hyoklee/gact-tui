@@ -108,6 +108,10 @@ for (const theme of ['dark', 'light'] as const) {
     const input = composer.locator('form > [data-slot="input-group"]');
     const question = page.getByRole('region', { name: 'Agent needs your attention', exact: true });
     await expect(question).toBeVisible();
+    await expect(question.getByRole('radio', { name: 'Table', exact: true })).toBeVisible();
+    await expect(
+      question.getByRole('button', { name: 'Send response', exact: true }),
+    ).toBeDisabled();
     const background = await input.evaluate((node) => getComputedStyle(node).backgroundColor);
     await expect
       .poll(() => question.evaluate((node) => getComputedStyle(node).backgroundColor))
