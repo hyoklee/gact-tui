@@ -165,7 +165,7 @@ describe('ClioConversation harness injection', () => {
     expect(screen.queryByText(/Did you mean/)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Injection Path suggestion/u }));
     expect(screen.getByText(/Did you mean 'data\/a.csv'/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Open exact details' }));
+    await user.click(screen.getByRole('button', { name: 'Technical details for Path suggestion' }));
     expect(screen.getByRole('dialog').querySelector('pre')?.textContent).toBe(text);
   });
 
@@ -259,7 +259,11 @@ describe('ClioConversation harness injection', () => {
         ).toBe(text);
         spill = container.querySelector<HTMLElement>('[data-turn-activity="injection:spill"]')!;
       }
-      await user.click(within(spill).getByRole('button', { name: 'Open exact details' }));
+      await user.click(
+        within(spill).getByRole('button', {
+          name: 'Technical details for Large result saved to a file',
+        }),
+      );
       expect(screen.getByRole('dialog').querySelector('pre')?.textContent).toBe(text);
     },
   );

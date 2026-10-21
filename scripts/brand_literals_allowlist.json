@@ -1,5 +1,15 @@
 [
   {
+    "file": "web/src/components/clio/injection-presentation.ts",
+    "match": "CLIO|Agent session",
+    "reason": "Fixed recorded mailbox wire prefix, independent of the embedding product's display brand. Never rendered as product copy."
+  },
+  {
+    "file": "web/src/components/clio/injection-presentation.ts",
+    "match": "CLIO; [a-z_]+;",
+    "reason": "Fixed historical task-notification wire prefix; using the selected UI brand would prevent decoding existing evidence."
+  },
+  {
     "file": "web/src/components/clio/web-search-setup.tsx",
     "match": "CLIO Web Search",
     "reason": "Web Search is a distinct, named companion service brand, not the agent identity itself; it has no vocab field yet."
