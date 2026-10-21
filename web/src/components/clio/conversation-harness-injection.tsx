@@ -1,18 +1,17 @@
 import type { MessageBlock } from '@clio/core/v3';
-import { ChevronRightIcon, SyringeIcon } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronRightIcon, MessageSquareIcon, SyringeIcon, TerminalIcon } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { vocab } from '@/lib/brand-vocabulary';
+import { Dialog, DialogTrigger } from '@/components/ui/dialog';
+import { InfoIcon } from '@/lib/icon-vocabulary';
 import { cn } from '@/lib/utils';
 import { humanizeProtocolValue } from './presentation-labels';
 import { useTranscriptDisclosure } from './transcript-disclosure-context';
+import { injectionPresentation } from './injection-presentation';
+import { BoundedResult } from './bounded-result';
+import { GroundedMessageResponse } from './grounded-message-response';
+import { ToolTerminalResult } from './tool-terminal-result';
+import { ToolDetailsContent } from './tool-details-content';
 
 type InjectionBlock = Extract<MessageBlock, { type: 'injection' }>;
 
@@ -27,6 +26,8 @@ const INJECTION_LABELS: Record<string, string> = {
   replan: 'Replanning suggestion',
   memory_search: 'Memory search results',
   task_results: 'Results from background tasks',
+  task_result: 'Task result',
+  peer: 'Agent message',
   path_hint: 'Path suggestion',
   circuit_breaker: 'Repeated-failure warning',
   result_spilled: 'Large result saved to a file',
@@ -46,7 +47,17 @@ export function HarnessInjection({
 }) {
   const [expanded, setExpanded] = useTranscriptDisclosure(`injection:${block.id}`);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const label = INJECTION_LABELS[block.source] ?? humanizeProtocolValue(block.source);
+  const presentation = useMemo(
+    () => injectionPresentation(block.source, block.text),
+    [block.source, block.text],
+  );
+  const label =
+    presentation?.label ?? INJECTION_LABELS[block.source] ?? humanizeProtocolValue(block.source);
+  const Icon = presentation
+    ? presentation.terminal
+      ? TerminalIcon
+      : MessageSquareIcon
+    : SyringeIcon;
   const triggerLabel =
     block.source === 'summarization'
       ? block.trigger === 'manual'
@@ -54,61 +65,93 @@ export function HarnessInjection({
         : 'Automatic'
       : '';
   return (
-    <section
-      className="min-w-0 max-w-full"
-      data-slot="harness-injection"
-      data-source={block.source}
-    >
-      <Button
-        variant="ghost"
-        aria-label={`Injection ${label}${triggerLabel ? ` ${triggerLabel}` : ''}`}
-        aria-expanded={expanded}
-        onClick={() => setExpanded(!expanded)}
-        type="button"
-        className={cn(
-          'h-auto min-h-7 w-full min-w-0 justify-start gap-2 rounded-sm px-1 py-1 text-left text-muted-foreground',
-          compact ? 'pr-7 text-xs' : 'text-sm font-medium',
-        )}
+    <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+      <section
+        className="min-w-0 max-w-full"
+        data-slot="harness-injection"
+        data-source={block.source}
       >
-        <SyringeIcon
-          aria-hidden="true"
-          className={compact ? 'size-3.5 shrink-0' : 'size-4 shrink-0'}
-        />
-        <span className="shrink-0 text-xs font-normal">Injection</span>
-        <span className="min-w-0 flex-1 truncate">{label}</span>
-        {triggerLabel ? <span className="shrink-0 text-xs font-normal">{triggerLabel}</span> : null}
-        <ChevronRightIcon
-          aria-hidden="true"
-          className={cn('size-3 shrink-0 transition-transform', expanded && 'rotate-90')}
-        />
-      </Button>
-      {expanded ? (
-        <div>
-          <pre className="mt-2 min-w-0 max-w-full whitespace-pre-wrap break-words rounded-md bg-muted p-2 text-xs leading-5">
-            {block.text}
-          </pre>
-          <button
-            className="mt-1 text-xs text-primary hover:underline"
-            onClick={() => setDetailsOpen(true)}
+        <div className="flex min-w-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            aria-label={`Injection ${label}${triggerLabel ? ` ${triggerLabel}` : ''}`}
+            aria-expanded={expanded}
+            onClick={() => setExpanded(!expanded)}
             type="button"
+            className={cn(
+              'h-auto min-h-7 min-w-0 flex-1 shrink justify-start gap-2 rounded-sm px-1 py-1 text-left text-muted-foreground',
+              compact ? 'pr-7 text-xs' : 'text-sm font-medium',
+            )}
           >
-            Open exact details
-          </button>
+            <Icon
+              aria-hidden="true"
+              className={compact ? 'size-3.5 shrink-0' : 'size-4 shrink-0'}
+            />
+            {!presentation ? <span className="shrink-0 text-xs font-normal">Injection</span> : null}
+            <span className="min-w-0 flex-1 truncate">{label}</span>
+            {triggerLabel ? (
+              <span className="shrink-0 text-xs font-normal">{triggerLabel}</span>
+            ) : null}
+            <ChevronRightIcon
+              aria-hidden="true"
+              className={cn('size-3 shrink-0 transition-transform', expanded && 'rotate-90')}
+            />
+          </Button>
+          <DialogTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="size-5 shrink-0"
+              aria-label={`Technical details for ${label}`}
+              title="View original recorded content"
+            >
+              <InfoIcon className="size-4" />
+            </Button>
+          </DialogTrigger>
         </div>
-      ) : null}
-      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <DialogContent className="flex max-h-[88dvh] flex-col sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{label}</DialogTitle>
-            <DialogDescription>
-              The recorded content {vocab.agent} gave the agent.
-            </DialogDescription>
-          </DialogHeader>
-          <pre className="min-h-0 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-4 text-xs leading-5">
+        {expanded ? (
+          <div className="mt-2 min-w-0 space-y-2 pl-1">
+            {presentation?.attribution ? (
+              <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                {presentation.attribution}
+              </p>
+            ) : null}
+            {presentation?.terminal ? (
+              <ToolTerminalResult
+                block={presentation.terminal}
+                saved={[]}
+                lines={8}
+                running={false}
+              />
+            ) : (
+              <BoundedResult lines={8} title={label}>
+                {presentation?.format === 'markdown' ? (
+                  <GroundedMessageResponse mode="static">
+                    {presentation.text}
+                  </GroundedMessageResponse>
+                ) : (
+                  <pre className="min-w-0 max-w-full whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]">
+                    {presentation?.text ??
+                      (['task_result', 'peer', 'attention', 'question_answer'].includes(
+                        block.source,
+                      )
+                        ? 'Recorded content is available in the information panel.'
+                        : block.text)}
+                  </pre>
+                )}
+              </BoundedResult>
+            )}
+            {presentation?.notice ? (
+              <p className="text-sm text-muted-foreground">{presentation.notice}</p>
+            ) : null}
+          </div>
+        ) : null}
+        <ToolDetailsContent inline={false} title={`${label}: Technical details`}>
+          <pre className="min-h-0 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-4 text-sm leading-6 [overflow-wrap:anywhere]">
             {block.text}
           </pre>
-        </DialogContent>
-      </Dialog>
-    </section>
+        </ToolDetailsContent>
+      </section>
+    </Dialog>
   );
 }

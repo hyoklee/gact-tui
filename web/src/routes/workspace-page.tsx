@@ -113,6 +113,7 @@ export function WorkspacePage() {
     parentSession,
     providerCatalog,
     processes,
+    workPages,
     runs,
     session,
     sessionLookupPending,
@@ -159,12 +160,8 @@ export function WorkspacePage() {
     [sessionId],
   );
   const attention = useAttentionMode(sessionId, transcript.data?.messages.length ?? 0);
-  // messageCount lags transcript.isFetching by a render tick (it only
-  // hydrates from transcript.data via use-workspace-data.ts's mergeSnapshots
-  // effect), which used to flash the welcome variant -- remounting the
-  // composer and dropping any in-progress attachment/draft -- for one render
-  // per existing-conversation navigation. Gating also on transcript.data's
-  // own count, which never disagrees with isFetching, closes the race.
+  // Hydration can lag messageCount by a render. Check both to avoid remounting
+  // the welcome composer and losing drafts or attachments during navigation.
   const showConversationWelcome =
     messageCount === 0 &&
     (transcript.data?.messages.length ?? 0) === 0 &&
@@ -276,6 +273,8 @@ export function WorkspacePage() {
       interactions,
       tools,
       messages: transcript.data?.messages ?? [],
+      sessionId,
+      endpoint: settings.endpoint,
       focusComposer: focusComposerForAnswer,
       respondInteraction: respondInteraction.mutateAsync,
       send: send.mutateAsync,
@@ -325,7 +324,7 @@ export function WorkspacePage() {
           }
           statusStrip={
             <WorkspaceLiveStatusStrip
-              activeWorkCount={workspaceRouteState.countActiveWork(runs, tasks, tools, processes)}
+              work={{ runs, tasks, tools, processes }}
               sessionId={sessionId}
             />
           }
@@ -367,7 +366,6 @@ export function WorkspacePage() {
     session.state === 'running' ? 'running' : send.isPending ? 'queued' : session.state;
   const { pendingMessageIds, cancellablePendingMessageIds } =
     workspaceRouteState.pendingSteerMessageIds(pendingSteers.data ?? []);
-  const activeWorkCount = workspaceRouteState.countActiveWork(runs, tasks, tools, processes);
   const renderComposer = (variant: 'docked' | 'welcome') => (
     <m.div
       className={
@@ -524,6 +522,7 @@ export function WorkspacePage() {
               onOpenSubagent={openSubagent}
               onProvenanceProviderChange={executionProvenance.setProvider}
               processes={processes}
+              workPages={workPages}
               resources={workspaceResources.data ?? []}
               provenanceDegradation={executionProvenance.degradation}
               provenancePending={
@@ -670,6 +669,7 @@ export function WorkspacePage() {
                     sessionContext.preferences.mutateAsync(input)
                   }
                   processes={processes}
+                  workPages={workPages}
                   resources={workspaceResources.data ?? []}
                   provenanceDegradation={executionProvenance.degradation}
                   provenancePending={
@@ -692,7 +692,8 @@ export function WorkspacePage() {
           workbenchRevealKey={workbenchRequest?.key}
           statusStrip={
             <WorkspaceLiveStatusStrip
-              activeWorkCount={activeWorkCount}
+              work={{ runs, tasks, tools, processes }}
+              onInspectTasks={() => openObservability('evidence')}
               onOpenWork={() => revealWorkbench({ kind: 'resources', section: 'work' })}
               sessionId={sessionId}
               sessionState={session?.state}

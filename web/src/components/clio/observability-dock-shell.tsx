@@ -1,4 +1,6 @@
 import { subagentOpenTarget } from './subagent-navigation';
+import { countWorkNeedingInspection } from './workspace-route-state';
+import type { TaskPageControls } from './async-task-list';
 import type {
   Artifact,
   AsyncProcess,
@@ -57,7 +59,9 @@ export interface ClioObservabilityDockProps {
   messages: readonly Message[];
   interactions?: readonly PendingInteraction[];
   processes: readonly AsyncProcess[];
+  workPages?: TaskPageControls;
   onCancelTask?: (task: AsyncProcess) => Promise<void>;
+  onControlTask?: (task: AsyncProcess, action: 'pause' | 'resume' | 'restart') => Promise<void>;
   tasks: readonly Task[];
   tools: readonly ToolInvocation[];
   runs: readonly Run[];
@@ -124,6 +128,7 @@ export function ClioObservabilityDock(props: ClioObservabilityDockProps) {
     () => 0,
   );
   const activityCount = props.processes.length || props.subagents.length;
+  const unresolvedWorkCount = countWorkNeedingInspection(props.processes);
   const activeActivityCount = props.processes.length
     ? props.processes.filter((process) => isActiveWork(process.live_state)).length
     : props.subagents.filter((agent) => isActiveWork(agent.state)).length;
@@ -140,7 +145,9 @@ export function ClioObservabilityDock(props: ClioObservabilityDockProps) {
   const showDockStatusBadge = Boolean(
     activeActivityCount || sessionActive || sessionNeedsAttention || activityCount,
   );
-  const dockStatusValue: ClioStatusValue = props.sessionState ?? 'running';
+  const dockStatusValue: ClioStatusValue = unresolvedWorkCount
+    ? 'task_state_uncertain'
+    : (props.sessionState ?? 'running');
   const activityCountLabel = `${activityCount.toLocaleString()} background ${activityCount === 1 ? 'activity' : 'activities'}`;
   const outputArtifacts = artifactDeliverables(props.artifacts).filter(
     (artifact) => artifact.session_relation !== 'used',
@@ -158,15 +165,17 @@ export function ClioObservabilityDock(props: ClioObservabilityDockProps) {
             : 'Activity';
   // The badge takes the session state's tone (red for failed), so its words must name that
   // same state: an idle fall-through label under a failed tone read as a red "Up to date".
-  const dockStatus = activeActivityCount
-    ? `${activeActivityCount} active`
-    : sessionActive
-      ? 'Working'
-      : sessionNeedsAttention && props.sessionState
-        ? clioStatusLabel(props.sessionState)
-        : activityCount
-          ? 'Settled'
-          : 'No active work';
+  const dockStatus = unresolvedWorkCount
+    ? 'Needs inspection'
+    : activeActivityCount
+      ? `${activeActivityCount} active`
+      : sessionActive
+        ? 'Working'
+        : sessionNeedsAttention && props.sessionState
+          ? clioStatusLabel(props.sessionState)
+          : activityCount
+            ? 'Settled'
+            : 'No active work';
 
   const openChildAgent = (subagent: SubagentRun, target: SubagentOpenTarget) => {
     props.onOpenSubagent?.(subagent, target);
