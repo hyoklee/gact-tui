@@ -1,4 +1,6 @@
-import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
+import { GripVerticalIcon } from 'lucide-react';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import { Sortable, SortableItem, SortableItemHandle } from '@/components/reui/sortable';
 import { AddIcon, RemoveIcon, ConfigureIcon } from '@/lib/icon-vocabulary';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -33,7 +35,16 @@ export function SessionRailCustomize({
             Saved on this device. Empty sections appear when available.
           </p>
         </div>
-        <ul className="clio-scrollbar max-h-80 overflow-y-auto" aria-label="Rail sections">
+        <Sortable
+          value={layout.order}
+          getItemValue={(id) => id}
+          strategy="vertical"
+          modifiers={[restrictToVerticalAxis]}
+          onValueChange={(order) => onChange({ ...layout, order })}
+          className="clio-scrollbar max-h-80 overflow-y-auto"
+          aria-label="Rail sections"
+          role="list"
+        >
           {layout.order.map((id, index) => {
             const label = SESSION_RAIL_SECTIONS.find((section) => section.id === id)!.label;
             const included = !layout.hidden.includes(id);
@@ -43,35 +54,37 @@ export function SessionRailCustomize({
               onChange({ ...layout, order });
             };
             return (
-              <li
+              <SortableItem
                 key={id}
+                value={id}
+                role="listitem"
                 className="flex h-9 items-center gap-0.5 border-b border-border/50 last:border-0"
               >
+                <SortableItemHandle asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="size-7 shrink-0 touch-none cursor-grab text-muted-foreground active:cursor-grabbing"
+                    aria-label={`Drag ${label} in layout`}
+                    title="Drag to reorder. Alt+Up or Alt+Down moves with the keyboard."
+                    onKeyDown={(event) => {
+                      if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const offset = event.key === 'ArrowUp' ? -1 : 1;
+                        if (index + offset >= 0 && index + offset < layout.order.length)
+                          move(offset);
+                      }
+                    }}
+                  >
+                    <GripVerticalIcon aria-hidden="true" className="size-3.5" />
+                  </Button>
+                </SortableItemHandle>
                 <span
                   className={`min-w-0 flex-1 truncate px-2 text-xs ${included ? '' : 'text-muted-foreground'}`}
                 >
                   {label}
                 </span>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  className="size-6"
-                  aria-label={`Move ${label} up`}
-                  disabled={index === 0}
-                  onClick={() => move(-1)}
-                >
-                  <ArrowUpIcon className="size-3" />
-                </Button>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  className="size-6"
-                  aria-label={`Move ${label} down`}
-                  disabled={index === layout.order.length - 1}
-                  onClick={() => move(1)}
-                >
-                  <ArrowDownIcon className="size-3" />
-                </Button>
                 <Button
                   size="icon-sm"
                   variant="ghost"
@@ -93,10 +106,10 @@ export function SessionRailCustomize({
                     <AddIcon className="size-3.5" />
                   )}
                 </Button>
-              </li>
+              </SortableItem>
             );
           })}
-        </ul>
+        </Sortable>
         <Button variant="ghost" size="sm" className="mt-1 h-8 w-full text-xs" onClick={onReset}>
           Reset layout
         </Button>

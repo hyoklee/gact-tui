@@ -40,10 +40,10 @@ it('reorders with accessible row controls, retains collapse state and restores d
   const first = render(<SessionRail items={items} />);
   await user.click(screen.getByRole('button', { name: 'Collapse Context' }));
   await user.click(screen.getByRole('button', { name: 'Customize rail' }));
-  await user.click(screen.getByRole('button', { name: 'Move Context down' }));
+  screen.getByRole('button', { name: 'Drag Context in layout' }).focus();
+  await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
   // Move past the intervening unavailable sections until Background tasks is ahead.
-  for (let step = 0; step < 5; step++)
-    await user.click(screen.getByRole('button', { name: 'Move Context down' }));
+  for (let step = 0; step < 5; step++) await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
   expect(JSON.parse(localStorage.getItem(SESSION_RAIL_STORAGE_KEY)!).order[6]).toBe('context');
   first.unmount();
   render(<SessionRail items={items} />);

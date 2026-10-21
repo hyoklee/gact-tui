@@ -138,6 +138,8 @@ export function AgentEditorDialog({
     presets: modelConfiguration.data?.presets ?? [],
   });
   const modelCatalogStatus =
+    modelConfiguration.isFetching ||
+    modelCatalogs.some((catalog) => catalog.isFetching) ||
     (modelConfiguration.isPending && !modelConfiguration.data) ||
     modelCatalogs.some((catalog) => catalog.isPending && !catalog.data)
       ? 'loading'

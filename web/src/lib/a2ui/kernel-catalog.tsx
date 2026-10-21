@@ -11,7 +11,6 @@ import {
   Button as A2UIButton,
   CheckBox,
   Column,
-  DateTimeInput,
   Card,
   Divider,
   List,
@@ -26,6 +25,7 @@ import {
 import { GitCompareArrowsIcon, ShieldAlertIcon } from 'lucide-react';
 import { lazy, Suspense, type CSSProperties } from 'react';
 import { z } from 'zod';
+import { ClioDateTimeInput } from '@/components/clio/a2ui-date-time-input';
 import {
   Confirmation,
   ConfirmationAction,
@@ -700,7 +700,7 @@ const KERNEL_COMPONENT_LIST: ReactComponentImplementation[] = [
   CheckBox,
   ClioChoicePicker,
   Slider,
-  DateTimeInput,
+  ClioDateTimeInput,
   Grid,
   Frame,
   Status,
