@@ -396,6 +396,9 @@ export function ClioObservabilityView({
               error={contextError}
               files={contextFiles}
               frames={contextFrames}
+              resources={resources}
+              onOpenResource={onOpenResource}
+              tools={tools}
               messages={messages}
               onCompact={onCompactContext}
               onOpenFile={onOpenFile}
