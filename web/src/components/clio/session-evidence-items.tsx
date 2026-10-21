@@ -33,6 +33,8 @@ import { ClioToolInvocation } from './tool-invocation';
 import { AsyncTaskList } from './async-task-list';
 
 import type { SessionRailItem } from './session-rail-layout';
+import { FileIdentityRow } from './file-identity-row';
+import { ClioRelativeTime } from './relative-time';
 
 export type SessionEvidenceSummaryProps = Pick<
   ClioEvidenceViewProps,
@@ -243,20 +245,33 @@ export function sessionEvidenceItems({
             content: (
               <>
                 {outputs.map((artifact) => (
-                  <SessionSummaryRow
+                  <FileIdentityRow
                     key={artifact.id}
-                    icon={<ArtifactTypeIcon artifact={artifact} />}
-                    label={artifactDisplayName(artifact)}
-                    metadata={[
-                      isDashboardArtifact(artifact)
-                        ? 'Dashboard'
-                        : fileFormatLabel(artifact.name, artifact.media_type),
-                      artifact.size === undefined ? undefined : formatBytes(artifact.size),
-                    ]
-                      .filter(Boolean)
-                      .join(' — ')}
-                    timestamp={artifact.created_at}
-                    timestampLabel="Created"
+                    name={artifactDisplayName(artifact)}
+                    mediaType={artifact.media_type}
+                    className="my-1"
+                    icon={<ArtifactTypeIcon artifact={artifact} badge className="size-9" />}
+                    metadata={
+                      <span className="flex items-center gap-2">
+                        <span>
+                          {[
+                            isDashboardArtifact(artifact)
+                              ? 'Dashboard'
+                              : fileFormatLabel(artifact.name, artifact.media_type),
+                            artifact.size === undefined ? undefined : formatBytes(artifact.size),
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
+                        {artifact.created_at ? (
+                          <ClioRelativeTime
+                            timestamp={artifact.created_at}
+                            label="Created"
+                            compact
+                          />
+                        ) : null}
+                      </span>
+                    }
                     onOpen={
                       actions.onOpenArtifact ? () => actions.onOpenArtifact?.(artifact) : undefined
                     }

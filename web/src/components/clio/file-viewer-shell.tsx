@@ -12,7 +12,9 @@ import { OverlayContainer } from '@/components/ui/overlay-container';
 import { FileViewerActions } from './file-viewer-actions';
 import { FileViewerActionRegistry, type FileViewerAction } from './file-viewer-action-context';
 import { FileViewerInformationHost } from './file-viewer-context';
-import type { FileViewerSource } from './file-viewer-source';
+import { fileViewerIdentity, type FileViewerSource } from './file-viewer-source';
+import { FileTypeIcon } from './file-type-icon';
+import { formatBytes } from '@/lib/format';
 import { ViewerToolbarHost } from './viewer-toolbar-context';
 
 export interface FileViewerTab {
@@ -40,6 +42,7 @@ export function FileViewerShell({
   hasDocumentActions?: boolean;
 }) {
   const [toolbarHost, setToolbarHost] = useState<HTMLDivElement | null>(null);
+  const identity = fileViewerIdentity(source);
   const [informationHost, setInformationHost] = useState<HTMLDivElement | null>(null);
   const [formatActions, setFormatActions] = useState<
     ReadonlyMap<string, readonly FileViewerAction[]>
@@ -89,9 +92,20 @@ export function FileViewerShell({
                 onValueChange={onValueChange}
               >
                 <div
-                  className="flex h-9 shrink-0 items-center gap-1 overflow-x-auto overflow-y-hidden border-b px-2"
+                  className="flex h-10 shrink-0 items-center gap-1 overflow-x-auto overflow-y-hidden border-b px-2"
                   data-slot="viewer-toolbar"
                 >
+                  <span
+                    className="mr-1 flex shrink-0 items-center gap-2"
+                    title={`${identity.name}${identity.size === undefined ? '' : ` · ${formatBytes(identity.size)}`}`}
+                  >
+                    <FileTypeIcon
+                      name={identity.name}
+                      mediaType={identity.mediaType}
+                      badge
+                      className="size-7"
+                    />
+                  </span>
                   <TabsList
                     aria-label={label}
                     className="h-full shrink-0 gap-0 bg-transparent p-0 group-data-horizontal/tabs:h-full"
