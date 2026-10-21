@@ -62,6 +62,7 @@ export const ndpEndpointSchema = z.object({
   ssh_profile: z.string(),
   ssh_route: sshRouteSchema.nullish(),
   authentication: z.enum(['none', 'ndp']),
+  streaming_runtime: z.object({ python: z.string(), profile_path: z.string() }).nullish(),
   workspace_id: z.string(),
   observed_at: z.string(),
   hidden: z.boolean().optional(),
@@ -110,6 +111,7 @@ export type NDPEndpointInput = {
   ssh_profile: string;
   ssh_route?: SshRoute | null;
   authentication: 'none' | 'ndp';
+  streaming_runtime?: { python: string; profile_path: string } | null;
 };
 export type NDPEndpointRequest = {
   operation_id: string;

@@ -62,6 +62,15 @@ export function countActiveWork(
   );
 }
 
+/** Lost visibility requires inspection without claiming the backend is still executing. */
+export function countWorkNeedingInspection(
+  processes: readonly Pick<AsyncProcess, 'effective_status' | 'live_state'>[],
+): number {
+  return processes.filter(
+    (process) => (process.effective_status ?? process.live_state) === 'task_state_uncertain',
+  ).length;
+}
+
 /** Keeps live connectivity independent from a failed historical snapshot. */
 export function canOpenSessionStream(
   gactVersions: readonly string[] | undefined,

@@ -38,6 +38,7 @@ const labels: Record<string, string> = {
   dataset_name: 'Dataset name',
   session_id: 'Stream session',
   resource_id: 'Catalog resource',
+  topic: 'Kafka topic',
   start: 'Start reading',
   max_records: 'Records to capture',
   seconds: 'Wait for records (seconds)',
@@ -56,6 +57,7 @@ const primaryFields = new Set([
   'url',
   'filename',
   'resource_id',
+  'topic',
   'start',
   'max_records',
 ]);
@@ -86,11 +88,15 @@ export function NDPWorkflowForm({
   const client = useQueryClient();
   const { operation } = workflow;
   const archivedUrl = ['GET /stream/segment/url', 'GET /pull/url'].includes(operation.id);
-  const kafkaSegment = operation.id === 'GET /streams/{stream_id}/segment';
+  const kafkaSegment = ['GET /streams/{stream_id}/segment', 'SDK streaming_v2.read'].includes(
+    operation.id,
+  );
   const { settings } = useConnectionSettings();
   const sourceChoices = useQuery({
     queryKey: ['ndp-stream-sources', connectionScope(settings), workspaceId, endpoint.id],
-    enabled: operation.id === 'POST /streams' && !workflow.body?.resource_id,
+    enabled:
+      (operation.id === 'POST /streams' && !workflow.body?.resource_id) ||
+      (operation.id === 'SDK streaming_v2.open' && !workflow.parameters?.resource_id),
     queryFn: ({ signal }) =>
       repository.browseNdpEndpoint(
         workspaceId,
@@ -139,9 +145,9 @@ export function NDPWorkflowForm({
         workflow.parameters?.[row.name] !== undefined
       ) &&
       !(
-        operation.id === 'POST /streams' &&
+        ['POST /streams', 'SDK streaming_v2.open'].includes(operation.id) &&
         row.name === 'resource_id' &&
-        workflow.body?.resource_id
+        (workflow.body?.resource_id || workflow.parameters?.resource_id)
       ),
   );
   const request = useMutation({
@@ -186,7 +192,8 @@ export function NDPWorkflowForm({
           {title}
           {field.required ? ' *' : ''}
         </Label>
-        {operation.id === 'POST /streams' && field.name === 'resource_id' ? (
+        {['POST /streams', 'SDK streaming_v2.open'].includes(operation.id) &&
+        field.name === 'resource_id' ? (
           <>
             <select
               id={`ndp-workflow-${field.name}`}
@@ -231,7 +238,8 @@ export function NDPWorkflowForm({
             {(kind === 'boolean' ? [true, false] : (field.schema.enum as unknown[])).map(
               (option) => (
                 <option key={String(option)} value={String(option)}>
-                  {operation.id === 'POST /streams' && field.name === 'start'
+                  {['POST /streams', 'SDK streaming_v2.open'].includes(operation.id) &&
+                  field.name === 'start'
                     ? option === 'earliest'
                       ? 'Retained history'
                       : 'New arrivals'
@@ -374,7 +382,9 @@ export function NDPWorkflowForm({
                   ? request.data?.continuation
                     ? 'Capture next records'
                     : 'Capture records'
-                  : 'Save sample'
+                  : operation.method === 'SDK'
+                    ? workflow.title
+                    : 'Save sample'
                 : 'Review'}
         </Button>
         <Button type="button" variant="ghost" onClick={onClose}>

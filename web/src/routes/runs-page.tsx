@@ -3,26 +3,31 @@ import { queryKeys } from '@/lib/query-keys';
 import { truncate } from '@/lib/format';
 import {
   DATA_GRID_PAGE_SIZES,
-  OPERATIONS_POLL_MS,
   RUN_REASON_TRUNCATE_CHARS,
   RUNS_POLL_MS,
 } from '@/lib/runtime-limits';
 import type {
-  OperationalRun,
+  TaskSnapshot,
   RunState,
   Session,
   ToolInvocation,
   TranscriptSnapshot,
   Workspace,
 } from '@clio/core/v3';
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { operationalRunStateSchema } from '@clio/core/v3';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useTable } from '@tanstack/react-table';
 import {
   ActivityIcon,
   ChevronLeftIcon,
   ExternalLinkIcon,
-  PlugZapIcon,
   SearchIcon,
   WorkflowIcon,
 } from 'lucide-react';
@@ -73,8 +78,9 @@ import { useConnectionSettings } from '@/providers/connection-provider';
 import { returnRouteFromState, sessionIdFromRoute } from '@/lib/workspace-route-memory';
 import { workflowDescriptor } from '@/components/clio/workflow-tool-presentation';
 import { taskProgressLabel } from '@/components/clio/task-progress-label';
+import { matchesRunState } from '@/lib/session-agent-tasks';
 
-type RunSource = OperationalRun['source'] | 'workflow';
+type RunSource = 'agent_task' | 'mcp_task' | 'unknown' | 'workflow';
 const WORKFLOW_SCAN_BATCH = 4;
 
 export interface RunRow {
@@ -90,6 +96,7 @@ export interface RunRow {
   state: RunState;
   reportedStatus: string;
   statusReason?: string;
+  statusDetail?: string;
   source: RunSource;
   host: string;
   placement: string;
@@ -98,16 +105,14 @@ export interface RunRow {
   workspaceId?: string;
   targetSessionId?: string;
   updatedAt: string;
-  detached: boolean;
   workflow?: ToolInvocation;
 }
 
-type ConfirmedRunAction = { kind: 'cancel' | 'dismiss'; row: RunRow };
+type ConfirmedRunAction = { kind: 'cancel'; row: RunRow };
 
 const sourceLabels: Record<RunSource, string> = {
   agent_task: 'Agent',
   mcp_task: 'Tool',
-  relay_job: 'Remote job',
   unknown: 'Unknown source',
   workflow: 'Workflow',
 };
@@ -142,56 +147,65 @@ function conciseReason(reason: string | undefined): string | undefined {
 }
 
 function buildRows(
-  runs: readonly OperationalRun[],
+  runs: readonly TaskSnapshot[],
   sessions: readonly Session[],
   workspaces: readonly Workspace[],
 ): RunRow[] {
   const labels = workspaceLabels(workspaces);
   const sessionsById = new Map(sessions.map((session) => [session.id, session]));
   return runs.map((run) => {
-    const targetSessionId = run.child_session_id || run.parent_session_id || undefined;
+    const targetSessionId = run.owner.session_id;
     const targetSession = targetSessionId ? sessionsById.get(targetSessionId) : undefined;
-    const parentSession = sessionsById.get(run.parent_session_id);
-    const workspaceId = targetSession?.workspace_id ?? parentSession?.workspace_id;
+    const workspaceId = targetSession?.workspace_id;
     const workspaceLabelFields = workspaceId
       ? (labels.get(workspaceId) ?? {
           name: `${capitalize(vocab.workspace)} unavailable`,
           qualifiers: [],
         })
       : { name: `${capitalize(vocab.workspace)} unavailable`, qualifiers: [] };
+    const statusDetail = ['failed', 'task_state_uncertain'].includes(run.status)
+      ? run.progress.message || undefined
+      : undefined;
     return {
-      handleId: run.handle_id,
-      taskKind: run.task_kind,
+      handleId: run.handle,
+      taskKind: run.kind,
       progress: run.progress,
-      assignment: run.description,
-      ownerSessionId: run.parent_session_id,
-      cancelRequested: run.cancel_requested,
-      cancellable: run.supported_actions?.includes('cancel'),
-      taskId: run.task_id,
-      label: run.run_label || 'Unnamed run',
-      state: run.live_state,
-      reportedStatus: run.status,
-      statusReason: conciseReason(run.status_reason),
-      source: run.source,
-      host: run.host,
-      placement: run.placement,
+      assignment: run.description_missing
+        ? 'Assignment description unavailable'
+        : (run.description ?? undefined),
+      ownerSessionId: run.owner.session_id,
+      cancelRequested: Boolean(run.cancellation_requested_at),
+      cancellable: run.supported_actions.includes('cancel'),
+      taskId: run.handle,
+      label: run.label || 'Unnamed task',
+      state: taskState(run),
+      reportedStatus: run.raw_status || run.status,
+      statusReason: conciseReason(statusDetail),
+      statusDetail,
+      source: ['Session', 'Subagent'].includes(run.kind) ? 'agent_task' : 'mcp_task',
+      host: run.backend?.server || '',
+      placement: run.backend?.placement || 'local',
       workspaceLabel: workspaceLabelText(workspaceLabelFields),
       workspaceLabelFields,
       workspaceId,
       targetSessionId,
       updatedAt: run.updated_at,
-      detached: run.detached,
     };
   });
 }
 
-function workflowState(tool: ToolInvocation): RunState {
-  if (tool.state === 'pending') return 'queued';
-  if (tool.state === 'running') return 'running';
-  if (tool.state === 'succeeded') return 'completed';
-  if (tool.state === 'failed') return 'failed';
-  if (tool.state === 'cancelled' || tool.state === 'denied') return 'cancelled';
-  return 'unknown';
+function taskState(task: TaskSnapshot): RunState {
+  if (task.terminal_at || task.status === 'task_state_uncertain')
+    return operationalRunStateSchema.parse(task.status);
+  if (task.cancellation_requested_at) return 'cancellation_requested';
+  const activity: Record<string, string> = {
+    busy: 'running',
+    executing: 'running',
+    cancelling: 'cancellation_requested',
+    waiting_for_input: 'waiting_user',
+    idle: 'yielded',
+  };
+  return operationalRunStateSchema.parse(activity[task.activity] ?? (task.activity || task.status));
 }
 
 // Pure indexing keeps transcript-derived workflow identity deterministic and testable.
@@ -200,6 +214,7 @@ export function buildWorkflowRows(
   transcripts: readonly TranscriptSnapshot[],
   sessions: readonly Session[],
   workspaces: readonly Workspace[],
+  tasks: readonly TaskSnapshot[] = [],
 ): RunRow[] {
   const labels = workspaceLabels(workspaces);
   const sessionsById = new Map(sessions.map((session) => [session.id, session]));
@@ -209,6 +224,44 @@ export function buildWorkflowRows(
       if (!descriptor) return [];
       const session = sessionsById.get(tool.session_id);
       const workspaceId = session?.workspace_id;
+      const launched = descriptor.steps.filter(
+        (step) => step.launchState !== 'not_started' && step.launchState !== 'not_launched',
+      );
+      const steps = launched.map((step) => tasks.find((task) => task.handle === step.taskId));
+      const recordedFailure = [
+        'workflow_child_failed',
+        'workflow_step_timeout',
+        'workflow_spawn_refused',
+      ].includes(descriptor.status ?? '');
+      const recordedYield = ['workflow_predicate_unsatisfied', 'workflow_step_stalled'].includes(
+        descriptor.status ?? '',
+      );
+      const allStepsLaunched = launched.length === descriptor.steps.length;
+      const failedStep = descriptor.steps.find((step) => step.stepId === descriptor.failedStep);
+      const unlaunched = descriptor.steps.filter((step) => step.launchState === 'not_launched');
+      const completeVisibility = steps.every((task) => task !== undefined);
+      const active = steps.some((task) => task && !task.terminal_at);
+      const state: RunState =
+        descriptor.status === 'task_state_uncertain' ||
+        steps.some((task) => task?.status === 'task_state_uncertain')
+          ? 'task_state_uncertain'
+          : recordedFailure
+            ? 'failed'
+            : recordedYield
+              ? 'yielded'
+              : !steps.length || !completeVisibility
+                ? 'unknown'
+                : active
+                  ? 'running'
+                  : steps.some((task) => task?.status === 'failed')
+                    ? 'failed'
+                    : steps.some((task) => task?.status === 'cancelled')
+                      ? 'cancelled'
+                      : !allStepsLaunched
+                        ? 'yielded'
+                        : steps.every((task) => task?.status === 'completed')
+                          ? 'completed'
+                          : 'interrupted';
       const workspaceLabelFields = workspaceId
         ? (labels.get(workspaceId) ?? {
             name: `${capitalize(vocab.workspace)} unavailable`,
@@ -220,8 +273,24 @@ export function buildWorkflowRows(
           handleId: tool.id,
           taskId: tool.id,
           label: descriptor.label,
-          state: workflowState(tool),
-          reportedStatus: tool.state,
+          state,
+          reportedStatus: descriptor.status ?? state,
+          statusReason: recordedFailure
+            ? conciseReason(
+                `Workflow failed${failedStep ? ` at ${failedStep.name}` : ''}.${unlaunched.length ? ` ${unlaunched.length} ${unlaunched.length === 1 ? 'step was' : 'steps were'} not launched.` : ''}`,
+              )
+            : recordedYield || !allStepsLaunched
+              ? 'The declared workflow has an uncompleted step.'
+              : completeVisibility && steps.length
+                ? undefined
+                : !launched.length && descriptor.steps.length
+                  ? 'Steps have not launched.'
+                  : 'Accepted step statuses are not loaded.',
+          progress: {
+            completed: completeVisibility ? steps.filter((task) => task?.terminal_at).length : null,
+            total: descriptor.steps.length,
+            unit: 'steps',
+          },
           source: 'workflow',
           host: 'Ordered execution',
           placement: `${descriptor.steps.length} ordered ${descriptor.steps.length === 1 ? 'step' : 'steps'}`,
@@ -230,7 +299,6 @@ export function buildWorkflowRows(
           workspaceId,
           targetSessionId: tool.session_id,
           updatedAt: tool.completed_at || tool.started_at || session?.updated_at || '',
-          detached: false,
           workflow: tool,
         },
       ];
@@ -254,7 +322,7 @@ export function RunsPage() {
   const [requestedCancellation, setRequestedCancellation] = useState<Set<string>>(new Set());
   const [workflowScanLimit, setWorkflowScanLimit] = useState(WORKFLOW_SCAN_BATCH);
   const [search, setSearch] = useState('');
-  const [stateFilter, setStateFilter] = useState('all');
+  const [stateFilter, setStateFilter] = useState('active');
   const [sourceFilter, setSourceFilter] = useState('all');
   const [confirmedAction, setConfirmedAction] = useState<ConfirmedRunAction>();
   const workspaces = useQuery({
@@ -265,16 +333,29 @@ export function RunsPage() {
     queryKey: queryKeys.key('sessions', settings.endpoint, 'all'),
     queryFn: ({ signal }) => repository.allSessions(signal),
   });
-  const runs = useQuery({
-    queryKey: queryKeys.key('runs', settings.endpoint),
-    queryFn: ({ signal }) => repository.runs(signal),
+  const runs = useInfiniteQuery({
+    queryKey: queryKeys.key(
+      'tasks',
+      settings.endpoint,
+      category === 'executions' && stateFilter === 'active',
+    ),
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ signal, pageParam }) =>
+      repository.queryTasks(
+        { cursor: pageParam, activeOnly: category === 'executions' && stateFilter === 'active' },
+        signal,
+      ),
+    getNextPageParam: (page) => page.cursor ?? undefined,
     refetchInterval: RUNS_POLL_MS,
   });
-  const relay = useQuery({
-    queryKey: queryKeys.key('relay-status', settings.endpoint),
-    queryFn: ({ signal }) => repository.relayStatus(signal),
-    refetchInterval: OPERATIONS_POLL_MS,
-  });
+  const tasks = useMemo(
+    () => [
+      ...new Map(
+        (runs.data?.pages.flatMap((page) => page.tasks) ?? []).map((task) => [task.handle, task]),
+      ).values(),
+    ],
+    [runs.data],
+  );
   const orderedWorkflowSessions = useMemo(() => {
     const current = sessionIdFromRoute(returnRouteFromState(location.state, settings.endpoint));
     const values = sessions.data ?? [];
@@ -293,26 +374,9 @@ export function RunsPage() {
     })),
   });
   const refreshRuns = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: queryKeys.key('runs', settings.endpoint) }),
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.key('tasks', settings.endpoint) }),
     [queryClient, settings.endpoint],
   );
-  const detach = useMutation({
-    mutationFn: (handleId: string) => repository.detachRun(handleId),
-    onSuccess: async () => {
-      await refreshRuns();
-      toast.success('Run detached from active monitoring');
-    },
-    onError: (error) => toast.error(error.message),
-  });
-  const dismiss = useMutation({
-    mutationFn: (handleId: string) => repository.dismissRun(handleId),
-    onSuccess: async () => {
-      setConfirmedAction(undefined);
-      await refreshRuns();
-      toast.success('Run removed from the explorer');
-    },
-    onError: (error) => toast.error(error.message),
-  });
   const cancel = useMutation({
     mutationFn: (row: RunRow) => {
       if (!row.ownerSessionId) throw new Error('The task owner is unavailable');
@@ -332,8 +396,8 @@ export function RunsPage() {
     },
   });
   const executionRows = useMemo(
-    () => buildRows(runs.data ?? [], sessions.data ?? [], workspaces.data ?? []),
-    [runs.data, sessions.data, workspaces.data],
+    () => buildRows(tasks, sessions.data ?? [], workspaces.data ?? []),
+    [tasks, sessions.data, workspaces.data],
   );
   const workflowRows = useMemo(
     () =>
@@ -341,19 +405,15 @@ export function RunsPage() {
         workflowTranscripts.flatMap((query) => (query.data ? [query.data] : [])),
         sessions.data ?? [],
         workspaces.data ?? [],
+        tasks,
       ),
-    [sessions.data, workflowTranscripts, workspaces.data],
+    [sessions.data, workflowTranscripts, workspaces.data, tasks],
   );
   const rows = category === 'workflows' ? workflowRows : executionRows;
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return rows.filter((row) => {
-      const stateMatches =
-        stateFilter === 'all' ||
-        row.state === stateFilter ||
-        (stateFilter === 'active' && ['queued', 'running'].includes(row.state)) ||
-        (stateFilter === 'attention' &&
-          ['failed', 'interrupted', 'waiting_permission', 'waiting_user'].includes(row.state));
+      const stateMatches = matchesRunState(row.state, stateFilter);
       const sourceMatches =
         category === 'workflows' || sourceFilter === 'all' || row.source === sourceFilter;
       const searchMatches =
@@ -385,21 +445,26 @@ export function RunsPage() {
                 className="inline-flex items-center gap-1.5 font-medium underline-offset-4 hover:text-primary hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 to={`${`/workspaces/${encodeURIComponent(row.original.workspaceId)}/sessions/${encodeURIComponent(row.original.targetSessionId)}`}${row.original.workflow ? `?workflow=${encodeURIComponent(row.original.workflow.id)}` : ''}`}
               >
-                {row.original.label}
+                {truncate(row.original.label, 80)}
                 <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
               </Link>
             ) : (
               <span className="font-medium">{row.original.label}</span>
             )}
-            <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-              {row.original.workflow ? `workflow ${row.original.taskId}` : row.original.taskId}
-            </p>
             {row.original.taskKind && (
               <p className="text-xs text-muted-foreground">{row.original.taskKind}</p>
             )}
-            {row.original.assignment && (
-              <p className="max-w-80 break-words text-xs">{row.original.assignment}</p>
-            )}
+            <details className="mt-1 max-w-80 text-xs">
+              <summary className="cursor-pointer text-muted-foreground">Details</summary>
+              <p className="mt-2 whitespace-pre-wrap break-words">{row.original.assignment}</p>
+              <p className="mt-2 break-all font-mono">{row.original.taskId}</p>
+              <p className="text-muted-foreground">Backend: {row.original.reportedStatus}</p>
+              {row.original.statusDetail ? (
+                <p className="mt-2 whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]">
+                  Reported issue: {row.original.statusDetail}
+                </p>
+              ) : null}
+            </details>
           </div>
         ),
         meta: { autoSize: true, headerTitle: 'Run' },
@@ -416,16 +481,24 @@ export function RunsPage() {
                   requestedCancellation.has(row.original.handleId)) &&
                 !['completed', 'failed', 'cancelled', 'interrupted'].includes(row.original.state)
                   ? 'Cancellation requested'
-                  : row.original.reportedStatus.replaceAll('_', ' ')
+                  : undefined
               }
               value={row.original.state}
             />
-            {taskProgressLabel(row.original.progress, row.original.taskKind) && (
-              <p className="text-xs text-muted-foreground">
-                {taskProgressLabel(row.original.progress, row.original.taskKind)}
+            {taskProgressLabel(
+              row.original.progress,
+              row.original.taskKind,
+              row.original.statusDetail,
+            ) && (
+              <p className="line-clamp-2 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                {taskProgressLabel(
+                  row.original.progress,
+                  row.original.taskKind,
+                  row.original.statusDetail,
+                )}
               </p>
             )}
-            {row.original.statusReason ? (
+            {row.original.statusReason && row.original.state !== 'task_state_uncertain' ? (
               <p
                 className="line-clamp-2 text-xs text-destructive"
                 title={row.original.statusReason}
@@ -447,7 +520,6 @@ export function RunsPage() {
               {row.original.workflow
                 ? row.original.placement
                 : row.original.host || 'Host unavailable'}
-              {row.original.detached ? ', detached' : ''}
             </p>
           </div>
         ),
@@ -489,9 +561,7 @@ export function RunsPage() {
         cell: ({ row }) => (
           <RunActions
             onCancel={() => setConfirmedAction({ kind: 'cancel', row: row.original })}
-            onDetach={() => detach.mutate(row.original.handleId)}
-            onDismiss={() => setConfirmedAction({ kind: 'dismiss', row: row.original })}
-            pending={detach.isPending && detach.variables === row.original.handleId}
+            pending={cancel.isPending && cancel.variables?.handleId === row.original.handleId}
             row={{
               ...row.original,
               cancelRequested:
@@ -502,7 +572,7 @@ export function RunsPage() {
         meta: { autoSize: true, headerTitle: 'Actions' },
       },
     ],
-    [detach, requestedCancellation],
+    [cancel.isPending, cancel.variables, requestedCancellation],
   );
   const table = useTable({ columns, data: filteredRows, features: dataGridFeatures });
   const workflowError = workflowTranscripts.find((query) => query.error)?.error;
@@ -597,7 +667,6 @@ export function RunsPage() {
                 <SelectItem value="all">All execution</SelectItem>
                 <SelectItem value="agent_task">Agents</SelectItem>
                 <SelectItem value="mcp_task">Tools</SelectItem>
-                <SelectItem value="relay_job">Remote jobs</SelectItem>
               </SelectContent>
             </Select>
           ) : null}
@@ -605,32 +674,7 @@ export function RunsPage() {
             {filteredRows.length} {category === 'workflows' ? 'workflows' : 'runs'}
           </Badge>
         </div>
-        {category === 'executions' ? (
-          <Alert className="mt-6">
-            <PlugZapIcon aria-hidden="true" />
-            <AlertTitle>
-              {relay.isPending
-                ? 'Checking remote execution'
-                : relay.data?.reachable
-                  ? 'Remote execution is reachable'
-                  : relay.data?.configured
-                    ? 'Remote execution needs attention'
-                    : 'Remote execution is not configured'}
-            </AlertTitle>
-            <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
-              <span>
-                {relay.error?.message ||
-                  relay.data?.detail ||
-                  relay.data?.reason ||
-                  relay.data?.host ||
-                  'This service has not advertised a remote execution connection.'}
-              </span>
-              <Button asChild size="sm" variant="outline">
-                <Link to="/settings/relays">Open remote execution settings</Link>
-              </Button>
-            </AlertDescription>
-          </Alert>
-        ) : (
+        {category === 'workflows' ? (
           <Alert className="mt-6">
             <WorkflowIcon aria-hidden="true" />
             <AlertTitle>Recorded workflow executions</AlertTitle>
@@ -662,7 +706,7 @@ export function RunsPage() {
               ) : null}
             </AlertDescription>
           </Alert>
-        )}
+        ) : null}
         {error ? (
           <Alert className="mt-6" variant="destructive">
             <ActivityIcon aria-hidden="true" />
@@ -696,6 +740,24 @@ export function RunsPage() {
             </DataGridContainer>
           </DataGrid>
         )}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+          <span>
+            {runs.data?.pages[0]?.total == null
+              ? `${tasks.length} tasks loaded`
+              : `Showing ${tasks.length} of ${runs.data.pages[0].total} tasks`}
+            . Search covers loaded results.
+          </span>
+          {runs.hasNextPage ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={runs.isFetchingNextPage}
+              onClick={() => void runs.fetchNextPage()}
+            >
+              {runs.isFetchingNextPage ? 'Loading…' : 'Load more tasks'}
+            </Button>
+          ) : null}
+        </div>
       </div>
       <AlertDialog
         onOpenChange={(open) => !open && setConfirmedAction(undefined)}
@@ -703,32 +765,25 @@ export function RunsPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirmedAction?.kind === 'cancel' ? 'Cancel this task?' : 'Dismiss this run?'}
-            </AlertDialogTitle>
+            <AlertDialogTitle>Cancel this task?</AlertDialogTitle>
             <AlertDialogDescription>
-              {confirmedAction?.kind === 'cancel'
-                ? `${confirmedAction.row.assignment || confirmedAction.row.label}. ${confirmedAction.row.taskKind === 'Subagent' || confirmedAction.row.source === 'agent_task' ? 'This also cancels all descendant agents, downloads and shell processes.' : 'The owner will settle cancellation after required cleanup.'}`
-                : 'This removes the settled or detached handle from the run explorer. It does not delete its session, transcript, or artifacts.'}
+              {confirmedAction
+                ? `${truncate(confirmedAction.row.assignment || confirmedAction.row.label, 240)}. ${confirmedAction.row.source === 'agent_task' ? 'This also cancels all descendant agents, downloads and shell processes.' : 'The owner will settle cancellation after required cleanup.'}`
+                : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep run</AlertDialogCancel>
             <AlertDialogAction
-              disabled={dismiss.isPending || cancel.isPending}
+              disabled={cancel.isPending}
               onClick={(event) => {
                 event.preventDefault();
                 if (!confirmedAction) return;
-                if (confirmedAction.kind === 'cancel') cancel.mutate(confirmedAction.row);
-                else dismiss.mutate(confirmedAction.row.handleId);
+                cancel.mutate(confirmedAction.row);
               }}
               variant="destructive"
             >
-              {dismiss.isPending || cancel.isPending
-                ? 'Working…'
-                : confirmedAction?.kind === 'cancel'
-                  ? 'Cancel task'
-                  : 'Dismiss run'}
+              {cancel.isPending ? 'Requesting cancellation…' : 'Cancel task'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

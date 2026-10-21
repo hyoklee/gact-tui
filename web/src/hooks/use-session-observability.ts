@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useRepository } from './use-repository';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { queryKeys } from '@/lib/query-keys';
@@ -12,6 +13,7 @@ export function useSessionObservability(sessionId: string) {
   const repository = useRepository();
   const { settings } = useConnectionSettings();
   const enabled = Boolean(sessionId);
+  const [showHistory, setShowHistory] = useState(false);
 
   const diffs = useQuery({
     queryKey: queryKeys.sessionObservabilityDetail(settings.endpoint, sessionId, 'diffs'),
@@ -28,11 +30,39 @@ export function useSessionObservability(sessionId: string) {
     queryFn: ({ signal }) => repository.contextFrames(sessionId, signal),
     enabled,
   });
-  const processes = useQuery({
+  const processes = useInfiniteQuery({
     queryKey: queryKeys.sessionObservabilityDetail(settings.endpoint, sessionId, 'processes'),
-    queryFn: ({ signal }) => repository.asyncProcesses(sessionId, signal),
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ signal, pageParam }) =>
+      repository.asyncProcessesPage(sessionId, { cursor: pageParam, activeOnly: true }, signal),
+    getNextPageParam: (page) => page.cursor ?? undefined,
     enabled,
   });
+  const history = useInfiniteQuery({
+    queryKey: [
+      ...queryKeys.sessionObservabilityDetail(settings.endpoint, sessionId, 'processes'),
+      'history',
+    ],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ signal, pageParam }) =>
+      repository.asyncProcessesPage(sessionId, { cursor: pageParam, activeOnly: false }, signal),
+    getNextPageParam: (page) => page.cursor ?? undefined,
+    enabled: enabled && showHistory,
+  });
 
-  return { contextFiles, contextFrames, diffs, processes };
+  const workPages = {
+    hasMore: Boolean(processes.hasNextPage),
+    pending: processes.isFetchingNextPage,
+    loadMore: () => processes.fetchNextPage({ throwOnError: true }),
+    history: {
+      visible: showHistory,
+      toggle: () => setShowHistory((value) => !value),
+      items: history.data?.pages.flatMap((page) => page.items) ?? [],
+      hasMore: Boolean(history.hasNextPage),
+      pending: history.isFetching,
+      loadMore: () => history.fetchNextPage({ throwOnError: true }),
+      error: history.error instanceof Error ? history.error.message : '',
+    },
+  };
+  return { contextFiles, contextFrames, diffs, processes, workPages };
 }

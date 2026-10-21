@@ -1,7 +1,7 @@
 import type { RunState, StreamState } from '@clio/core/v3';
 import { AlertTriangleIcon } from 'lucide-react';
 import { m, useIsPresent } from 'motion/react';
-import type { ReactNode } from 'react';
+import { forwardRef, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -19,16 +19,14 @@ import { SessionWorkStatus } from './session-work';
  * mounted and out of the tab/AT order through its `AnimatePresence` fade,
  * rather than snapping away mid-animation.
  */
-export function TranscriptPresenceSurface({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className: string;
-}) {
+export const TranscriptPresenceSurface = forwardRef<
+  HTMLDivElement,
+  { children: ReactNode; className: string }
+>(function TranscriptPresenceSurface({ children, className }, ref) {
   const isPresent = useIsPresent();
   return (
     <m.div
+      ref={ref}
       animate={{ opacity: 1 }}
       aria-hidden={!isPresent}
       className={className}
@@ -39,7 +37,7 @@ export function TranscriptPresenceSurface({
       {children}
     </m.div>
   );
-}
+});
 
 /** Surface failed user actions alongside the composer, independently of stream health. */
 export function WorkspaceActionAlerts({
@@ -175,6 +173,7 @@ export function WorkspaceHydrating({ label = 'Opening conversation' }: { label?:
 
 export function WorkspaceStatusStrip({
   activeWorkCount,
+  unresolvedWorkCount = 0,
   cost,
   cursor,
   tokens,
@@ -182,10 +181,13 @@ export function WorkspaceStatusStrip({
   stream,
   sessionId,
   onOpenWork,
+  onInspectTasks,
 }: {
   sessionId?: string;
   onOpenWork?: () => void;
+  onInspectTasks?: () => void;
   activeWorkCount: number;
+  unresolvedWorkCount?: number;
   /** Undefined when no turn ever reported a real cost -- shown as a muted
    * dash with a tooltip, never the word "Unavailable" (it isn't broken,
    * the provider just doesn't report a price). */
@@ -197,12 +199,15 @@ export function WorkspaceStatusStrip({
   sessionState?: RunState;
   stream: StreamState;
 }) {
+  const inspectionLabel = `${unresolvedWorkCount} task${unresolvedWorkCount === 1 ? ' needs' : 's need'} inspection`;
   const activeWorkLabel =
-    sessionState === 'running'
-      ? `${vocab.agent} running${activeWorkCount ? ` with ${activeWorkCount} active item${activeWorkCount === 1 ? '' : 's'}` : ''}`
-      : activeWorkCount === 0
-        ? 'No active work'
-        : `${activeWorkCount} active item${activeWorkCount === 1 ? '' : 's'}`;
+    unresolvedWorkCount > 0
+      ? `${sessionState === 'running' ? `${vocab.agent} running; ` : ''}${inspectionLabel}`
+      : sessionState === 'running'
+        ? `${vocab.agent} running${activeWorkCount ? ` with ${activeWorkCount} active item${activeWorkCount === 1 ? '' : 's'}` : ''}`
+        : activeWorkCount === 0
+          ? 'No active work'
+          : `${activeWorkCount} active item${activeWorkCount === 1 ? '' : 's'}`;
   const recoveryLabel =
     stream === 'reconnecting'
       ? 'Resuming updates'
@@ -219,9 +224,21 @@ export function WorkspaceStatusStrip({
           copy there so the two surfaces never duplicate the same pill. */}
       {inTauri() ? null : <LiveConnectionIndicator />}
       {recoveryLabel ? <span title={recoveryDetail}>{recoveryLabel}</span> : null}
-      {sessionId && onOpenWork ? (
+      {unresolvedWorkCount > 0 && onInspectTasks ? (
+        <Button
+          aria-label="Inspect unresolved tasks"
+          className="h-6 min-w-0 px-0 text-[0.625rem]"
+          onClick={onInspectTasks}
+          type="button"
+          variant="ghost"
+        >
+          {activeWorkLabel}
+        </Button>
+      ) : sessionId && onOpenWork ? (
         <SessionWorkStatus sessionId={sessionId} onOpen={onOpenWork} fallback={activeWorkLabel} />
-      ) : <span>{activeWorkLabel}</span>}
+      ) : (
+        <span>{activeWorkLabel}</span>
+      )}
       <SystemVersionStatus />
       <span className="ml-auto hidden font-mono sm:inline">Tokens: {tokens ?? 0}</span>
       <span className="hidden items-center gap-1 font-mono sm:inline-flex">

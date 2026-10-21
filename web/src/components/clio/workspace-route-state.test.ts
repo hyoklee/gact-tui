@@ -5,11 +5,29 @@ import {
   canUploadWorkspaceResources,
   conversationUnavailableMessage,
   countActiveWork,
+  countWorkNeedingInspection,
   planRevisionFromComposer,
   responseTrayInteractions,
 } from './workspace-route-state';
 
 describe('workspace route state', () => {
+  it('keeps uncertain work separate from confirmed activity and honors later settlement', () => {
+    const processes = [
+      { live_state: 'running', effective_status: 'task_state_uncertain' },
+      { live_state: 'task_state_uncertain' },
+      { live_state: 'running', effective_status: 'completed' },
+      { live_state: 'failed', effective_status: 'failed' },
+    ] as const;
+    expect(countWorkNeedingInspection(processes)).toBe(2);
+    expect(countActiveWork([], [], [], processes)).toBe(0);
+    expect(
+      countWorkNeedingInspection(
+        processes.map((process) => ({ ...process, effective_status: 'completed' as const })),
+      ),
+    ).toBe(0);
+    expect(countWorkNeedingInspection([])).toBe(0);
+  });
+
   it('keeps accepted task activity visible after its originating turn is interrupted', () => {
     expect(
       countActiveWork(

@@ -6,10 +6,20 @@ UI aren't tracked.
 
 ## Unreleased
 
-## [0.11.3-beta.11] - 2026-10-20
+## [0.11.3-beta.11] - 2026-10-21
 
 ### Changed
 
+- Inspect and control shared background tasks, retain interrupted assignments and
+  navigate to their results or child conversations.
+- Keep Session and Work in separate rails. Arrange their sections by dragging,
+  inspect context contributors inline and open or download artifacts from compact rows.
+- Use shared date and time controls for schedules and generated forms. Keep
+  existing content available during background refreshes and show request state
+  for charts, maps, tables and model discovery.
+- Add details to questionnaire choices, navigate bundled questions and keep drafts
+  across view changes. Show file formats, real upload progress and conversion state
+  in compact attachment rows.
 - Group adjacent citations under a Sources count with a clickable list available
   by hover, touch or keyboard. Align thinking rows with other recorded activity.
 - Show tool purpose, requested files and readable results before technical details.
@@ -20,6 +30,10 @@ UI aren't tracked.
 
 ### Fixed
 
+- Give generated-form actions the shared primary, outlined and borderless button
+  styles, with keyboard focus and disabled validation states.
+- Let the welcome screen leave the layout when the first message arrives so the
+  conversation can use the available height.
 - Size authored charts to their available space, including composed charts and
   fullscreen views. Preserve native selection and brush interactions.
 - Render saved map geometry in standalone HTML conversations, including local

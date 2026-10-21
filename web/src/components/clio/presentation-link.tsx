@@ -1,6 +1,6 @@
 import { subagentOpenTarget } from './subagent-navigation';
 import { useContext } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useInRouterContext } from 'react-router-dom';
 import type { ToolPresentationBlock } from '@clio/core/v3';
 import { PresentationNavigation } from './presentation-navigation';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ export function PresentationLink({
   iconOnly?: boolean;
 }) {
   const navigation = useContext(PresentationNavigation);
+  const hasRouter = useInRouterContext();
   const uri = block.uri ?? '';
   if (block.target === 'connected_data')
     return iconOnly ? null : <ConnectedDataSetupLink block={block} />;
@@ -110,7 +111,9 @@ export function PresentationLink({
         {text}
       </ExternalLink>,
     );
-  if (block.target === 'session' && uri)
+  // Offline reviews have no live session router. Retain the recorded label
+  // without constructing a live navigation control or crashing the transcript.
+  if (block.target === 'session' && uri && hasRouter)
     return withTooltip(
       <Link
         className={cn(className, 'underline')}

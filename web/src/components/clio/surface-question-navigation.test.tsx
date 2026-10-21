@@ -137,6 +137,8 @@ function Scene({
   const [interactions, setInteractions] = useState<PendingInteraction[]>([]);
   const [surface] = useState(() => ({ ...dashboard(bound), session_id: owner }));
   const { questionAnswering, pendingInteractionsPanel } = useWorkspaceQuestions({
+    endpoint: 'http://localhost:8100',
+    sessionId: 'parent-session',
     interactions,
     messages: [],
     tools: [],

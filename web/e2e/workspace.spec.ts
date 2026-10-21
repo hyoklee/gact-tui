@@ -93,6 +93,46 @@ async function alignLatestActivityAtTop(page: Page) {
 
 setupWorkspaceBrowser();
 
+test('opens the unresolved task from the status strip in the actual task view', async ({
+  page,
+}) => {
+  await page.route('**/v1/sessions/sess_flat_ndp/async-processes*', async (route) => {
+    await route.fulfill({
+      json: {
+        processes: [
+          {
+            id: 'task_visibility_unresolved',
+            handle: 'task_visibility_unresolved',
+            kind: 'mcp',
+            task_kind: 'MCP',
+            title: 'Prepare dataset',
+            description: 'Prepare the selected dataset for analysis.',
+            status: 'working',
+            raw_status: 'working',
+            live_state: 'task_state_uncertain',
+            effective_status: 'task_state_uncertain',
+            connection_freshness: 'lost',
+            metadata: {},
+          },
+        ],
+      },
+    });
+  });
+  await page.goto(workspaceUrl);
+  const inspect = page.getByRole('button', { name: 'Inspect unresolved tasks' });
+  await expect(inspect).toHaveText(/running; 1 task needs inspection$/);
+  await inspect.click();
+  const canvas = page.getByRole('complementary', { name: 'Workspace canvas' });
+  await expect(canvas.getByRole('tab', { name: 'Evidence', exact: true })).toHaveAttribute(
+    'data-state',
+    'active',
+  );
+  const tasks = canvas.getByRole('button', { name: 'Background tasks, 1 recorded' });
+  if ((await tasks.getAttribute('aria-expanded')) === 'false') await tasks.click();
+  await expect(canvas.getByRole('button', { name: 'Task details: Prepare dataset' })).toBeVisible();
+  await expect(canvas.getByText('MCP · Needs inspection')).toBeVisible();
+});
+
 test('keeps Observability tabs inside the strip and scrolls only their content vertically', async ({
   page,
 }, testInfo) => {
@@ -103,7 +143,7 @@ test('keeps Observability tabs inside the strip and scrolls only their content v
     await page.reload();
     await waitForArtifactPreview(page);
     await page.evaluate(() => document.fonts.ready);
-    await page.getByRole('button', { name: /^Evidence layout:/ }).click();
+    await page.getByRole('button', { name: 'Session rail', exact: true }).click();
     await page.getByRole('button', { name: 'Open full details' }).click();
     const canvas = page.getByRole('complementary', { name: 'Workspace canvas' });
     const resize = page.getByRole('separator', { name: 'Resize workspace canvas' });
@@ -979,6 +1019,15 @@ test('renders a ghost queue stack and reconciles a live server update', async ({
   // each carries its own composer, so two queue panels are on screen until that
   // exit finishes. Settle on one before driving it.
   await expect(queue).toHaveCount(1);
+  // A hidden welcome screen must leave the flex layout after hydration.
+  // Otherwise it takes half the height while the transcript is squeezed below it.
+  await expect
+    .poll(async () => {
+      const surface = (await page.locator('[data-slot="session-transcript"]').boundingBox())!;
+      const transcript = (await page.getByRole('log', { name: 'Conversation' }).boundingBox())!;
+      return transcript.y - surface.y;
+    })
+    .toBeLessThan(2);
   await expect(queue).toBeVisible();
   await expect(queue.getByText('6 queued messages')).toBeVisible();
   await expect(queue.locator('[data-queue-live-item]')).toHaveCount(6);
@@ -1020,12 +1069,14 @@ test('renders a ghost queue stack and reconciles a live server update', async ({
   await queueViewport.evaluate((element) => {
     element.scrollTop = 0;
   });
-  // The top-toolbar toggle announces its layout and evidence count. The
+  // The top-toolbar retains separate rail controls. The
   // persistent live region retains work status without a second visible badge.
   const observabilityDock = page.getByRole('button', {
-    name: /^Evidence layout:/,
+    name: 'Session rail',
+    exact: true,
   });
-  await expect(observabilityDock).toHaveAttribute('title', /1 background activity/);
+  await expect(observabilityDock).toHaveAttribute('title', 'Show session rail');
+  await expect(page.getByRole('button', { name: 'Work rail', exact: true })).toBeVisible();
   await expect(page.locator('[aria-live="polite"]').filter({ hasText: /^Working$/ })).toHaveCount(
     1,
   );
@@ -1155,6 +1206,11 @@ test('keeps summarization in collapsed activity and discloses its exact received
   await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
   await expect(compactionRow.getByText('Automatic')).toBeVisible();
   await expect(compactionRow.locator('pre')).toHaveCount(0);
+  const information = compactionRow.getByRole('button', {
+    name: 'Technical details for Summarization',
+    exact: true,
+  });
+  await expect(information).toBeVisible();
   // Scroll the row to the top of the viewport: it sits near the tail of the
   // transcript, close enough to the composer that the floating "Agent needs
   // your response" queue (docked at the bottom) would otherwise cover it.
@@ -1180,10 +1236,13 @@ test('keeps summarization in collapsed activity and discloses its exact received
   await expect(
     compactionRow.getByText(/derived displacement series before this checkpoint/),
   ).toBeVisible();
-  await compactionRow.getByRole('button', { name: 'Open exact details' }).click();
-  await expect(page.getByRole('dialog', { name: 'Summarization', exact: true })).toContainText(
-    'derived displacement series before this checkpoint',
-  );
+  await information.click();
+  const details = page.getByRole('dialog', {
+    name: 'Summarization: Technical details',
+    exact: true,
+  });
+  await expect(details).toContainText('derived displacement series before this checkpoint');
+  await expect(details.locator('pre')).toContainText('EarthScope station evidence ledger');
   await page.keyboard.press('Escape');
   await disclosure.click();
   await expect(compactionRow.locator('pre')).toHaveCount(0);

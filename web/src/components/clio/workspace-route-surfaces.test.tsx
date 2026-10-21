@@ -1,5 +1,5 @@
-import { cleanup, render, screen } from '@testing-library/react';
-import type { ComponentProps } from 'react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { createRef, type ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useUpdateFlowStore } from '@/store/update-flow-store';
@@ -7,9 +7,20 @@ import {
   WorkspaceHydrating,
   WorkspaceStatusStrip,
   WorkspaceTranscriptAlerts,
+  TranscriptPresenceSurface,
 } from './workspace-route-surfaces';
 
 const tauri = vi.hoisted(() => ({ inTauri: vi.fn(() => false) }));
+
+it('gives the transition its DOM node so an exiting welcome can leave the flex layout', () => {
+  const ref = createRef<HTMLDivElement>();
+  render(
+    <TranscriptPresenceSurface ref={ref} className="min-h-0 flex-1">
+      Welcome
+    </TranscriptPresenceSurface>,
+  );
+  expect(ref.current).toBe(screen.getByText('Welcome'));
+});
 
 vi.mock('./navigation-version-status', () => ({
   SystemVersionStatus: () => <button type="button">System version</button>,
@@ -34,6 +45,43 @@ function renderStrip(props: ComponentProps<typeof WorkspaceStatusStrip>) {
 }
 
 describe('WorkspaceStatusStrip', () => {
+  it('opens unresolved work instead of reporting an idle workspace as empty', () => {
+    const open = vi.fn();
+    const openGoals = vi.fn();
+    renderStrip({
+      activeWorkCount: 0,
+      unresolvedWorkCount: 1,
+      sessionId: 'lost-visibility',
+      sessionState: 'interrupted',
+      onOpenWork: openGoals,
+      onInspectTasks: open,
+      stream: 'live',
+    });
+    const inspection = screen.getByRole('button', { name: 'Inspect unresolved tasks' });
+    expect(inspection).toHaveTextContent('1 task needs inspection');
+    expect(screen.queryByText('No active work')).not.toBeInTheDocument();
+    fireEvent.click(inspection);
+    expect(open).toHaveBeenCalledOnce();
+    expect(openGoals).not.toHaveBeenCalled();
+  });
+
+  it('keeps inspection visible alongside model execution and clears it after settlement', () => {
+    const view = renderStrip({
+      activeWorkCount: 2,
+      unresolvedWorkCount: 2,
+      sessionState: 'running',
+      stream: 'live',
+    });
+    expect(screen.getByText(/running; 2 tasks need inspection/)).toBeVisible();
+    view.rerender(
+      <TooltipProvider>
+        <WorkspaceStatusStrip activeWorkCount={0} unresolvedWorkCount={0} stream="live" />
+      </TooltipProvider>,
+    );
+    expect(screen.getByText('No active work')).toBeVisible();
+    expect(screen.queryByText(/need.*inspection/)).not.toBeInTheDocument();
+  });
+
   it('shows the live connection indicator once on web, with no "Up to date" pill', () => {
     tauri.inTauri.mockReturnValue(false);
     renderStrip({ activeWorkCount: 0, cursor: 'checkpoint-1849', stream: 'live' });

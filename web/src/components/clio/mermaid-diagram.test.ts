@@ -10,12 +10,26 @@ describe('Mermaid trust boundary', () => {
 
   it.each([
     '%%{init: {"securityLevel": "loose"}}%%\nflowchart LR\na-->b',
-    'flowchart LR\na-->b\nclick a javascript:alert(1)',
     'flowchart LR\na[<b>unsafe</b>] --> b',
   ])('rejects executable or HTML source', (source) => {
     expect(() => validateMermaidSource(source)).toThrow(
       'Diagram contains an unsupported executable or HTML directive',
     );
+  });
+
+  it.each(['javascript:alert(1)', 'call alert()', '"https://example.com/"'])(
+    'rejects executable click target %s before rendering or navigation',
+    (target) => {
+      expect(() => validateMermaidSource(`flowchart LR\na-->b\nclick a ${target}`)).toThrow(
+        'Diagram contains an unsupported executable or HTML directive',
+      );
+    },
+  );
+
+  it('rejects a folder navigation outside the workspace', () => {
+    expect(() =>
+      validateMermaidSource('flowchart LR\na-->b\nclick a "workspace-folder:../private"'),
+    ).toThrow('Diagram clicks must name a relative workspace-folder target.');
   });
 
   it('removes executable SVG nodes and attributes after rendering', () => {

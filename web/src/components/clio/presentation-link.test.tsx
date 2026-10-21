@@ -1,10 +1,56 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { a2uiSurfaceDomId } from './a2ui-presentation';
 import { PresentationLink } from './presentation-link';
 import { PresentationNavigation } from './presentation-navigation';
 
+afterEach(cleanup);
+
 describe('presentation navigation', () => {
+  it('keeps recorded peer session labels readable without a live router', () => {
+    render(
+      <PresentationLink
+        block={{
+          id: 'peer',
+          type: 'link',
+          target: 'session',
+          uri: 'sess_peer',
+          label: 'Budget reviewer',
+        }}
+        compact
+      />,
+    );
+    expect(screen.getByText('Budget reviewer')).toBeVisible();
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+  it('preserves normal session navigation when the live router is present', () => {
+    render(
+      <MemoryRouter initialEntries={['/workspaces/work/sessions/current']}>
+        <Routes>
+          <Route
+            path="/workspaces/:workspaceId/sessions/:sessionId"
+            element={
+              <PresentationLink
+                block={{
+                  id: 'peer',
+                  type: 'link',
+                  target: 'session',
+                  uri: 'sess_peer',
+                  label: 'Budget reviewer',
+                }}
+              />
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: 'Budget reviewer' })).toHaveAttribute(
+      'href',
+      '/workspaces/work/sessions/sess_peer',
+    );
+  });
   it('opens a saved document through the existing workspace file viewer', () => {
     const open = vi.fn();
     render(

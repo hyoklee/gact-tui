@@ -1,3 +1,5 @@
+import type { ContextSnapshot } from './context-domain.js';
+export type { ContextSnapshot, PromptSection } from './context-domain.js';
 export type { AgentBlueprintSource } from './blueprint-domain.js';
 import type { A2UIActionLifecycle } from './a2ui/lifecycle.js';
 import type { InfrastructureDependency } from './infrastructure-domain.js';
@@ -9,6 +11,8 @@ import type { CapabilityNegotiation } from './capability-domain.js';
 import type { PendingCompaction } from './compaction-domain.js';
 import type { VariantRun } from './variant-domain.js';
 import type { UsageSnapshot } from './usage-domain.js';
+import type { RunState } from './run-domain.js';
+export type { RunState } from './run-domain.js';
 
 export type { ToolPresentation, ToolPresentationBlock } from './tool-presentation-domain.js';
 
@@ -25,16 +29,6 @@ export interface TransportGap {
   reason: string;
   received_at: string;
 }
-export type RunState =
-  | 'queued'
-  | 'running'
-  | 'waiting_permission'
-  | 'waiting_user'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
-  | 'interrupted'
-  | 'unknown';
 export type ToolState = WireValue<
   'pending' | 'running' | 'succeeded' | 'failed' | 'denied' | 'cancelled'
 >;
@@ -267,12 +261,13 @@ export interface ApprovalRequest {
 }
 
 export interface UserQuestion {
+  task_handle?: string;
   response_mode?: 'blocking' | 'async';
   id: string;
   session_id: string;
   prompt: string;
   status: WireValue<'pending' | 'answered' | 'cancelled' | 'expired'>;
-  kind: WireValue<'freeform' | 'choice' | 'confirmation'>;
+  kind: WireValue<'freeform' | 'choice' | 'confirmation' | 'multi_choice'>;
   options?: Array<{ label: string; value: string; description?: string }>;
   allow_freeform?: boolean;
   answer?: string;
@@ -400,29 +395,6 @@ export interface ArtifactLineage {
   truncated?: { reason: string; nodes?: number; at_depth?: number };
 }
 
-export interface ContextSnapshot {
-  session_id: string;
-  scope?: string;
-  used_tokens?: number;
-  used_tokens_source?: 'provider' | 'estimated';
-  usage_model?: string;
-  cache_read_tokens?: number;
-  cache_write_tokens?: number;
-  cache_tokens_measured?: boolean;
-  limit_tokens?: number;
-  live_tokens?: number;
-  live_block_count?: number;
-  tokens_by_kind?: Record<string, number>;
-  categories?: Record<string, number>;
-  autocompact_enabled?: boolean;
-  autocompact_pct?: number;
-  segments?: Array<Record<string, unknown>>;
-  render_text?: string;
-  /** The agent's context as the model receives it (role + typed parts). */
-  messages?: Array<{ role: string; parts: Array<Record<string, unknown>> }>;
-  provenance: Provenance;
-}
-
 export interface WorkspaceFileEntry {
   path: string;
   display_path?: string;
@@ -498,7 +470,11 @@ export interface ContextFrame {
 
 export interface AsyncProcess {
   handle?: string;
-  task_kind?: 'Subagent' | 'MCP' | 'Download' | 'Indexing' | 'Shell';
+  task_kind?: 'Subagent' | 'Session' | 'MCP' | 'Download' | 'Indexing' | 'Shell' | 'Question';
+  question_id?: string;
+  activity?: string;
+  recording?: 'confirmed' | 'unconfirmed';
+  result_reference?: Record<string, unknown> | string;
   description?: string;
   description_missing?: boolean;
   effective_status?: string;
@@ -508,7 +484,7 @@ export interface AsyncProcess {
   connection_freshness?: string;
   progress?: Record<string, unknown>;
   owner?: { session_id: string; agent?: string };
-  kind: 'agent' | 'mcp-task';
+  kind: 'agent' | 'mcp-task' | 'mcp' | 'question';
   id: string;
   title: string;
   live_state: RunState;
@@ -528,6 +504,7 @@ export interface AsyncProcess {
   updated_at?: string;
   error_reason?: string;
   result?: {
+    answer?: string;
     answer_excerpt?: string;
     message_ref?: string;
     workflow_state?: Record<string, unknown>;

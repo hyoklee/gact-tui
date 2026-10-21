@@ -3,11 +3,13 @@ import type { ComponentProps } from 'react';
 import { useMemo } from 'react';
 import { useLiveStore } from '@/store/live-store';
 import { useTaskCancellation } from '@/hooks/use-task-cancellation';
+import { useSubagentControl } from '@/hooks/use-subagent-control';
 import { useMessageMarks } from '@/hooks/use-message-marks';
 import { conversationForkOrigin } from './conversation-fork-origin';
 import { ClioConversation, type ClioConversationProps } from './conversation';
 import { ClioObservabilityDock, ClioObservabilityView } from './observability-dock';
 import { WorkspaceStatusStrip } from './workspace-route-surfaces';
+import { countActiveWork, countWorkNeedingInspection } from './workspace-route-state';
 
 function useSessionMessages(sessionId: string): Message[] {
   const messages = useLiveStore((state) => state.entities.messages);
@@ -131,11 +133,13 @@ export function WorkspaceLiveObservabilityDock({
   ...props
 }: LiveObservabilityDockProps) {
   const onCancelTask = useTaskCancellation(sessionId);
+  const onControlTask = useSubagentControl(sessionId);
   return (
     <ClioObservabilityDock
       {...props}
       sessionId={sessionId}
       onCancelTask={onCancelTask}
+      onControlTask={onControlTask}
       messages={useSessionMessages(sessionId)}
     />
   );
@@ -150,10 +154,12 @@ export function WorkspaceLiveObservabilityView({
   ...props
 }: LiveObservabilityViewProps) {
   const onCancelTask = useTaskCancellation(sessionId);
+  const onControlTask = useSubagentControl(sessionId);
   return (
     <ClioObservabilityView
       {...props}
       onCancelTask={onCancelTask}
+      onControlTask={onControlTask}
       messages={useSessionMessages(sessionId)}
       sessionId={sessionId}
     />
@@ -162,10 +168,16 @@ export function WorkspaceLiveObservabilityView({
 
 type LiveStatusStripProps = Omit<
   ComponentProps<typeof WorkspaceStatusStrip>,
-  'cost' | 'cursor' | 'tokens' | 'stream'
-> & { sessionId: string };
+  'cost' | 'cursor' | 'tokens' | 'stream' | 'activeWorkCount' | 'unresolvedWorkCount'
+> & {
+  sessionId: string;
+  work: Pick<
+    ComponentProps<typeof ClioObservabilityDock>,
+    'runs' | 'tasks' | 'tools' | 'processes'
+  >;
+};
 
-export function WorkspaceLiveStatusStrip({ sessionId, ...props }: LiveStatusStripProps) {
+export function WorkspaceLiveStatusStrip({ sessionId, work, ...props }: LiveStatusStripProps) {
   const usage = useLiveStore((state) => state.entities.usage[sessionId]);
   const cursor = useLiveStore((state) => state.entities.cursor);
   const stream = useLiveStore((state) => state.entities.stream);
@@ -173,6 +185,8 @@ export function WorkspaceLiveStatusStrip({ sessionId, ...props }: LiveStatusStri
   return (
     <WorkspaceStatusStrip
       {...props}
+      activeWorkCount={countActiveWork(work.runs, work.tasks, work.tools, work.processes)}
+      unresolvedWorkCount={countWorkNeedingInspection(work.processes)}
       sessionId={sessionId}
       cost={usage?.cost_usd}
       cursor={cursor}
