@@ -452,7 +452,7 @@ describe('WorkspaceFileView', () => {
     expect(screen.getByText('file not found: missing.pdf')).toBeVisible();
   });
 
-  it('presents unsupported binary metadata and controls instead of a code block', () => {
+  it('presents unsupported binary metadata and controls instead of a code block', async () => {
     renderFile(
       <WorkspaceFileView
         mediaType="application/x-hdf5"
@@ -468,6 +468,9 @@ describe('WorkspaceFileView', () => {
     expect(screen.getAllByRole('button', { name: 'Download file' })).toHaveLength(1);
     expect(document.querySelector('pre code')).not.toBeInTheDocument();
     expect(repository.readWorkspaceFile).not.toHaveBeenCalled();
+    expect(screen.queryByText('data/run.h5')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'File information' }));
+    expect(await screen.findByText('data/run.h5')).toBeVisible();
   });
 
   it('aborts the previous text preview when selection changes', async () => {

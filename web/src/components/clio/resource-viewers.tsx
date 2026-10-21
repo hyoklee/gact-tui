@@ -240,7 +240,6 @@ function WorkspaceBinaryView({
           <EmptyDescription>
             {mediaType} · {size === undefined ? 'Size unavailable' : formatBytes(size)}
           </EmptyDescription>
-          <p className="break-all font-mono text-xs text-muted-foreground">{path}</p>
           <div className="flex flex-wrap justify-center gap-2 pt-2">
             <Button disabled={busy} onClick={() => void open()} size="sm">
               <ExternalLinkIcon aria-hidden="true" />
