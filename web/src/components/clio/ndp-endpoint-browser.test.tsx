@@ -87,6 +87,126 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+
+const sdkOperation = (action: string, fields: string[] = []) =>
+  operation(`SDK streaming_v2.${action}`, {
+    read_only: true,
+    parameters: fields.map((name) => ({
+      name,
+      in: 'query',
+      required: name !== 'cursor',
+      schema: { type: 'string' },
+    })),
+  });
+
+it('opens the selected catalog resource through the SDK without an HTTP stream route', async () => {
+  fixture.repository.browseNdpEndpoint.mockImplementation(async (_w, _id, request) =>
+    request.operation_id === 'SDK streaming_v2.list'
+      ? { streams: [] }
+      : [
+          {
+            id: 'dataset',
+            title: 'Scientific observations',
+            resources: [{ id: 'catalog-resource', name: 'Observed events', format: 'kafka' }],
+          },
+        ],
+  );
+  show({
+    ...endpoint,
+    operations: [
+      operation('GET /search'),
+      sdkOperation('open', ['resource_id']),
+      sdkOperation('list'),
+    ],
+  });
+  await userEvent.click(await screen.findByText('1 resources'));
+  await userEvent.click(screen.getByRole('button', { name: 'Read stream' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Read Observed events' }));
+  await waitFor(() =>
+    expect(fixture.repository.requestNdpEndpoint).toHaveBeenCalledWith(
+      'w',
+      'ep',
+      expect.objectContaining({
+        operation_id: 'SDK streaming_v2.open',
+        parameters: { resource_id: 'catalog-resource', start: 'earliest' },
+      }),
+    ),
+  );
+});
+
+it('SDK capture advances the hidden cursor for the next capture', async () => {
+  fixture.repository.browseNdpEndpoint.mockResolvedValue({
+    streams: [{ id: 'reader', topic: 'Scientific events', cursor: 'first', state: 'active' }],
+  });
+  fixture.repository.requestNdpEndpoint.mockResolvedValue({
+    id: 'capture',
+    method: 'SDK',
+    status_code: 200,
+    bytes_received: 40,
+    events: 5,
+    stop_reason: 'completed',
+    sha256: 'abc',
+    preview: '{}',
+    continuation: {
+      stream_id: 'reader',
+      next_cursor: 'second',
+      next_positions: { '0': 5 },
+      count: 5,
+    },
+  });
+  show({
+    ...endpoint,
+    operations: [
+      sdkOperation('list'),
+      sdkOperation('read', ['stream_id', 'cursor']),
+      sdkOperation('stop', ['stream_id']),
+      sdkOperation('resume', ['stream_id']),
+    ],
+  });
+  expect(await screen.findByText('Scientific events')).toBeVisible();
+  await userEvent.click(screen.getByRole('button', { name: /^Capture$/ }));
+  expect(screen.queryByLabelText(/cursor/i)).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Capture records' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Capture next records' }));
+  await waitFor(() =>
+    expect(fixture.repository.requestNdpEndpoint).toHaveBeenLastCalledWith(
+      'w',
+      'ep',
+      expect.objectContaining({
+        operation_id: 'SDK streaming_v2.read',
+        parameters: { stream_id: 'reader', cursor: 'second' },
+      }),
+    ),
+  );
+});
+
+it('SDK stopped readers offer resume while capture remains disabled', async () => {
+  fixture.repository.browseNdpEndpoint.mockResolvedValue({
+    streams: [{ id: 'reader', topic: 'Scientific events', cursor: 'current', state: 'stopped' }],
+  });
+  show({
+    ...endpoint,
+    operations: [
+      sdkOperation('list'),
+      sdkOperation('read', ['stream_id']),
+      sdkOperation('resume', ['stream_id']),
+    ],
+  });
+  expect(await screen.findByRole('button', { name: /^Capture$/ })).toBeDisabled();
+  await userEvent.click(screen.getByRole('button', { name: /^Resume$/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Resume reader' }));
+  await waitFor(() =>
+    expect(fixture.repository.requestNdpEndpoint).toHaveBeenCalledWith(
+      'w',
+      'ep',
+      expect.objectContaining({
+        operation_id: 'SDK streaming_v2.resume',
+        parameters: { stream_id: 'reader' },
+      }),
+    ),
+  );
+});
+
 function show(current = endpoint) {
   render(
     <MemoryRouter>
