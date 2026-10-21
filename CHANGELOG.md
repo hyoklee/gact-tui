@@ -6,10 +6,20 @@ UI aren't tracked.
 
 ## Unreleased
 
-## [0.11.3-beta.11] - 2026-10-20
+## [0.11.3-beta.11] - 2026-10-21
 
 ### Changed
 
+- Inspect and control shared background tasks, retain interrupted assignments and
+  navigate to their results or child conversations.
+- Arrange the session rail by dragging sections, choose which sections appear,
+  and inspect context usage alongside connected sources and scheduled work.
+- Use shared date and time controls for schedules and generated forms. Keep
+  existing content available during background refreshes and show request state
+  for charts, maps, tables and model discovery.
+- Add details to questionnaire choices, navigate bundled questions and keep drafts
+  across view changes. Show file formats, real upload progress and conversion state
+  in compact attachment rows.
 - Group adjacent citations under a Sources count with a clickable list available
   by hover, touch or keyboard. Align thinking rows with other recorded activity.
 - Show tool purpose, requested files and readable results before technical details.
