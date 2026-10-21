@@ -21,7 +21,7 @@ test('opens children in tabs, uses Shift for the center, and fits evidence equal
   await page.goto(workspaceUrl);
   const layout = page.getByRole('button', { name: 'Work rail', exact: true });
   await layout.click();
-  const evidence = page.getByLabel('Work rail', { exact: true });
+  const evidence = page.getByRole('dialog', { name: 'Work rail', exact: true });
   await expect(evidence).toHaveAttribute('data-showcase-mode', 'docked');
   const parentWidth = await evidence.evaluate((element) => element.clientWidth);
   const child = evidence.getByRole('button', {

@@ -164,12 +164,12 @@ test('shows one latest response output while Evidence retains versions and revie
   await expect(
     canvas.getByRole('button', { name: 'Open sunflower-garden.html', exact: true }),
   ).toHaveCount(2);
-  await expect(canvas.locator('p[title="text/html"]').filter({ hasText: /v1$/u })).toHaveText(
-    /HTML\s*512 B\s*v1/u,
-  );
-  await expect(canvas.locator('p[title="text/html"]').filter({ hasText: /v2$/u })).toHaveText(
-    /HTML\s*512 B\s*v2/u,
-  );
+  await expect(
+    canvas.locator('p[title="text/html"]').filter({ has: page.getByText('v1', { exact: true }) }),
+  ).toHaveText(/HTML\s*512 B\s*v1/u);
+  await expect(
+    canvas.locator('p[title="text/html"]').filter({ has: page.getByText('v2', { exact: true }) }),
+  ).toHaveText(/HTML\s*512 B\s*v2/u);
   await expect(canvas.getByText('Verification', { exact: true })).toBeVisible();
   await expect(canvas.getByText('Intermediate', { exact: true })).toBeVisible();
   await expect(canvas.getByRole('button', { name: 'Open review.png' })).toBeVisible();

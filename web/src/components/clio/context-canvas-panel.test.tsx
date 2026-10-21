@@ -116,9 +116,8 @@ describe('ClioContextCanvasPanel', () => {
       />,
     );
     expect(screen.getByText('1K / 922K')).toBeVisible();
-    expect(
-      screen.getByText(/Section estimates total 1.8K; the provider total above is unchanged/),
-    ).toBeVisible();
+    expect(screen.getByText('≈1.8K')).toBeVisible();
+    expect(screen.queryByText(/Section counts are text estimates/)).not.toBeInTheDocument();
     expect(screen.getByText('work-with-ndp / references/catalog.md')).not.toBeVisible();
     await user.click(screen.getByText('Skills'));
     expect(screen.getByText('work-with-ndp / references/catalog.md')).toBeVisible();

@@ -25,10 +25,7 @@ export function ContextUsage({
   messages?: readonly Message[];
   compact?: boolean;
 }) {
-  const { used, limit, sections, reserve, free, estimated, estimateMismatch } = contextComposition(
-    context,
-    messages,
-  );
+  const { used, limit, sections, reserve, free, estimated } = contextComposition(context, messages);
   const cacheRead = context?.cache_read_tokens ?? 0;
   return (
     <section
@@ -126,21 +123,9 @@ export function ContextUsage({
           </>
         ) : null}
       </div>
-      {context?.prompt_breakdown ? (
-        <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
-          Section counts are text estimates.
-          {context.prompt_breakdown.media_items
-            ? ` ${context.prompt_breakdown.media_items} media ${context.prompt_breakdown.media_items === 1 ? 'item has' : 'items have'} no section token estimate.`
-            : ''}
-          {estimateMismatch
-            ? ` Section estimates total ${contextTokens(context.prompt_breakdown.tokens_estimated)}; the provider total above is unchanged.`
-            : ''}
-        </p>
-      ) : (
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Detailed prompt sections appear after the next request.
-        </p>
-      )}
+      {!context?.prompt_breakdown && !compact ? (
+        <p className="mt-2 text-[11px] text-muted-foreground">No section data yet.</p>
+      ) : null}
       {context?.cache_tokens_measured && used ? (
         <p className="mt-2 text-[11px] text-muted-foreground">
           Prompt cache: {contextTokens(cacheRead)} reused ({contextPercent(cacheRead, used)})
