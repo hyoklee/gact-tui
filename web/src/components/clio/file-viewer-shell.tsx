@@ -96,7 +96,7 @@ export function FileViewerShell({
                   data-slot="viewer-toolbar"
                 >
                   <span
-                    className="mr-1 flex shrink-0 items-center gap-2"
+                    className="mr-1 flex shrink-0 items-center gap-2 @max-[360px]/viewer:hidden"
                     title={`${identity.name}${identity.size === undefined ? '' : ` · ${formatBytes(identity.size)}`}`}
                   >
                     <FileTypeIcon
