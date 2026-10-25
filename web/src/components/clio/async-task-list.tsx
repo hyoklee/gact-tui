@@ -76,6 +76,7 @@ export interface AsyncTaskListProps {
   processes: readonly AsyncProcess[];
   subagents?: readonly SubagentRun[];
   onOpenSubagent?: ClioEvidenceViewProps['onOpenSubagent'];
+  onOpenFlow?: ClioEvidenceViewProps['onOpenFlow'];
   onCancelTask?: (task: AsyncProcess) => Promise<void>;
   onControlTask?: (task: AsyncProcess, action: 'pause' | 'resume' | 'restart') => Promise<void>;
   pagination?: TaskPageControls;
@@ -86,6 +87,7 @@ export function AsyncTaskList({
   processes,
   subagents,
   onOpenSubagent,
+  onOpenFlow,
   onCancelTask,
   onControlTask,
   pagination,
@@ -150,7 +152,7 @@ export function AsyncTaskList({
   return (
     <div className="min-w-0 space-y-0.5" aria-label="Background work">
       {history ? (
-        <Button variant="ghost" size="sm" aria-expanded={history.visible} onClick={history.toggle}>
+        <Button variant="outline" size="sm" aria-expanded={history.visible} onClick={history.toggle}>
           {history.visible ? 'Hide completed work' : 'Show completed work'}
         </Button>
       ) : null}
@@ -168,6 +170,7 @@ export function AsyncTaskList({
               entry={entry}
               status={entry.subagent!.state}
               onOpenSubagent={onOpenSubagent}
+              onOpenFlow={onOpenFlow}
             />
           );
         const handle = entry.key;
@@ -185,6 +188,7 @@ export function AsyncTaskList({
             key={handle}
             entry={entry}
             onOpenSubagent={onOpenSubagent}
+            onOpenFlow={onOpenFlow}
             status={
               cancelling
                 ? 'cancellation_requested'

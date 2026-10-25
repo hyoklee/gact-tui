@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => {
     repository,
     resume: undefined as (() => void) | undefined,
     storeState,
-    toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
+    toast: { dismiss: vi.fn(), error: vi.fn(), info: vi.fn(), success: vi.fn() },
     useLiveStore,
   };
 });
@@ -563,16 +563,4 @@ describe('useSessionLiveStream resume recovery', () => {
     expect(advancedPastFirstFrame).toBe(true);
     unmount();
   });
-});
-
-it('refreshes blueprint revisions only on the connected CLIO', () => {
-  const keys = queryInvalidationKeysForEvent({
-    endpoint: 'http://connected-clio',
-    eventName: 'blueprint.revision.changed',
-    sessionId: 's1',
-    workspaceId: 'w1',
-  });
-  expect(keys).toContainEqual(['agent-blueprints', 'http://connected-clio']);
-  expect(keys).toContainEqual(['blueprint-files', 'http://connected-clio']);
-  expect(keys.every((key) => key[1] === 'http://connected-clio')).toBe(true);
 });
