@@ -228,7 +228,7 @@ describe('ClioRepository session operation contracts', () => {
       '/v1/sessions/sess%201/diffs',
       '/v1/sessions/sess%201/context/files',
       '/v1/sessions/sess%201/context/frames',
-      '/v1/sessions/sess%201/async-processes',
+      '/v1/sessions/sess%201/async-processes?include_descendants=true',
     ]);
     expect(diffs[0]).toMatchObject({
       id: 'chg_1',

@@ -1,4 +1,5 @@
 import {
+  BanIcon,
   BotIcon,
   CircleAlertIcon,
   Clock3Icon,
@@ -7,7 +8,6 @@ import {
   PauseIcon,
   WorkflowIcon,
   WrenchIcon,
-  XIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -69,7 +69,7 @@ export function WorkKindStatus({
       : failed || uncertain
         ? CircleAlertIcon
         : cancelled
-          ? XIcon
+          ? BanIcon
           : !complete && status !== 'not_run'
             ? Clock3Icon
             : undefined;

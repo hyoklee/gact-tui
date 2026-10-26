@@ -1,3 +1,4 @@
+import { vocab } from '@/lib/brand-vocabulary';
 import type {
   ExecutionProvenanceDegradation,
   ExecutionProvenanceResult,
@@ -528,7 +529,7 @@ function ProvenanceSourceBar({
                     <dt className="text-xs text-muted-foreground">Artifact relationships</dt>
                     <dd>
                       {artifactProvider.provider === 'native'
-                        ? 'CLIO artifact registry'
+                        ? `${vocab.agent} artifact registry`
                         : recordSourceLabel(artifactProvider.provider)}
                     </dd>
                   </div>
@@ -571,7 +572,7 @@ function ProvenanceSourceBar({
 function recordSourceLabel(provider: string): string {
   return (
     (
-      { native: 'Built-in CLIO records', flowcept: 'Flowcept', cmf: 'CMF' } as Record<
+      { native: `Built-in ${vocab.agent} records`, flowcept: 'Flowcept', cmf: 'CMF' } as Record<
         string,
         string
       >

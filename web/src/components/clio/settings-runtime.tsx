@@ -1,6 +1,7 @@
 import type { RuntimeSetting, RuntimeSettings, UpdateRuntimeSettings } from '@clio/core/v3';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CopyIcon, RotateCcwIcon } from 'lucide-react';
+import { CopyIcon } from 'lucide-react';
+import { RetryIcon } from '@/lib/icon-vocabulary';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { SettingsSectionHeading } from './settings-section-heading';
@@ -303,7 +304,7 @@ export function RuntimeSettingsPanel({
                           aria-label={`Use inherited ${setting.title.toLowerCase()}`}
                           onClick={() => update(setting, null)}
                         >
-                          <RotateCcwIcon aria-hidden="true" />
+                          <RetryIcon aria-hidden="true" />
                         </Button>
                       ) : null}
                     </div>
