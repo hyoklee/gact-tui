@@ -1,6 +1,7 @@
 import type { LocalExtensionInput, McpConfigurationInput } from '@clio/core/v3';
 import { useRef, useState } from 'react';
-import { PlusIcon, PackageIcon, BoxesIcon, CableIcon } from 'lucide-react';
+import { PackageIcon, BoxesIcon, CableIcon } from 'lucide-react';
+import { AddIcon } from '@/lib/icon-vocabulary';
 import { CapabilitySelection } from './capability-picker';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -70,7 +71,7 @@ export function ExtensionAddMenu({
               : undefined
           }
         >
-          <PlusIcon />
+          <AddIcon />
           {mcpOnly || category === 'mcp'
             ? 'Add MCP'
             : category === 'skills'

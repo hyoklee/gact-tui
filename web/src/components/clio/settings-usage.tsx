@@ -49,7 +49,7 @@ function AccountRow({ account, mode }: { account: FleetAccount; mode: UsageMode 
             {account.health === 'ready' ? '' : ` (${account.health})`}
           </p>
           {account.spend ? (
-            <div aria-label="Usage recorded by CLIO" className="mt-1">
+            <div aria-label={`Usage recorded by ${vocab.agent}`} className="mt-1">
               <SpendSummary spend={account.spend} />
             </div>
           ) : null}
@@ -116,7 +116,7 @@ export function UsageSettings() {
         <div>
           <h2 className="text-lg font-semibold">Usage</h2>
           <p className="text-sm text-muted-foreground">
-            Account limits and usage recorded by CLIO.
+            Account limits and usage recorded by {vocab.agent}.
           </p>
         </div>
         <ToggleGroup

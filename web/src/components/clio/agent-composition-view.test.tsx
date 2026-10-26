@@ -1,4 +1,5 @@
 import type { AgentResolution, SessionAgent } from '@clio/core/v3';
+import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -152,9 +153,11 @@ const sessionAgent: SessionAgent = {
 function renderView(view = <AgentCompositionView sessionId="sess_1" />) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <QueryClientProvider client={client}>
-      <TooltipProvider>{view}</TooltipProvider>
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={client}>
+        <TooltipProvider>{view}</TooltipProvider>
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 

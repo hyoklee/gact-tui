@@ -1,6 +1,6 @@
 import type { AsyncProcess, SubagentRun } from '@clio/core/v3';
-import { ChevronRightIcon, EllipsisIcon, PauseIcon, PlayIcon } from 'lucide-react';
-import { CloseIcon, RetryIcon } from '@/lib/icon-vocabulary';
+import { ChevronRightIcon, PauseIcon, PlayIcon } from 'lucide-react';
+import { CloseIcon, MoreIcon, RetryIcon } from '@/lib/icon-vocabulary';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -246,7 +246,7 @@ export function AsyncTaskList({
                     title="More actions"
                     disabled={Boolean(controlling[handle] || cancelling)}
                   >
-                    <EllipsisIcon aria-hidden="true" className="size-4" />
+                    <MoreIcon aria-hidden="true" className="size-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">

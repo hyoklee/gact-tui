@@ -1,7 +1,8 @@
 import type { InfrastructureOperation, ModelAcquisition } from '@clio/core/v3';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { EllipsisIcon, ExternalLinkIcon, CopyIcon } from 'lucide-react';
+import { ExternalLinkIcon, CopyIcon } from 'lucide-react';
+import { MoreIcon } from '@/lib/icon-vocabulary';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -92,7 +93,7 @@ export function InfrastructureActivityRow({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${title}`}>
-                <EllipsisIcon aria-hidden="true" />
+                <MoreIcon aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

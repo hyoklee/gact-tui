@@ -1,8 +1,8 @@
 import { refreshAfterMemoryRemoval } from '@/lib/memory-cache';
 import { MEMORY_CATEGORIES, type MemoryDocument, type Session } from '@clio/core/v3';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { DownloadIcon, UploadIcon, SettingsIcon, SearchIcon } from 'lucide-react';
-import { MoreIcon } from '@/lib/icon-vocabulary';
+import { DownloadIcon, UploadIcon, SearchIcon } from 'lucide-react';
+import { MoreIcon, SettingsIcon } from '@/lib/icon-vocabulary';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { XIcon } from 'lucide-react';
+import { RemoveIcon } from '@/lib/icon-vocabulary';
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -203,7 +203,7 @@ export function CapabilitySelection({
                   aria-label={`Remove ${row?.title ?? value}`}
                   onClick={() => onChange(values.filter((item) => item !== value))}
                 >
-                  <XIcon aria-hidden="true" />
+                  <RemoveIcon aria-hidden="true" />
                 </Button>
               </li>
             );
