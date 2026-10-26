@@ -194,6 +194,22 @@ function PromptMap({ data, onlyHeated }: { data: AttentionItemsAvailable; onlyHe
         role="table"
         aria-label="Prompt heat map"
       >
+        <div className="sticky top-0 z-10 flex border-b bg-background" role="row">
+          <span className="sticky left-0 flex shrink-0 bg-background" role="columnheader">
+            {data.items.map((item) => (
+              <span
+                className="inline-block w-4 text-center font-medium"
+                key={item.index}
+                title={item.text}
+              >
+                {item.index + 1}
+              </span>
+            ))}
+          </span>
+          <span className="px-2 font-sans text-muted-foreground" role="columnheader">
+            Prompt line
+          </span>
+        </div>
         {rows.map((row) =>
           row.kind === 'gap' ? (
             <div className="px-2 text-muted-foreground" key={`gap-${row.from}`} role="row">
