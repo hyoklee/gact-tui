@@ -3,7 +3,8 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { TransportError } from '@clio/core/v3';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createHash, webcrypto } from 'node:crypto';
 import { ArtifactView, WorkspaceFileView } from './resource-viewers';
 
 const { repository } = vi.hoisted(() => ({
@@ -57,9 +58,11 @@ vi.mock('./document-pdf-viewer', () => ({
   ),
 }));
 
+beforeEach(() => vi.stubGlobal('crypto', webcrypto));
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('ArtifactView', () => {
@@ -69,7 +72,9 @@ describe('ArtifactView', () => {
       entries: [{ path: 'analysis/result.txt', type: 'file', internal: false, size: 30 }],
       truncated: false,
     });
-    repository.readWorkspaceFile.mockResolvedValue('Recovered nested result');
+    repository.readWorkspaceFileBytes.mockResolvedValue(
+      new TextEncoder().encode('Recovered nested result'),
+    );
     render(
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -80,6 +85,7 @@ describe('ArtifactView', () => {
             session_id: 'session_1',
             workspace_id: 'workspace_1',
             name: 'result.txt',
+            sha256: createHash('sha256').update('Recovered nested result').digest('hex'),
             media_type: 'text/plain',
             size: 30,
             uri: 'artifact://workspace_1/result.txt@v1',
@@ -90,10 +96,11 @@ describe('ArtifactView', () => {
       </QueryClientProvider>,
     );
     expect(await screen.findByText('Recovered nested result')).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Lineage' })).toBeVisible();
     expect(repository.workspaceFiles).toHaveBeenCalledWith('workspace_1', expect.any(AbortSignal), {
       excludeServiceStorage: true,
     });
-    expect(repository.readWorkspaceFile).toHaveBeenCalledWith(
+    expect(repository.readWorkspaceFileBytes).toHaveBeenCalledWith(
       'workspace_1',
       'analysis/result.txt',
       expect.any(AbortSignal),
@@ -107,7 +114,9 @@ describe('ArtifactView', () => {
     } else {
       repository.readArtifactTextFor.mockResolvedValue('Saved result');
     }
-    repository.readWorkspaceFile.mockResolvedValue('Recovered result');
+    repository.readWorkspaceFileBytes.mockResolvedValue(
+      new TextEncoder().encode('Recovered result'),
+    );
     render(
       <QueryClientProvider client={queryClient}>
         <ArtifactView
@@ -116,6 +125,9 @@ describe('ArtifactView', () => {
             session_id: 'session_1',
             workspace_id: 'workspace_1',
             name: 'result.txt',
+            sha256: createHash('sha256')
+              .update(missing ? 'Recovered result' : 'Saved result')
+              .digest('hex'),
             media_type: 'text/plain',
             size: 30,
             uri: 'artifact://workspace_1/result.txt@v1',
@@ -129,7 +141,7 @@ describe('ArtifactView', () => {
     expect(Boolean(screen.queryByText('Recovered from the matching workspace file.'))).toBe(
       missing,
     );
-    expect(repository.readWorkspaceFile).toHaveBeenCalledTimes(missing ? 1 : 0);
+    expect(repository.readWorkspaceFileBytes).toHaveBeenCalledTimes(missing ? 1 : 0);
   });
 
   it('renders Markdown as a readable wrapping document instead of source code', async () => {
@@ -218,7 +230,7 @@ describe('WorkspaceFileView', () => {
     await userEvent.click(screen.getByRole('button', { name: '2' }));
     expect(screen.getByText('11 - 20 of 25')).toBeVisible();
     expect(screen.getByText('MTA10')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Download file' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Download CSV' })).toBeEnabled();
   });
 
   it.each([
@@ -269,7 +281,7 @@ describe('WorkspaceFileView', () => {
       expect(screen.queryByText(/Static preview ·/)).not.toBeInTheDocument();
       await userEvent.click(screen.getByRole('tab', { name: 'Source' }));
       expect(document.querySelector('[data-language="html"]')).toHaveTextContent('<h1>Pedal!</h1>');
-      await userEvent.click(screen.getByRole('tab', { name: 'Preview' }));
+      await userEvent.click(screen.getByRole('tab', { name: 'HTML preview' }));
       expect(screen.getByTitle(`HTML preview of ${path}`)).toBeVisible();
       expect(repository.readWorkspaceFile).toHaveBeenCalledTimes(1);
       expect(repository.readWorkspaceFile).toHaveBeenCalledWith(
@@ -334,7 +346,8 @@ describe('WorkspaceFileView', () => {
     expect(document.querySelector('pre code')).not.toBeInTheDocument();
     expect(repository.readWorkspaceFile).not.toHaveBeenCalled();
     expect(screen.queryByText('data/run.h5')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'File information' }));
+    await userEvent.click(screen.getByRole('button', { name: 'File actions' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'File information' }));
     expect(await screen.findByText('data/run.h5')).toBeVisible();
   });
 

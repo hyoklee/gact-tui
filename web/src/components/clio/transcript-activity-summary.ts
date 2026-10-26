@@ -61,8 +61,14 @@ export function transcriptActivitySummary(iterations: readonly ConversationItera
   ];
   const description = actions.join(', ') || 'activity';
   const label = description[0].toUpperCase() + description.slice(1);
+  const interruptionOnTool = iterations.some((item) =>
+    item.tools.some((tool) => getToolStatus(tool) === 'interrupted'),
+  );
   return {
-    label: iterations.some((item) => item.interrupted) ? `${label} (Interrupted)` : label,
+    label:
+      !interruptionOnTool && iterations.some((item) => item.interrupted)
+        ? `${label} (Interrupted)`
+        : label,
     running,
     failed: iterations
       .flatMap((item) => item.tools)
@@ -71,6 +77,7 @@ export function transcriptActivitySummary(iterations: readonly ConversationItera
 }
 
 function injectionLabel(source: string): string {
+  if (source === 'question_answer') return 'received your answer';
   if (['task_completion', 'task_result', 'task_results', 'memory_search'].includes(source))
     return 'received results';
   if (source === 'memory') return 'received memory';

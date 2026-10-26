@@ -31,6 +31,7 @@ const resolution = {
     },
   ],
   prompt: {
+    text: 'You are CLIO.\n\n# Capabilities\nServer-rendered guidance.\n',
     sections: [
       { section: 'identity', fragments: [{ id: 'standard.identity', plugin: 'agent:standard' }] },
     ],
@@ -115,6 +116,7 @@ describe('PluginRepository contracts', () => {
     ]);
     expect(preview.plugins[0]?.removable).toBe(false);
     expect(preview.prompt.sections[0]?.fragments[0]?.plugin).toBe('agent:standard');
+    expect(preview.prompt.text).toBe(resolution.prompt.text);
     const removal = await repository.previewPluginRemoval({
       ref: 'clio/standard',
       plugin: 'document-runtime',
@@ -126,6 +128,7 @@ describe('PluginRepository contracts', () => {
       apply: 'compact',
     });
     expect(pinned.delta.add).toEqual(['hdf5']);
+    expect(pinned.resolution.prompt.text).toBe(resolution.prompt.text);
     expect(pinned.prompt_basis).toMatchObject({ pending: true, added: ['hdf5'], removed: [] });
     expect(pluginChangeCompactionError(pinned.compaction)).toBe('model timed out');
     await repository.saveUserAgent({
@@ -256,4 +259,21 @@ describe('plugin review', () => {
       'GET /v1/plugins/debate/review',
     ]);
   });
+});
+
+it('inspects one exact qualified catalog entry and preserves truncated-file boundaries', async () => {
+  const transport = new RecordingTransport([
+    {
+      plugin: { id: 'notes', ref: 'lab/notes' },
+      files: [
+        { path: 'SKILL.md', text: '# Notes', bytes: 1000, truncated: true, sha256: '', error: '' },
+      ],
+      incomplete: true,
+      reason: '',
+    },
+  ]);
+  const repository = new ClioRepository(transport);
+  const result = await repository.inspectPlugin('lab/notes', true);
+  expect(transport.requests[0]?.path).toBe('/v1/plugins/inspect?ref=lab%2Fnotes&pending=true');
+  expect(result.files[0]).toMatchObject({ truncated: true, sha256: '' });
 });

@@ -37,15 +37,22 @@ export function flowRunStatus(run: Pick<FlowRun, 'status' | 'outcome'>): {
   return { value: 'failed', label: `Stopped: ${run.status.replaceAll('_', ' ')}` };
 }
 
+/** Whether an empty task list is an unrecorded history rather than a live prelaunch state. */
+export function flowTaskHistoryUnavailable(
+  run: Pick<FlowRun, 'status' | 'outcome'>,
+  taskCount: number,
+): boolean {
+  if (taskCount !== 0) return false;
+  const status = flowRunStatus(run).value;
+  return status !== 'running' && status !== 'completed' && status !== 'cancelled';
+}
+
 /**
  * A workflow step's state, always with its text label. A step the workflow
  * skipped because a step it waits on failed is reported as skipped, not as
  * cancelled by someone.
  */
-export function workflowStepStatus(
-  step: Pick<WorkflowStep, 'status'>,
-  skipped = false,
-): FlowState {
+export function workflowStepStatus(step: Pick<WorkflowStep, 'status'>, skipped = false): FlowState {
   switch (step.status) {
     case 'pending':
       return { value: 'queued', label: 'Waiting', word: 'waiting', tone: 'waiting' };
@@ -74,6 +81,27 @@ export function workflowStepStatus(
 /** A flow call's task state with its text label; a state this client does not know is spelled out. */
 export function flowCallStatus(status: string): FlowState {
   switch (status) {
+    case 'returned_after_stop':
+      return {
+        value: 'completed',
+        label: 'Returned after flow stopped',
+        word: 'returned after stop',
+        tone: 'done',
+      };
+    case 'unknown':
+      return { value: 'unknown', label: 'Not confirmed', word: 'not confirmed', tone: 'unknown' };
+    case 'returned':
+      return { value: 'completed', label: 'Returned', word: 'returned', tone: 'done' };
+    case 'not_run':
+    case 'not_accepted':
+      return { value: 'cancelled', label: 'Did not run', word: 'did not run', tone: 'cancelled' };
+    case 'rejected':
+      return { value: 'failed', label: 'Rejected', word: 'rejected', tone: 'failed' };
+    case 'output_rejected':
+      return { value: 'failed', label: 'Output rejected', word: 'output rejected', tone: 'failed' };
+    case 'dispatching':
+    case 'accepted':
+      return { value: 'running', label: 'Started', word: 'started', tone: 'running' };
     case 'pending':
     case 'queued':
       return { value: 'queued', label: 'Waiting', word: 'waiting', tone: 'waiting' };
@@ -126,7 +154,8 @@ export interface FlowStep {
   /** The task that runs it, once it started. */
   handle?: string;
   /** `flow` when the step runs another flow, `editor` when it may edit the workflow. */
-  kind: 'agent' | 'flow' | 'editor' | 'proposal';
+  kind: 'agent' | 'flow' | 'editor' | 'proposal' | 'action';
+  label?: string;
   /** The editor that added this step while the workflow ran. */
   addedBy?: string;
   /** The reason an editor gave for adding or proposing it. */
@@ -137,6 +166,29 @@ export interface FlowStep {
 
 /** The workflow's steps, in workflow order, then the proposals still waiting for approval. */
 export function workflowSteps(run: FlowRun, agentRef: string): FlowStep[] {
+  if (run.execution?.length) {
+    const seen = new Map<string, number>();
+    const totals = new Map<string, number>();
+    for (const row of run.execution) totals.set(row.label, (totals.get(row.label) ?? 0) + 1);
+    return run.execution.map((row): FlowStep => {
+      const count = (seen.get(row.label) ?? 0) + 1;
+      seen.set(row.label, count);
+      const repeated = (totals.get(row.label) ?? 0) > 1;
+      return {
+        id: row.id,
+        label: repeated ? `${row.label} ${count}` : row.label,
+        target: row.target,
+        targetLabel: row.target ? flowTargetLabel(row.target, agentRef) : '',
+        input: undefined,
+        after: row.after,
+        status: flowCallStatus(row.status),
+        ...(row.handle ? { handle: row.handle } : {}),
+        kind: row.kind === 'flow' ? 'flow' : row.kind === 'action' ? 'action' : 'agent',
+        ...(row.detail ? { note: row.detail } : {}),
+        attempts: row.status === 'not_run' ? 0 : 1,
+      };
+    });
+  }
   const view = run.view;
   if (!view) return [];
   const kinds = new Map(run.calls.map((call) => [call.invocation, call.kind]));
@@ -159,7 +211,10 @@ export function workflowSteps(run: FlowRun, agentRef: string): FlowStep[] {
       targetLabel: flowTargetLabel(step.target, agentRef),
       input: step.input,
       after: step.after,
-      status: workflowStepStatus(step, skipped.has(step.id)),
+      status:
+        step.status === 'pending' && run.status !== 'running'
+          ? flowCallStatus('not_run')
+          : workflowStepStatus(step, skipped.has(step.id)),
       ...(step.handle ? { handle: step.handle } : {}),
       kind: view.editors.includes(step.target)
         ? 'editor'
@@ -279,7 +334,10 @@ export function flowMembers(
     ? options.perspectives.filter((value): value is string => typeof value === 'string')
     : [];
   const verdict = flowVerdict(run);
-  const calls = memberCalls(run, run.calls.filter((call) => call.kind !== 'ask'));
+  const calls = memberCalls(
+    run,
+    run.calls.filter((call) => call.kind !== 'ask'),
+  );
   // Any other flow names a call by the agent it ran, numbered among that agent's calls.
   const named = (call: FlowCall) =>
     call.target !== '' && call.target !== 'self' && call.target !== agentRef;

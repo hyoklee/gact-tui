@@ -28,11 +28,14 @@ it('keeps a visibility error in technical details without repeating it as progre
     supported_actions: ['observe', 'cancel'],
   };
   render(<AsyncTaskList processes={[uncertain]} />);
-  expect(screen.getByText('MCP · Needs inspection')).toBeVisible();
+  expect(screen.getByText('Tool · Needs inspection')).toBeVisible();
   expect(screen.queryByText(issue)).toBeNull();
   await userEvent.click(screen.getByRole('button', { name: 'Task details: Prepare dataset' }));
   expect(screen.queryByText(issue)).toBeNull();
-  expect(screen.getByRole('status')).toHaveTextContent('could not be confirmed');
+  expect(screen.getByText(/Execution or cleanup could not be confirmed/)).toHaveAttribute(
+    'role',
+    'status',
+  );
   await userEvent.click(screen.getByRole('button', { name: 'Technical details' }));
   expect(screen.getAllByText(issue)).toHaveLength(1);
 });
@@ -178,8 +181,8 @@ it('shows one compact task row and discloses complete assignments and technical 
       subagents={[child]}
     />,
   );
-  expect(screen.getByRole('button', { name: 'Child agents, 1 recorded' })).toBeVisible();
-  expect(screen.queryByRole('button', { name: /^Background tasks/ })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Background tasks, 1 recorded' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: /^Child agents,/ })).toBeNull();
   const row = screen.getByRole('button', { name: 'Task details: Worker #1' });
   expect(row).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByRole('region', { name: 'Assignment: Worker #1' })).toBeNull();
@@ -344,7 +347,7 @@ it('names a task that runs a flow as that run and opens the run view', async () 
     id: 'task_workflow_handle',
     handle: 'task_workflow_handle',
     title: 'Field sites workflow',
-    flow: { id: 'workflow' },
+    flow: { id: 'workflow', status: 'running' },
     effective_status: 'running',
     live_state: 'running',
     status: 'running',
@@ -352,7 +355,8 @@ it('names a task that runs a flow as that run and opens the run view', async () 
     supported_actions: ['cancel'],
   };
   render(<AsyncTaskList processes={[flowTask]} onOpenFlow={openFlow} onOpenSubagent={openChild} />);
-  expect(screen.getByText(/^Workflow run · Running/u)).toBeVisible();
+  expect(screen.getByText('Workflow run')).toBeVisible();
+  expect(screen.getByRole('img', { name: 'Flow: running' })).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'Task details: Field sites workflow' }));
   await user.click(
     screen.getByRole('button', { name: 'Open the workflow run: Field sites workflow' }),
@@ -363,4 +367,67 @@ it('names a task that runs a flow as that run and opens the run view', async () 
     screen.getByRole('button', { name: 'Open child conversation Field sites workflow' }),
   ).toBeVisible();
   expect(asyncProcessDetail(flowTask)).toBe('Workflow run');
+});
+
+it('hides a stale resume affordance while running and keeps restart behind More and confirmation', async () => {
+  const control = vi.fn(async () => undefined);
+  render(
+    <AsyncTaskList
+      processes={[
+        {
+          ...task,
+          live_state: 'running',
+          effective_status: 'running',
+          supported_actions: ['pause', 'resume', 'restart'],
+        },
+      ]}
+      onControlTask={control}
+    />,
+  );
+  expect(screen.queryByRole('button', { name: 'resume Subagent: Worker #1' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'pause Subagent: Worker #1' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'restart Subagent: Worker #1' })).toBeNull();
+  await userEvent.click(screen.getByRole('button', { name: 'More actions for Worker #1' }));
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Restart subagent' }));
+  expect(control).not.toHaveBeenCalled();
+  expect(screen.getByRole('alertdialog')).toBeVisible();
+  await userEvent.click(screen.getByRole('button', { name: 'Restart subagent' }));
+  expect(control).toHaveBeenCalledWith(expect.objectContaining({ id: task.id }), 'restart');
+});
+
+it('distinguishes a flow from a subagent and links a no-op follow-up to the actual earlier attempt', async () => {
+  const open = vi.fn();
+  render(
+    <AsyncTaskList
+      processes={[
+        {
+          ...task,
+          id: 'flow',
+          handle: 'flow',
+          effective_status: 'completed',
+          live_state: 'completed',
+          flow: { id: 'deep-research', status: 'not_run', previous_handle: 'old' },
+          supported_actions: ['restart'],
+        },
+        task,
+      ]}
+      onOpenFlow={open}
+      onControlTask={vi.fn()}
+    />,
+  );
+  expect(screen.getByText('Deep research follow-up')).toBeVisible();
+  expect(screen.getByText('Flow · No new run')).toBeVisible();
+  expect(document.querySelector('[data-work-kind="workflow"]')).toHaveAttribute(
+    'data-work-status',
+    'not_run',
+  );
+  expect(document.querySelector('[data-work-kind="agent"]')).not.toBeNull();
+  const row = screen.getByText('Deep research follow-up').closest('button')!;
+  await userEvent.click(row);
+  await userEvent.click(screen.getByRole('button', { name: 'Open earlier flow attempt' }));
+  expect(open).toHaveBeenCalledWith('old', 'Deep research run');
+  await userEvent.click(
+    row.parentElement!.querySelector('[aria-label="More actions for Worker #1"]')!,
+  );
+  expect(screen.getByRole('menuitem', { name: 'Restart flow' })).toBeVisible();
 });

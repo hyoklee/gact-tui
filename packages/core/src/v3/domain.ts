@@ -241,6 +241,25 @@ export interface ToolInvocation {
   completed_at?: string;
   duration_ms?: number;
   error?: string;
+  /** The original submission RPC remains inspectable when execution is asynchronous. */
+  submission?: {
+    state: ToolState;
+    output?: unknown;
+    error?: string;
+    completed_at?: string;
+    duration_ms?: number | null;
+  };
+  execution_task?: {
+    handle: string;
+    status: string;
+    activity: string;
+    updated_at: string;
+    accepted_at: string;
+    terminal_at: string | null;
+    cancellation_requested_at: string | null;
+    result_sha256: string | null;
+  };
+  execution_problem?: string;
 }
 
 export interface ApprovalRequest {
@@ -528,7 +547,13 @@ export interface AsyncProcess {
   updated_at?: string;
   error_reason?: string;
   /** Set when the task's child conversation runs a flow (a workflow, council, arena...). */
-  flow?: { id: string };
+  flow?: {
+    id: string;
+    status?: string;
+    outcome?: { reason?: string; message?: string } | null;
+    previous_handle?: string;
+    detail?: string;
+  };
   /** The model the child conversation runs on and why. */
   model_choice?: ModelChoice;
   result?: {
@@ -605,10 +630,11 @@ export interface McpUserConfiguration {
   name: string;
   configured: boolean;
   scope: 'user';
-  status: 'ready' | 'degraded' | 'local_fallback';
+  status: 'ready' | 'degraded' | 'auth_required' | 'local_fallback';
   transport?: string;
   tools_count: number;
   tools: string[];
+  tool_details?: Array<Record<string, unknown>>;
   spec?: Record<string, unknown>;
   error?: string;
   retryable: boolean;

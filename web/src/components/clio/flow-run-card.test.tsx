@@ -133,7 +133,7 @@ describe('FlowRunCard', () => {
     );
     // The track's colours are explained once, in words; no row repeats each step.
     expect(screen.getByText('Select a step to see it')).toBeVisible();
-    for (const word of ['done', 'running', 'waiting']) expect(screen.getByText(word)).toBeVisible();
+    for (const word of ['ran', 'running', 'waiting']) expect(screen.getByText(word)).toBeVisible();
     expect(screen.queryByRole('list', { name: 'Workflow steps' })).toBeNull();
 
     await user.click(screen.getByRole('button', { name: 'clean: Completed. Runs this agent.' }));
@@ -186,5 +186,47 @@ describe('FlowRunCard', () => {
     expect(await screen.findByText('Workflow run')).toBeVisible();
     expect(screen.getAllByText('Workflow run')).toHaveLength(1);
     expect(repository.taskFlow).toHaveBeenCalledWith('sess_1', 'task_workflow', expect.anything());
+  });
+
+  it('does not say a stopped flow started no tasks when its call history is empty', async () => {
+    repository.taskFlow.mockResolvedValue(
+      flowRunSchema.parse({
+        flow: 'deep-research',
+        status: 'flow_stall',
+        view: null,
+        calls: [],
+        outcome: { reason: 'flow_stall', message: 'The flow stopped unexpectedly.' },
+      }),
+    );
+    repository.agentTask.mockResolvedValue({ task_id: 'x', created_at: '', updated_at: '' });
+    wrap(
+      <FlowRunCard
+        flow={{ flow: 'deep-research', label: 'Deep research', handle: 'task_flow', args: {} }}
+        sessionId="sess_1"
+      />,
+    );
+
+    expect(await screen.findByText('Task history not recorded')).toBeVisible();
+    expect(screen.getByText(/Whether it started any tasks is unknown/u)).toBeVisible();
+    expect(screen.getByText('Stalled')).toBeVisible();
+    expect(screen.queryByText('0 tasks')).toBeNull();
+    expect(screen.queryByText('The flow has not started any task yet.')).toBeNull();
+  });
+
+  it('keeps the prelaunch copy for a live flow with no call records yet', async () => {
+    repository.taskFlow.mockResolvedValue(
+      flowRunSchema.parse({ flow: 'deep-research', status: 'running', view: null, calls: [] }),
+    );
+    repository.agentTask.mockResolvedValue({ task_id: 'x', created_at: '', updated_at: '' });
+    wrap(
+      <FlowRunCard
+        flow={{ flow: 'deep-research', label: 'Deep research', handle: 'task_flow', args: {} }}
+        sessionId="sess_1"
+      />,
+    );
+
+    expect(await screen.findByText('0 tasks')).toBeVisible();
+    expect(screen.getByText('The flow has not started any task yet.')).toBeVisible();
+    expect(screen.queryByText('Task history not recorded')).toBeNull();
   });
 });

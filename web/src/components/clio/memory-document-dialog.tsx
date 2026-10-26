@@ -1,3 +1,6 @@
+import { refreshAfterMemoryRemoval } from '@/lib/memory-cache';
+import { memoryChanges } from '@/lib/memory-changes';
+import { MemoryFactChanges } from './memory-fact-changes';
 import type { MemoryDocument, MemoryFact, MemoryVersion } from '@clio/core/v3';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckIcon, HistoryIcon } from 'lucide-react';
@@ -19,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useRepository } from '@/hooks/use-repository';
 import { cn } from '@/lib/utils';
 import { MemorySourceIcon } from './memory-source';
+import { MEMORY_CATEGORY_LABELS } from './memory-presentation';
 
 type SessionHref = (sessionId: string) => string | undefined;
 
@@ -60,11 +64,14 @@ function FactRow({
   const forget = useMutation({
     mutationFn: () => repository.forgetMemoryFact(document.name, fact.id, document.sha),
     onSuccess: (result) => {
-      refresh();
       if ('removed' in result) {
-        toast.success('Forgotten. That was its last fact, so the document is gone too.');
+        toast.success('Memory forgotten');
         onRemoved();
-      } else toast.success('Fact forgotten');
+        void refreshAfterMemoryRemoval(client, document.name);
+      } else {
+        refresh();
+        toast.success('Fact forgotten');
+      }
     },
   });
   return (
@@ -141,6 +148,7 @@ export function MemoryDocumentDialog({
   onOpenChange,
   sessionHref,
   highlight = '',
+  scopeLabel,
 }: {
   name: string;
   open: boolean;
@@ -148,6 +156,7 @@ export function MemoryDocumentDialog({
   sessionHref: SessionHref;
   /** A fact id to scroll to and mark (from a memory notice's "Edit in memory"). */
   highlight?: string;
+  scopeLabel?: string;
 }) {
   const repository = useRepository();
   const document = useQuery({
@@ -161,20 +170,32 @@ export function MemoryDocumentDialog({
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{document.data?.slug ?? name}</DialogTitle>
-          <DialogDescription>{document.data?.description ?? 'Loading…'}</DialogDescription>
+          <DialogTitle>{document.data?.description || document.data?.slug || 'Memory'}</DialogTitle>
+          <DialogDescription>
+            {document.data
+              ? (scopeLabel ??
+                (document.data.scope === 'user'
+                  ? 'Account memory'
+                  : `Workspace memory · ${document.data.scope.replace('project/', '')}`))
+              : 'Loading…'}
+          </DialogDescription>
         </DialogHeader>
         {document.isPending ? <Skeleton className="h-24 w-full" /> : null}
         {document.error ? (
           <Alert variant="destructive">
-            <AlertTitle>Document unavailable</AlertTitle>
+            <AlertTitle>Memory unavailable</AlertTitle>
             <AlertDescription>{document.error.message}</AlertDescription>
           </Alert>
         ) : null}
         {document.data ? (
           <div className="grid gap-3">
             <div className="flex flex-wrap gap-1.5">
-              <Badge variant="outline">{document.data.category}</Badge>
+              {(document.data.description || document.data.slug) !==
+              (MEMORY_CATEGORY_LABELS[document.data.category] ?? document.data.category) ? (
+                <Badge variant="outline">
+                  {MEMORY_CATEGORY_LABELS[document.data.category] ?? document.data.category}
+                </Badge>
+              ) : null}
               {document.data.aliases.map((alias) => (
                 <Badge key={alias} variant="secondary">
                   {alias}
@@ -219,52 +240,10 @@ export function MemoryDocumentDialog({
   );
 }
 
-/** A document line as a person reads it: a fact without its annotation, no stamps. */
-function readable(line: string): string | undefined {
-  if (!line.trim() || line === '---' || /^(updated|name|category|forgotten):/u.test(line))
-    return undefined;
-  const about = /^description: (.*)$/u.exec(line);
-  if (about) return `About: ${about[1]}`;
-  const fact = /^- (.*) \{id=[^}]*\}$/u.exec(line);
-  if (!fact) return line;
-  const struck = /^~~(.*)~~$/u.exec(fact[1]);
-  return struck ? `${struck[1]} (replaced)` : fact[1];
-}
-
-function lineDiff(before: string, after: string) {
-  const lines = (text: string) =>
-    text.split('\n').flatMap((line) => {
-      const shown = readable(line);
-      return shown === undefined ? [] : [shown];
-    });
-  const old = lines(before);
-  const next = lines(after);
-  const kept = new Set(next);
-  const had = new Set(old);
-  return [
-    ...old.filter((line) => !kept.has(line)).map((line) => ({ kind: 'removed' as const, line })),
-    ...next.filter((line) => !had.has(line)).map((line) => ({ kind: 'added' as const, line })),
-  ];
-}
-
-/** A diff of two document texts, one line per changed line. */
+/** Fact-level changes shared with the conversation's inline memory results. */
 export function MemoryDiff({ before, after }: { before: string; after: string }) {
-  const rows = useMemo(() => lineDiff(before, after), [before, after]);
-  if (!rows.length) return <p className="text-sm text-muted-foreground">No differences.</p>;
-  return (
-    <pre className="max-h-72 overflow-auto rounded-md border bg-muted/40 p-2 text-xs leading-5 whitespace-pre-wrap">
-      {rows.map((row, index) => (
-        <div
-          className={
-            row.kind === 'added' ? 'text-success-foreground' : 'text-destructive-foreground'
-          }
-          key={`${row.kind}-${index}`}
-        >
-          {`${row.kind === 'added' ? '+' : '−'} ${row.line}`}
-        </div>
-      ))}
-    </pre>
-  );
+  const changes = useMemo(() => memoryChanges(before, after), [before, after]);
+  return <MemoryFactChanges changes={changes} />;
 }
 
 function authorLabel(version: MemoryVersion) {

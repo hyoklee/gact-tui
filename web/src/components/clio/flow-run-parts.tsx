@@ -28,11 +28,11 @@ import { ClioStatus } from './status';
 /** Each state's word in the legend, in the order the legend lists them. */
 const TONE_WORDS: readonly (readonly [FlowTone, string])[] = [
   ['running', 'running'],
-  ['done', 'done'],
-  ['failed', 'failed'],
+  ['done', 'ran'],
+  ['failed', 'stopped or rejected'],
   ['waiting', 'waiting'],
   ['proposed', 'awaiting approval'],
-  ['cancelled', 'cancelled or skipped'],
+  ['cancelled', 'did not run or cancelled'],
   ['unknown', 'not reported'],
 ];
 
@@ -159,22 +159,28 @@ export function FlowPickDetails({
               : undefined
       }
       handle={step.handle}
-      name={step.id}
+      name={step.label ?? step.id}
       onClose={onClose}
       onOpenHandle={onOpenHandle}
       status={step.status}
       time={rowDuration(elapsed.get(step.id))}
     >
-      <Fact label="Runs">
-        {step.kind === 'flow' ? (
-          <FlowName info={flows?.get(step.target)} name={step.targetLabel} />
-        ) : (
-          step.targetLabel
-        )}
-      </Fact>
-      <Fact label="Waits on">
-        {step.after.length ? step.after.join(', ') : 'nothing; starts first'}
-      </Fact>
+      {step.targetLabel ? (
+        <Fact label="Runs">
+          {step.kind === 'flow' ? (
+            <FlowName info={flows?.get(step.target)} name={step.targetLabel} />
+          ) : (
+            step.targetLabel
+          )}
+        </Fact>
+      ) : null}
+      {!step.label ? (
+        <Fact label="Waits on">
+          {step.after.length
+            ? step.after.map((id) => (id.startsWith('run:') ? id.slice(4) : id)).join(', ')
+            : 'nothing; starts first'}
+        </Fact>
+      ) : null}
       {callModel(usage, step.handle) ? (
         <Fact label="Model">{callModel(usage, step.handle)}</Fact>
       ) : null}
@@ -187,7 +193,10 @@ export function FlowPickDetails({
       ) : step.note ? (
         <Fact label="Description">{step.note}</Fact>
       ) : null}
-      <Instructions input={step.input} />
+      {step.kind !== 'action' && (!step.label || step.input !== undefined) ? (
+        <Instructions input={step.input} />
+      ) : null}
+      {step.handle ? <TaskAnswer handle={step.handle} status={step.status} /> : null}
     </PickFrame>
   );
 }
@@ -272,8 +281,6 @@ function MemberDetails({
   onOpenHandle: (handle: string) => void;
   onClose: () => void;
 }) {
-  const settled = !['running', 'waiting'].includes(member.status.tone);
-  const answer = useFlowTaskAnswer(member.handle, true, settled);
   return (
     <PickFrame
       badge={member.chosen ? 'Chosen' : undefined}
@@ -289,25 +296,34 @@ function MemberDetails({
       </Fact>
       {model ? <Fact label="Model">{model}</Fact> : null}
       {member.perspective ? <Fact label="Asked to answer as">{member.perspective}</Fact> : null}
-      <div className="grid min-w-0 gap-1">
-        <p className="text-muted-foreground">Answer</p>
-        {!member.handle ? (
-          <p>Not started yet.</p>
-        ) : answer.isPending ? (
-          <p role="status">Loading the answer…</p>
-        ) : answer.error ? (
-          <p className="text-destructive" role="alert">
-            The answer could not be loaded: {answer.error.message}
-          </p>
-        ) : answer.data ? (
-          <ContentMarkdown className="max-h-72 overflow-auto rounded-md bg-muted/40 p-2 text-xs leading-5 [&_:is(h1,h2,h3,h4)]:mt-2 [&_:is(h1,h2,h3,h4)]:text-sm [&_:is(h1,h2,h3,h4)]:font-semibold">
-            {answer.data}
-          </ContentMarkdown>
-        ) : (
-          <p>{settled ? 'No answer was recorded.' : 'Still working.'}</p>
-        )}
-      </div>
+      <TaskAnswer handle={member.handle} status={member.status} />
     </PickFrame>
+  );
+}
+
+/** Fetch only the selected child's answer, shared by workflow steps and flow members. */
+function TaskAnswer({ handle, status }: { handle?: string; status: FlowState }) {
+  const settled = !['running', 'waiting', 'proposed'].includes(status.tone);
+  const answer = useFlowTaskAnswer(handle, true, settled);
+  return (
+    <div className="grid min-w-0 gap-1">
+      <p className="text-muted-foreground">Answer</p>
+      {!handle ? (
+        <p>Not started yet.</p>
+      ) : answer.isPending ? (
+        <p role="status">Loading the answer…</p>
+      ) : answer.error ? (
+        <p className="text-destructive" role="alert">
+          The answer could not be loaded: {answer.error.message}
+        </p>
+      ) : answer.data ? (
+        <ContentMarkdown className="max-h-72 overflow-auto rounded-md bg-muted/40 p-2 text-xs leading-5 [&_:is(h1,h2,h3,h4)]:mt-2 [&_:is(h1,h2,h3,h4)]:text-sm [&_:is(h1,h2,h3,h4)]:font-semibold">
+          {answer.data}
+        </ContentMarkdown>
+      ) : (
+        <p>{settled ? 'No answer was recorded.' : 'Still working.'}</p>
+      )}
+    </div>
   );
 }
 

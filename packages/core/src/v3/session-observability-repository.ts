@@ -97,7 +97,15 @@ const asyncProcessSchema = z
     error_reason: z.string().optional(),
     /** Set when the task's child conversation runs a flow: its flow id. */
     flow: z
-      .object({ id: z.string() })
+      .object({
+        id: z.string(),
+        status: z.string().optional(),
+        outcome: z
+          .object({ reason: z.string().optional(), message: z.string().optional() })
+          .nullish(),
+        previous_handle: z.string().optional(),
+        detail: z.string().optional(),
+      })
       .nullish()
       .transform((value) => value ?? undefined),
     /** The model the child conversation runs on and why. */
@@ -250,10 +258,11 @@ export class SessionObservabilityRepository extends ExecutionProvenanceRepositor
 
   public async asyncProcessesPage(
     sessionId: string,
-    options: CursorPageOptions = {},
+    options: CursorPageOptions & { includeDescendants?: boolean } = {},
     signal?: AbortSignal,
   ): Promise<CursorPage<AsyncProcess>> {
     const query = cursorPageQuery(options);
+    query.set('include_descendants', String(options.includeDescendants ?? true));
     const value = await this.transport.request({
       method: 'GET',
       path: `/v1/sessions/${encodeURIComponent(sessionId)}/async-processes${query.size ? `?${query}` : ''}`,

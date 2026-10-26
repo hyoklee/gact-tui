@@ -66,10 +66,10 @@ import {
 } from './session-evidence-projection';
 import { ClioStatus } from './status';
 import type { SubagentOpenTarget } from './subagent-card';
-import { getToolActivityTitle, getToolStatus, getToolSummary } from './tool-presentation';
+import { ClioToolInvocation } from './tool-invocation';
 import { AsyncTaskList, type TaskPageControls } from './async-task-list';
 import { SessionEvidenceSummary } from './session-evidence-summary';
-import { taskActivity } from './task-activity';
+import { isSettledTaskActivity, taskActivity } from './task-activity';
 import { OpenQuestionsSection } from './open-question-list';
 import { openHumanQuestions } from '@/lib/inline-question';
 
@@ -118,22 +118,23 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
   const runs = showActivity ? (props.runs ?? []) : [];
   const subagents = showActivity ? (props.subagents ?? []) : [];
   const activity = taskActivity(backgroundProcesses, subagents);
+  const activeWorkCount = props.workPages?.history
+    ? activity.filter((entry) => !isSettledTaskActivity(entry)).length
+    : backgroundProcesses.length;
   const separateSubagents = activity.flatMap((entry) =>
     !entry.process && entry.subagent ? [entry.subagent] : [],
   );
   const taskSubagents = activity.flatMap((entry) =>
     entry.process && entry.subagent ? [entry.subagent] : [],
   );
-  // Finished work sits behind Show completed work: a count of 0 would read as none ever ran.
+  // Finished work sits behind Completed work: a count of 0 would read as none ever ran.
   const finishedWorkHidden = Boolean(props.workPages?.hasMore || props.workPages?.history);
   const tasks = showActivity ? (props.tasks ?? []) : [];
   const tools = showActivity ? (props.tools ?? []) : [];
   const files = showData
     ? sessionFiles(props.contextFiles, props.tools ?? [], props.executionProvenance)
     : [];
-  const diffs = showData
-    ? sessionDiffs(props.diffs, props.tools ?? [])
-    : [];
+  const diffs = showData ? sessionDiffs(props.diffs, props.tools ?? []) : [];
   const plans = showActivity
     ? sessionPlans(props.messages, props.interactions ?? [], props.artifacts)
     : [];
@@ -232,7 +233,9 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
             delegated agent, child session, and standing watcher of this
             session can be found and opened, so its absence must read as
             "none yet", never as a missing feature. */}
-        {showActivity && (!subagents.length || separateSubagents.length) ? (
+        {showActivity &&
+        !props.workPages?.history &&
+        (!subagents.length || separateSubagents.length) ? (
           <EvidenceSection
             icon={BoxesIcon}
             label="Child agents"
@@ -262,12 +265,12 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
             icon={ServerIcon}
             label="Background tasks"
             value="background"
-            count={backgroundProcesses.length}
-            summary={!backgroundProcesses.length && finishedWorkHidden ? 'none running' : undefined}
+            count={activeWorkCount}
+            summary={!activeWorkCount && finishedWorkHidden ? 'none running' : undefined}
           >
             <AsyncTaskList
               processes={backgroundProcesses}
-              subagents={taskSubagents}
+              subagents={props.workPages?.history ? subagents : taskSubagents}
               onOpenSubagent={props.onOpenSubagent}
               onOpenFlow={props.onOpenFlow}
               onCancelTask={props.onCancelTask}
@@ -306,7 +309,6 @@ export function ClioEvidenceView(props: ClioEvidenceViewProps) {
               artifacts={outputs}
               onOpenArtifact={props.onOpenArtifact}
               ownerLabels={artifactOwnerLabels(props.executionProvenance)}
-              compact={props.compact}
             />
           </EvidenceSection>
         ) : null}
@@ -386,7 +388,7 @@ function SubagentEvidence({
     return (
       <p className="px-2 py-1 text-xs text-muted-foreground">
         {listedWithTasks
-          ? 'Child agents are listed with their tasks under Background tasks; finished ones under Show completed work.'
+          ? 'Child agents are listed with their tasks under Background tasks; finished ones under Completed work.'
           : 'No child agents in this session yet.'}
       </p>
     );
@@ -459,16 +461,9 @@ function SubagentEvidence({
 
 function ToolEvidence({ tools }: { tools: readonly ToolInvocation[] }) {
   return (
-    <div className="grid gap-1">
+    <div className="@container/evidence-tools grid min-w-0 divide-y divide-border/40">
       {tools.map((tool) => (
-        <ClioInteractiveRow key={tool.id} running={tool.state === 'running'}>
-          <EvidenceRecord
-            detail={getToolSummary(tool)}
-            icon={WrenchIcon}
-            label={getToolActivityTitle(tool)}
-            state={getToolStatus(tool)}
-          />
-        </ClioInteractiveRow>
+        <ClioToolInvocation key={tool.id} tool={tool} compact surface="evidence" />
       ))}
     </div>
   );
@@ -615,9 +610,9 @@ function SourceEvidence({
               />
             )}
             <div className="min-w-0 flex-1">
-              <p className="break-words text-xs font-medium" title={source.label}>
+              <span className="block break-words text-sm font-medium" title={source.label}>
                 {source.label}
-              </p>
+              </span>
               {source.ownerLabel ? (
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
                   {source.relation ? `${friendlyStatus(source.relation)} by ` : ''}
@@ -665,32 +660,25 @@ function ArtifactEvidence({
   artifacts,
   onOpenArtifact,
   ownerLabels,
-  compact,
 }: {
   artifacts: readonly Artifact[];
   onOpenArtifact?: (artifact: Artifact) => void;
   ownerLabels: ReadonlyMap<string, string>;
-  compact?: boolean;
 }) {
   if (!artifacts.length) return <EmptyEvidence label="No artifacts were produced." />;
   return (
     <ArtifactFilters artifacts={artifacts}>
       {(visible) => (
-        <div className="grid min-w-0 grid-cols-1 gap-2">
+        <div className="grid min-w-0 grid-cols-1 gap-1">
           {visible.map((artifact) => (
-            <div key={artifact.id} title={compact ? ownerLabels.get(artifact.id) : undefined}>
-              <ClioArtifactCard
-                artifact={artifact}
-                onOpen={onOpenArtifact}
-                preview={false}
-                presentation="evidence"
-              />
-              {!compact && ownerLabels.get(artifact.id) ? (
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {`Generated by ${ownerLabels.get(artifact.id)}`}
-                </p>
-              ) : null}
-            </div>
+            <ClioArtifactCard
+              key={artifact.id}
+              artifact={artifact}
+              onOpen={onOpenArtifact}
+              preview={false}
+              presentation="evidence"
+              ownerLabel={ownerLabels.get(artifact.id)}
+            />
           ))}
         </div>
       )}
@@ -706,24 +694,32 @@ function FileEvidence({
   onOpenFile?: (path: string) => void;
 }) {
   return (
-    <div className="grid gap-2">
+    <div className="grid min-w-0 gap-1">
       {files.map((file) => (
         <ClioInteractiveRow
-          className={cn('border-border bg-muted/20', onOpenFile && 'cursor-pointer')}
+          appearance="navigation"
+          className={cn('min-h-11 px-2 py-2', onOpenFile && 'cursor-pointer')}
+          aria-label={onOpenFile ? `Open file ${file.displayPath}` : undefined}
           key={file.path}
           onClick={() => onOpenFile?.(file.path)}
           role={onOpenFile ? 'button' : undefined}
           tabIndex={onOpenFile ? 0 : undefined}
         >
-          <div className="flex items-center gap-3">
-            <FileTextIcon aria-hidden="true" className="size-4 text-primary" />
+          <div className="flex items-center gap-2.5">
+            <FileTypeIcon name={file.displayPath} badge className="size-6 shrink-0" />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium" title={file.path}>
+              <span className="block truncate text-sm font-medium" title={file.path}>
                 {file.displayPath}
-              </p>
+              </span>
               <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                 {file.facts.map((fact) => (
-                  <span key={fact}>{fact}</span>
+                  <span key={fact} title={fact}>
+                    {fact === 'Read by agent'
+                      ? 'Read'
+                      : fact === 'Written by agent'
+                        ? 'Written'
+                        : fact}
+                  </span>
                 ))}
                 {file.size === undefined ? null : <span>{formatBytes(file.size)}</span>}
               </div>
@@ -765,9 +761,9 @@ function PlanEvidence({
             role={canOpen ? 'button' : undefined}
             tabIndex={canOpen ? 0 : undefined}
           >
-            <p className="truncate text-sm font-medium" title={plan.path}>
+            <span className="block truncate text-sm font-medium" title={plan.path}>
               {plan.title}
-            </p>
+            </span>
             {plan.detail ? (
               <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
                 {plan.detail}

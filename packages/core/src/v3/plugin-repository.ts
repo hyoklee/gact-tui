@@ -4,6 +4,7 @@ import {
   agentResolutionSchema,
   marketplaceSummarySchema,
   pluginCatalogSchema,
+  pluginInspectionSchema,
   pluginCheckReportSchema,
   pluginMarketplaceSchema,
   removalPreviewSchema,
@@ -13,6 +14,7 @@ import {
   type AgentResolution,
   type MarketplaceSummary,
   type PluginCatalog,
+  type PluginInspection,
   type PluginCheckReport,
   type PluginMarketplace,
   type RemovalPreview,
@@ -24,8 +26,99 @@ import { SessionObservabilityRepository } from './session-observability-reposito
 
 const PLUGIN_REVIEW_PATH = /^\/v1\/plugins\/[^/?#]+\/review$/u;
 
+const registrySchema = z.object({
+  servers: z.array(
+    z.object({
+      server: z.object({
+        name: z.string(),
+        title: z.string().optional(),
+        description: z.string(),
+        version: z.string(),
+        repository: z.object({ url: z.string() }).optional(),
+        remotes: z.array(z.object({ type: z.string(), url: z.string() })).default([]),
+        packages: z
+          .array(
+            z.object({
+              registryType: z.string(),
+              identifier: z.string(),
+              version: z.string().optional(),
+            }),
+          )
+          .default([]),
+      }),
+    }),
+  ),
+  next_cursor: z.string(),
+});
+export type McpRegistryPage = z.infer<typeof registrySchema>;
+export interface LocalExtensionInput {
+  name: string;
+  description?: string;
+  skill?: string;
+  requires?: string[];
+  connections?: Record<string, string>;
+  files?: Record<string, string>;
+}
+
 /** Plugins, marketplaces, agents, user agents and the session's pinned agent. */
 export class PluginRepository extends SessionObservabilityRepository {
+  public discoverMcp(search: string, cursor = '', signal?: AbortSignal): Promise<McpRegistryPage> {
+    return this.transport.request({
+      method: 'GET',
+      path: `/v1/extensions/mcp-registry?${new URLSearchParams({ search, cursor })}`,
+      signal,
+      decode: (value) => registrySchema.parse(value),
+    });
+  }
+  public createLocalExtension(body: LocalExtensionInput): Promise<MarketplaceSummary> {
+    return this.transport.request({
+      method: 'POST',
+      path: '/v1/plugins/local',
+      body,
+      decode: (value) => marketplaceSummarySchema.parse(value),
+    });
+  }
+  public exportLocalMarketplace(signal?: AbortSignal): Promise<Uint8Array> {
+    return this.transport.request({
+      method: 'GET',
+      path: '/v1/plugins/local/export',
+      responseType: 'bytes',
+      signal,
+      decode: (value) => {
+        if (!(value instanceof Uint8Array)) throw new Error('Invalid marketplace archive');
+        return value;
+      },
+    });
+  }
+  public uploadExtension(
+    name: string,
+    archive: string,
+    kind?: 'skill' | 'plugin',
+  ): Promise<MarketplaceSummary> {
+    return this.transport.request({
+      method: 'POST',
+      path: `/v1/plugins/upload?${new URLSearchParams({ name, ...(kind ? { kind } : {}) })}`,
+      body: { archive },
+      decode: (value) => marketplaceSummarySchema.parse(value),
+    });
+  }
+  /** Inspect one exact catalog reference without executing source or changing trust. */
+  public inspectPlugin(
+    ref: string,
+    pending = false,
+    signal?: AbortSignal,
+    skill?: string,
+  ): Promise<PluginInspection> {
+    const params = new URLSearchParams({ ref, pending: String(pending) });
+    if (skill) params.set('skill', skill);
+    return this.transport.request({
+      method: 'GET',
+      path: `/v1/plugins/inspect?${params}`,
+      decode: (value) => pluginInspectionSchema.parse(value),
+      signal,
+    });
+  }
+
   /** Installed plugins and packs, plus plugins whose update waits for the trust step. */
   public plugins(signal?: AbortSignal): Promise<PluginCatalog> {
     return this.transport.request({
@@ -177,6 +270,7 @@ export class PluginRepository extends SessionObservabilityRepository {
       remove: string[];
       name?: string;
       description?: string;
+      create_only?: boolean;
     },
     signal?: AbortSignal,
   ): Promise<AgentEntry> {

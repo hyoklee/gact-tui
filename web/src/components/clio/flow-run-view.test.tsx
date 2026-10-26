@@ -2,9 +2,13 @@ import { flowRunSchema } from '@clio/core/v3';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const repository = vi.hoisted(() => ({ taskFlow: vi.fn(), agentTask: vi.fn() }));
+const repository = vi.hoisted(() => ({
+  taskFlow: vi.fn(),
+  agentTask: vi.fn(),
+  transcript: vi.fn(),
+}));
 
 vi.mock('@/hooks/use-repository', () => ({ useRepository: () => repository }));
 vi.mock('@/providers/connection-provider', () => ({
@@ -96,12 +100,35 @@ function renderRun(onOpenSubagent = vi.fn()) {
   return onOpenSubagent;
 }
 
+beforeEach(() => {
+  repository.transcript.mockResolvedValue({ messages: [] });
+});
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
 
 describe('FlowRunView', () => {
+  it('uses timestamps supplied with the flow instead of reading each child task', async () => {
+    repository.taskFlow.mockResolvedValue(
+      flowRunSchema.parse({
+        ...workflowRun,
+        timings: {
+          task_flow: { created_at: '2026-10-25T10:00:00Z', updated_at: '2026-10-25T10:00:10Z' },
+          task_draft: {
+            created_at: '2026-10-25T10:00:00Z',
+            updated_at: '2026-10-25T10:00:05Z',
+            terminal_at: '2026-10-25T10:00:05Z',
+          },
+        },
+      }),
+    );
+    renderRun();
+    await screen.findByRole('img', { name: /The workflow's 3 steps in order/u });
+    expect(repository.agentTask).not.toHaveBeenCalled();
+  });
+
   it('draws the live workflow with text statuses and the proposal awaiting approval', async () => {
     const user = userEvent.setup();
     repository.taskFlow.mockResolvedValue(workflowRun);
@@ -126,7 +153,7 @@ describe('FlowRunView', () => {
       'title',
       'Editors critic may add up to 2 steps over at most 1 editing round (0 added, 1 round so far). Added steps need your approval.',
     );
-    for (const word of ['done', 'running', 'awaiting approval']) {
+    for (const word of ['ran', 'running', 'awaiting approval']) {
       expect(screen.getByText(word)).toBeVisible();
     }
     await user.click(screen.getByRole('button', { name: /^review: Running\./u }));
@@ -183,6 +210,39 @@ describe('FlowRunView', () => {
     // Live: a final answer with a wide table widened its implicit column, and full screen
     // on a phone cut every line of the answer off at the right edge.
     expect(result.querySelector(':scope > div')).toHaveClass('grid-cols-[minmax(0,1fr)]');
+  });
+
+  it('loads the selected workflow child answer without loading every child transcript', async () => {
+    repository.taskFlow.mockResolvedValue(workflowRun);
+    repository.agentTask.mockImplementation(async (handle) => ({
+      task_id: handle,
+      child_session_id: `session-${handle}`,
+      created_at: '',
+      updated_at: '',
+    }));
+    repository.transcript.mockResolvedValue({
+      messages: [
+        {
+          role: 'assistant',
+          blocks: [
+            { type: 'text', text: 'Independent integrity findings: 54 records quarantined.' },
+          ],
+        },
+      ],
+    });
+    renderRun();
+    await screen.findByRole('img', { name: /The workflow's 3 steps in order/u });
+    expect(repository.transcript).not.toHaveBeenCalled();
+    await userEvent.setup().click(screen.getByRole('button', { name: /^draft: Completed\./u }));
+    const details = screen.getByRole('region', { name: 'draft: Completed' });
+    expect(
+      await within(details).findByText('Independent integrity findings: 54 records quarantined.'),
+    ).toBeVisible();
+    expect(repository.transcript).toHaveBeenCalledTimes(1);
+    expect(repository.transcript).toHaveBeenCalledWith(
+      'session-task_draft',
+      expect.any(AbortSignal),
+    );
   });
 
   it('says when no limit is set on what the editors may add', async () => {
@@ -244,6 +304,25 @@ describe('FlowRunView', () => {
     expect(screen.getByText('step_failed')).toBeVisible();
     expect(screen.getByText('Stalled')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Open the stalled step' })).toBeVisible();
+  });
+
+  it('marks empty history unavailable for a stopped run in the shared details view', async () => {
+    repository.taskFlow.mockResolvedValue(
+      flowRunSchema.parse({
+        ...workflowRun,
+        flow: 'deep-research',
+        status: 'flow_stall',
+        view: null,
+        calls: [],
+        outcome: { reason: 'flow_stall', message: 'The run stopped before its receipt was saved.' },
+      }),
+    );
+    renderRun();
+
+    expect(await screen.findByText(/Task history not recorded/u)).toBeVisible();
+    expect(screen.getByText(/Whether it started any tasks is unknown/u)).toBeVisible();
+    expect(screen.queryByText(/0 tasks/u)).toBeNull();
+    expect(screen.queryByText('The flow has not started any task yet.')).toBeNull();
   });
 
   it('shows a cancelled run as cancelled, not as a stall', async () => {

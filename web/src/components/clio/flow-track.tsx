@@ -20,6 +20,8 @@ export function FlowTrack({
   scale,
   className,
   usage,
+  historyUnavailable,
+  active = true,
 }: {
   flow: string;
   presentation: FlowPresentation;
@@ -29,6 +31,9 @@ export function FlowTrack({
   fontSize?: number;
   scale?: number;
   className?: string;
+  /** The run stopped without recording task history; do not imply it started none. */
+  historyUnavailable?: boolean;
+  active?: boolean;
 }) {
   const [selected, setSelected] = useState<string>();
   const { diagram, steps, members, elapsed } = presentation;
@@ -41,7 +46,8 @@ export function FlowTrack({
         ])
       : [
           ...steps.map(
-            (step) => [step.id, { name: step.id, pick: { kind: 'step', step } }] as const,
+            (step) =>
+              [step.id, { name: step.label ?? step.id, pick: { kind: 'step', step } }] as const,
           ),
           ...members.map(
             (member) =>
@@ -56,6 +62,7 @@ export function FlowTrack({
     <div className="grid min-w-0 gap-2">
       {diagram ? (
         <FlowDiagram
+          active={active}
           className={className}
           fontSize={fontSize}
           onSelect={select}
@@ -85,7 +92,14 @@ export function FlowTrack({
           ))}
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">The flow has not started any task yet.</p>
+        <p
+          className="text-xs text-muted-foreground"
+          role={historyUnavailable ? 'status' : undefined}
+        >
+          {historyUnavailable
+            ? 'Task history was not recorded for this stopped flow. Whether it started any tasks is unknown.'
+            : 'The flow has not started any task yet.'}
+        </p>
       )}
       {pick ? (
         <FlowPickDetails
