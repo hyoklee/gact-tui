@@ -737,6 +737,7 @@ export function WorkspacePage() {
                       attentionData={attention.heat}
                       bottomInset={dockedComposerHeight}
                       error={transcriptError}
+                      hasEarlierMessages={Boolean(transcript.data?.next_cursor)}
                       loading={transcript.isFetching}
                       onActionCardAction={actionCard.mutateAsync}
                       {...conversationNavigation}
