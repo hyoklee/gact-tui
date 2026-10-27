@@ -91,13 +91,13 @@ export async function readTransformRecord(
 }
 
 /**
- * A study's reference to a tool call, as `call:<session>/<call_id>` or a bare
+ * A study's reference to a tool call, as `call:<session>/<call_id>`, `<session>/<call_id>` or a bare
  * `call_id`, split into its parts (the session is empty when not named).
  */
 export function parseCallReference(reference: string): { session: string; callId: string } {
+  // As the service reads it: the `call:` prefix is optional.
   const value = reference.trim();
-  if (!value.startsWith('call:')) return { session: '', callId: value };
-  const rest = value.slice('call:'.length);
+  const rest = value.startsWith('call:') ? value.slice('call:'.length) : value;
   const slash = rest.lastIndexOf('/');
   return slash < 0
     ? { session: '', callId: rest }
