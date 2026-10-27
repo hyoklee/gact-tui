@@ -4,6 +4,7 @@ import {
   type PluginViewComponent,
   type PluginViewEvent,
 } from '@clio/core/v3';
+import type { PluginViewShadow } from './plugin-view-shadow';
 
 /** One session in the tree a view's events may come from. */
 export interface PluginViewSession {
@@ -30,6 +31,8 @@ export interface PluginView {
   groups: string[];
   /** When the latest event was recorded (ISO time), or empty. */
   updatedAt: string;
+  /** The study's current law, when one is drawn beside the rows (`shadow` fields). */
+  shadow?: PluginViewShadow;
 }
 
 /** A short, stable label for a session that has no title. */

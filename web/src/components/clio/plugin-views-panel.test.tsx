@@ -137,6 +137,61 @@ describe('plugin views', () => {
     expect(within(view).queryByText(/Chart unavailable/u)).toBeNull();
   });
 
+  it('draws the study’s current law beside the rows and says which hypothesis it is', async () => {
+    const branch = (session_id: string, title: string, relation: string) => ({
+      session_id,
+      title,
+      agent: 'main',
+      relation,
+      parent_session_id: relation === 'root' ? '' : 'sess_root',
+      task_status: 'completed',
+    });
+    const hypothesis = (id: string, formula: string, status: string, created_at: string) => ({
+      id,
+      study: 'study_1',
+      branch: 'sess_root',
+      session: 'sess_root',
+      type: 'hypothesis',
+      fields: { claim: `Claim ${id}`, formula },
+      links: [],
+      status,
+      created_at,
+      invocation: '',
+    });
+    repository.scienceLog.mockResolvedValue({
+      session_id: 'sess_root',
+      in_study: true,
+      study: 'study_1',
+      root_session_id: 'sess_root',
+      branches: [branch('sess_root', 'Root', 'root'), branch('sess_child', 'Arm sweep', 'branch')],
+      entries: [
+        hypothesis(
+          'e_wrong',
+          'ten_cycles_s = 99 * arm_length_m',
+          'refuted',
+          '2026-10-27T10:00:00Z',
+        ),
+        hypothesis('e_law', 'ten_cycles_s = 14 * arm_length_m^0.5', 'open', '2026-10-27T10:01:00Z'),
+      ],
+    });
+    renderWithClient(<PluginViewsSection sessionId="sess_root" />);
+    const view = await screen.findByRole('region', { name: 'Bench readings' });
+    // The law is named in words, not by a colour or a mark alone.
+    const law = await within(view).findByText(/Shadow: the current law, hypothesis/u);
+    expect(law).toHaveTextContent(
+      'Shadow: the current law, hypothesis e_law “Claim e_law”, drawn for 2 of 2 rows: ten_cycles_s = 14 * arm_length_m^0.5',
+    );
+    await waitFor(() => expect(embedded.specs.length).toBeGreaterThan(0), { timeout: 10_000 });
+    const spec = JSON.stringify(embedded.specs.at(-1));
+    expect(spec).toContain('"shadow_of":"ten_cycles_s"');
+    expect(spec).toContain('"shadow_law":"e_law: Claim e_law"');
+    // The plugin's shadow layer draws it, named in its legend as the current law.
+    expect(
+      await within(view).findAllByText('current law e_law', {}, { timeout: 10_000 }),
+    ).not.toHaveLength(0);
+    expect(within(view).queryByText(/Chart unavailable/u)).toBeNull();
+  }, 20_000);
+
   it('reads only sessions whose catalogs include a plugin catalog', async () => {
     repository.a2uiCatalogs.mockImplementation(async (id: string) => ({
       rows: id === 'sess_root' ? [READINGS_CATALOG_ROW] : [],

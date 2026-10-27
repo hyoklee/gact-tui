@@ -5,6 +5,7 @@ import { useRepository } from '@/hooks/use-repository';
 import { useScienceLog } from '@/hooks/use-science-log';
 import { branchTitle } from '@/components/clio/science-log-model';
 import { mergePluginViews, type PluginView, type PluginViewSession } from '@/lib/plugin-view-model';
+import { withCurrentLaw } from '@/lib/plugin-view-shadow';
 import { queryKeys } from '@/lib/query-keys';
 import { isSessionActive } from '@/lib/session-state';
 import { useConnectionSettings } from '@/providers/connection-provider';
@@ -139,7 +140,7 @@ export function usePluginViews(
   }, [liveSessions, tree]);
   // A read's update time changes exactly when its data does, so it keys the merge.
   const updated = events.map((query) => query.dataUpdatedAt).join(',');
-  const views = useMemo(
+  const merged = useMemo(
     () =>
       mergePluginViews(
         events.flatMap((query) => query.data ?? []),
@@ -147,6 +148,13 @@ export function usePluginViews(
       ),
     // oxlint-disable-next-line react-hooks/exhaustive-deps
     [titles, updated],
+  );
+  // The study's current law is drawn beside the rows; a new or changed
+  // hypothesis (live `science.entry` events update this read) redraws it.
+  const entries = study.data?.in_study ? study.data.entries : undefined;
+  const views = useMemo(
+    () => (entries ? withCurrentLaw(merged, entries) : merged),
+    [entries, merged],
   );
   const shown = useFrameValue(views);
   return {

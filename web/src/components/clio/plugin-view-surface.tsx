@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useA2uiSessionRegistry } from '@/lib/a2ui/processor-store';
 import { pluginViewSurface, pluginViewTitle, type PluginView } from '@/lib/plugin-view-model';
+import type { PluginViewShadow } from '@/lib/plugin-view-shadow';
 import { ClioA2UISurface } from './a2ui-surface';
 
 /** One plugin view, drawn by its catalog component and updated in place. */
@@ -23,6 +24,7 @@ export function PluginViewSurface({ view }: { view: PluginView }) {
         {groups === 1 ? 'session' : 'sessions'}
         {view.updatedAt ? ` · updated ${new Date(view.updatedAt).toLocaleTimeString()}` : ''}
       </p>
+      {view.shadow ? <PluginViewLaw shadow={view.shadow} rows={view.rows.length} /> : null}
       {surface ? (
         <div className="overflow-x-auto">
           <ClioA2UISurface readOnly surface={surface} />
@@ -33,5 +35,21 @@ export function PluginViewSurface({ view }: { view: PluginView }) {
         </p>
       )}
     </section>
+  );
+}
+
+/** Which hypothesis the view's shadow is, in words. */
+function PluginViewLaw({ shadow, rows }: { shadow: PluginViewShadow; rows: number }) {
+  const { law } = shadow;
+  // A hypothesis with no title or claim is labelled by its formula, shown in full below.
+  const named = !law.text.startsWith(law.label.replace(/…$/u, ''));
+  return (
+    <p className="px-1 text-xs text-muted-foreground" data-slot="plugin-view-law">
+      Shadow: the current law, hypothesis{' '}
+      <span className="font-mono text-foreground">{law.id}</span>
+      {named ? ` “${law.label}”` : ''}, drawn for {shadow.rows} of {rows}{' '}
+      {rows === 1 ? 'row' : 'rows'}:{' '}
+      <code className="font-mono break-words text-foreground">{law.text}</code>
+    </p>
   );
 }

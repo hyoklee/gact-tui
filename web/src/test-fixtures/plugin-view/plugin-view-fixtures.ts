@@ -23,17 +23,53 @@ export const READINGS_SPEC = {
   spec: {
     width: 260,
     height: 170,
-    mark: { type: 'point', filled: true, opacity: 0.75 },
-    encoding: {
-      x: { field: 'setting', type: 'quantitative', title: null },
-      y: {
-        field: 'period_s',
-        type: 'quantitative',
-        title: 'seconds per cycle',
-        scale: { zero: false },
+    layer: [
+      {
+        mark: { type: 'point', filled: true, opacity: 0.75 },
+        encoding: {
+          x: { field: 'setting', type: 'quantitative', title: null },
+          y: {
+            field: 'period_s',
+            type: 'quantitative',
+            title: 'seconds per cycle',
+            scale: { zero: false },
+          },
+          color: { field: 'branch', type: 'nominal', title: 'branch' },
+        },
       },
-      color: { field: 'branch', type: 'nominal', title: 'branch' },
-    },
+      {
+        // The plugin's shadow layer: the study's current law, in the view's units.
+        transform: [
+          {
+            filter:
+              "isValid(datum.shadow) && isFinite(datum.shadow) && (datum.shadow_of === 'ten_cycles_s' || datum.shadow_of === 'period_s')",
+          },
+          {
+            calculate: "datum.shadow_of === 'ten_cycles_s' ? datum.shadow / 10 : datum.shadow",
+            as: 'law_period_s',
+          },
+          { calculate: "'current law ' + split(datum.shadow_law, ':')[0]", as: 'law' },
+        ],
+        mark: { type: 'point', filled: false, strokeWidth: 1.5, size: 80 },
+        encoding: {
+          x: { field: 'setting', type: 'quantitative', title: null },
+          y: {
+            field: 'law_period_s',
+            type: 'quantitative',
+            title: 'seconds per cycle',
+            scale: { zero: false },
+          },
+          color: { field: 'branch', type: 'nominal', title: 'branch' },
+          shape: {
+            field: 'law',
+            type: 'nominal',
+            title: 'shadow',
+            scale: { range: ['diamond'] },
+            legend: { labelLimit: 320 },
+          },
+        },
+      },
+    ],
   },
 };
 
