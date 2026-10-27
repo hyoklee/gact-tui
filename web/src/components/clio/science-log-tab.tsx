@@ -2,6 +2,7 @@ import type { ScienceEntry, ScienceStudy, SubagentRun } from '@clio/core/v3';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useOpenTaskHandle } from '@/hooks/use-flow-run';
 import { useRepository } from '@/hooks/use-repository';
 import { useScienceLog } from '@/hooks/use-science-log';
@@ -19,6 +20,7 @@ import { ScienceLogPanel } from './science-log-panel';
 import type { ScienceFileReference } from './science-log-sources';
 import { PluginViewsSection } from './plugin-views-panel';
 import { StudyTree } from './study-tree';
+import { StudyGraph } from './study-graph';
 import type { SubagentOpenTarget } from './subagent-card';
 
 export interface ScienceLogTabProps {
@@ -106,6 +108,7 @@ export function ScienceLogView({
     : tree.branch;
   const [selectedBranch, setSelectedBranch] = useState(initial);
   const [focusedEntry, setFocusedEntry] = useState<string>();
+  const [studyView, setStudyView] = useState('tree');
   const selectEntry = useCallback(
     (entryId: string) => {
       const entry = byId.get(entryId);
@@ -138,15 +141,33 @@ export function ScienceLogView({
     // long tree never runs under the log below it.
     <div className="flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-auto p-3 [&>*]:shrink-0">
       {views}
-      <StudyTree
-        folderAvailable={folderAvailable}
-        onOpenFolder={onOpenFolder}
-        onOpenTask={onOpenTask}
-        onSelect={selectNode}
-        onSelectEntry={selectEntry}
-        root={tree}
-        selectedBranch={selectedBranch}
-      />
+      <ToggleGroup
+        aria-label="Study view"
+        type="single"
+        value={studyView}
+        onValueChange={(value) => {
+          if (value) setStudyView(value);
+        }}
+        variant="outline"
+        size="sm"
+        spacing={0}
+      >
+        <ToggleGroupItem value="tree">Tree</ToggleGroupItem>
+        <ToggleGroupItem value="graph">Graph</ToggleGroupItem>
+      </ToggleGroup>
+      {studyView === 'graph' ? (
+        <StudyGraph study={study} selectedEntry={focusedEntry} onSelectEntry={selectEntry} />
+      ) : (
+        <StudyTree
+          folderAvailable={folderAvailable}
+          onOpenFolder={onOpenFolder}
+          onOpenTask={onOpenTask}
+          onSelect={selectNode}
+          onSelectEntry={selectEntry}
+          root={tree}
+          selectedBranch={selectedBranch}
+        />
+      )}
       <ScienceLogPanel
         backlinks={cited}
         branchTitle={titles.get(selectedBranch) || selectedBranch}
