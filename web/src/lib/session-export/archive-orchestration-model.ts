@@ -91,6 +91,8 @@ export interface ArchiveSpawnCall {
   childSessionId: string;
   /** A fork copies its caller; any other spawn delegates to a new agent. */
   forked: boolean;
+  /** The flow the call ran (`workflow`, `council`, ...), when it started a flow's run. */
+  flow?: string;
   /** The agent asked for, when the call named one. */
   agent?: string;
   /** The model the child ran on and why, when the call reports it. */
@@ -100,7 +102,14 @@ export interface ArchiveSpawnCall {
   startedAt?: string;
 }
 
-const SPAWN_TOOLS = new Set(['spawn_agent_task', 'spawn_skill_task', 'spawn_agents_parallel']);
+/** Calls that start a child session: a delegated agent, a batch of them, or a flow's run. */
+const SPAWN_TOOLS = new Set([
+  'spawn_agent_task',
+  'spawn_skill_task',
+  'spawn_agents_parallel',
+  'run_flow',
+  'run_workflow',
+]);
 
 function record(value: unknown): Record<string, unknown> | undefined {
   if (typeof value === 'string' && /^\s*[{[]/u.test(value)) {
@@ -147,11 +156,20 @@ function spawnCalls(
         callId: tool.id,
         childSessionId: child,
         forked,
+        flow:
+          tool.name === 'run_workflow'
+            ? 'workflow'
+            : tool.name === 'run_flow'
+              ? (text(entry['flow']) ?? text(input['flow']) ?? 'flow')
+              : undefined,
         agent: text(entry['agent']) ?? text(request['agent']) ?? text(request['skill']),
         model: model.success ? model.data : undefined,
+        // A workflow's assignment is its whole definition; its task says what it was for.
         assignment: forked
           ? (text(entry['note']) ?? text(input['note']))
-          : (text(entry['assignment']) ?? text(request['task'])),
+          : tool.name === 'run_workflow'
+            ? (text(input['task']) ?? text(entry['assignment']))
+            : (text(entry['assignment']) ?? text(request['task'])),
         startedAt: tool.started_at,
       },
     ];
@@ -181,6 +199,19 @@ export function archiveSpawnCalls(
     }
   }
   return calls;
+}
+
+/** What a delegated session was asked, as the delegation handed it over. */
+export function archiveDelegatedAssignment(
+  view: ArchiveTranscriptView | undefined,
+): string | undefined {
+  for (const message of decodedMessages(view)) {
+    for (const block of message.blocks) {
+      if (block.type === 'injection' && block.source === 'delegation' && block.text.trim())
+        return block.text.trim();
+    }
+  }
+  return undefined;
 }
 
 /** The answer a session ended with: the last answer text of its last reply. */

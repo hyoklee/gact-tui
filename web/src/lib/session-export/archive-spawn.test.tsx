@@ -248,6 +248,31 @@ describe('exported subagent tree without subagent records', () => {
       model: { source: 'inherited' },
     });
     expect(archiveFinalAnswer(views.sess_fork)).toBe('fork of level 1');
+    // A flow's run is a child too: its call names the session the flow runs in.
+    const flow = archiveSpawnCalls({
+      sess_root: view(
+        'sess_root',
+        [
+          {
+            id: 'call_flow',
+            session_id: 'sess_root',
+            name: 'run_flow',
+            state: 'succeeded',
+            input: { flow: 'council', input: 'Is a hot dog a sandwich?' },
+            output: {
+              assignment: 'Is a hot dog a sandwich?',
+              handle: 'task_c',
+              session_id: 'sess_c',
+            },
+          },
+        ],
+        'Done.',
+      ),
+    });
+    expect(flow.get('sess_c')).toMatchObject({
+      callId: 'call_flow',
+      assignment: 'Is a hot dog a sandwich?',
+    });
   });
 
   it('reads each child after the session that started it, siblings in the order they started', () => {
@@ -321,6 +346,86 @@ describe('exported subagent tree without subagent records', () => {
     expect(fork).toHaveTextContent('Fork note');
     expect(fork).toHaveTextContent('Reply with the words fork of level 1.');
     expect(fork).toHaveTextContent('fork of level 1');
+  });
+
+  it("heads a flow's step with what it was handed and a way back to the run's railroad", async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn<(target: ArchiveTarget) => void>();
+    const runCall = {
+      sessionId: 'sess_root',
+      callId: 'call_wf',
+      messageId: 'm_sess_root',
+      childSessionId: 'sess_run',
+      forked: false,
+      flow: 'workflow',
+    };
+    const step: ArchiveTranscriptView = {
+      ...view('sess_step', [], 'Three reasons.'),
+      messages: [
+        {
+          id: 'm_step',
+          session_id: 'sess_step',
+          role: 'assistant',
+          created_at: at(0),
+          blocks: [
+            { id: 'i', type: 'injection', source: 'delegation', text: 'Give three reasons.' },
+            { id: 'a', type: 'text', text: 'Three reasons.', channel: 'answer' },
+          ],
+        },
+      ],
+    };
+    const repository = new ClioRepository(
+      new ArchiveTransport({
+        ...snapshot,
+        responses: {
+          'GET /v1/sessions/sess_step': record('sess_step', 'a'),
+          'GET /v1/agent-tasks/task_step': {
+            json: {
+              task_id: 'task_step',
+              child_session_id: 'sess_step',
+              parent_session_id: 'sess_run',
+              model_choice: {
+                ran: { provider_id: 'local', model_id: 'model-b' },
+                source: 'inherited',
+              },
+            },
+          },
+        },
+      }),
+    );
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ArchiveConnectionProvider>
+          <RepositoryOverrideProvider repository={repository}>
+            <ArchiveSessionHeader
+              flowCall={runCall}
+              onOpen={onOpen}
+              parentTitle="CLIO"
+              row={{
+                session: { id: 'sess_step', title: 'a' },
+                relationship: {
+                  session_id: 'sess_step',
+                  parent_session_id: 'sess_run',
+                  task_id: 'task_step',
+                },
+              }}
+              view={step}
+            />
+          </RepositoryOverrideProvider>
+        </ArchiveConnectionProvider>
+      </QueryClientProvider>,
+    );
+    const header = screen.getByRole('banner', { name: 'How a was started' });
+    expect(header).toHaveTextContent('Delegated by the workflow run — back to where it was drawn');
+    expect(header).toHaveTextContent('Give three reasons.');
+    expect(header).toHaveTextContent('Three reasons.');
+    expect(await within(header).findByText('local / model-b (the caller’s model)')).toBeVisible();
+    await user.click(within(header).getByRole('button', { name: 'workflow run' }));
+    expect(onOpen).toHaveBeenCalledWith({
+      sessionId: 'sess_root',
+      messageId: 'm_sess_root',
+      callId: 'call_wf',
+    });
   });
 
   it("opens each child from its spawn's link, and shows the fork's approval at its call", async () => {

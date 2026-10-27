@@ -177,6 +177,11 @@ export function Review() {
       node?.scrollIntoView({ block: 'start' });
     });
   };
+  // The call that started a flow's run, for the run's steps and members to return to.
+  const flowRunCall = (sessionId: string | undefined) => {
+    const call = sessionId ? spawnCalls.get(sessionId) : undefined;
+    return call?.flow ? call : undefined;
+  };
   const titleOf = (sessionId: string | undefined) =>
     rows.find((other) => other.session.id === sessionId)?.session.title ?? '';
   const tools = rows.reduce((count, row) => count + row.tool_records.length, 0);
@@ -250,6 +255,7 @@ export function Review() {
               {(row.relationship || spawnCalls.has(row.session.id)) && (
                 <ArchiveSessionHeader
                   call={spawnCalls.get(row.session.id)}
+                  flowCall={flowRunCall(row.relationship?.parent_session_id)}
                   onOpen={open}
                   parentTitle={titleOf(
                     spawnCalls.get(row.session.id)?.sessionId ??

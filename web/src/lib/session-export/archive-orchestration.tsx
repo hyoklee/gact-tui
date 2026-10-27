@@ -22,6 +22,7 @@ import {
   type ArchiveFileInventory,
 } from './archive-file-reference';
 import {
+  archiveDelegatedAssignment,
   archiveFinalAnswer,
   archiveSubagentSpawn,
   decodedMessages,
@@ -42,6 +43,7 @@ export function ArchiveSessionHeader({
   parentTitle,
   parentView,
   call,
+  flowCall,
   view,
   onOpen,
 }: {
@@ -51,6 +53,11 @@ export function ArchiveSessionHeader({
   parentView?: ArchiveTranscriptView;
   /** The recorded call that started this session, when an exported session made it. */
   call?: ArchiveSpawnCall;
+  /**
+   * The call that started the flow run this session is a step or member of,
+   * when its parent is that run: the way back is to the run's railroad.
+   */
+  flowCall?: ArchiveSpawnCall;
   /** This session's own transcript, for the answer it returned. */
   view?: ArchiveTranscriptView;
   onOpen: (target: ArchiveTarget) => void;
@@ -66,6 +73,16 @@ export function ArchiveSessionHeader({
   const relationship = row.relationship;
   const spawn = useMemo(() => archiveSubagentSpawn(sessionId, parentView), [parentView, sessionId]);
   const answer = useMemo(() => archiveFinalAnswer(view), [view]);
+  const delegated = useMemo(() => archiveDelegatedAssignment(view), [view]);
+  // A flow's step records why it runs on its model in its task (captured for flow runs).
+  const taskId = relationship?.task_id;
+  const task = useQuery({
+    queryKey: ['archive-agent-task', taskId],
+    queryFn: ({ signal }) => repository.agentTask(taskId!, signal),
+    enabled: Boolean(taskId) && !call?.model,
+    retry: false,
+    staleTime: Infinity,
+  });
   if (!relationship && !call) return null;
   const origin = conversationForkOrigin(session.data);
   const forked =
@@ -73,29 +90,42 @@ export function ArchiveSessionHeader({
   const author = forkAuthorLabel(origin);
   const subagent = spawn.subagent;
   const agent = subagent?.agent_id || session.data?.agent_id || call?.agent || '';
-  const choice = subagent?.model_choice ?? call?.model;
+  const choice = subagent?.model_choice ?? call?.model ?? task.data?.model_choice ?? undefined;
   const why = choice ? (MODEL_CHOICE_SOURCE[choice.source] ?? choice.source) : '';
   const ran = [session.data?.provider_id, session.data?.model_id].filter(Boolean).join(' / ');
   const model = ran && why ? `${ran} (${why})` : ran;
   const state = subagent?.state ?? session.data?.state;
-  const assignment = subagent?.task || call?.assignment;
+  const assignment = subagent?.task || call?.assignment || delegated;
   const result = subagent?.result || answer;
   const back: ArchiveTarget = call
     ? { sessionId: call.sessionId, messageId: call.messageId, callId: call.callId }
-    : { sessionId: relationship!.parent_session_id, messageId: spawn.messageId };
+    : flowCall && !spawn.messageId
+      ? { sessionId: flowCall.sessionId, messageId: flowCall.messageId, callId: flowCall.callId }
+      : { sessionId: relationship!.parent_session_id, messageId: spawn.messageId };
+  const viaFlow = !call && flowCall?.flow && back.sessionId === flowCall.sessionId;
   return (
     <header
       aria-label={`How ${row.session.title || sessionId} was started`}
       className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm"
       data-slot="archive-session-origin"
     >
-      <p>
-        {forked ? 'Forked from ' : 'Delegated by '}
-        <button className="font-medium underline" onClick={() => onOpen(back)} type="button">
-          {parentTitle || back.sessionId}
-        </button>
-        {back.messageId ? ' — back to where it was started' : ''}
-      </p>
+      {viaFlow ? (
+        <p>
+          {'Delegated by the '}
+          <button className="font-medium underline" onClick={() => onOpen(back)} type="button">
+            {flowCall!.flow} run
+          </button>
+          {' — back to where it was drawn'}
+        </p>
+      ) : (
+        <p>
+          {forked ? 'Forked from ' : 'Delegated by '}
+          <button className="font-medium underline" onClick={() => onOpen(back)} type="button">
+            {parentTitle || back.sessionId}
+          </button>
+          {back.messageId ? ' — back to where it was started' : ''}
+        </p>
+      )}
       {author ? <p>{author}</p> : null}
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
         {agent ? (
