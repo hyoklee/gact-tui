@@ -1,4 +1,4 @@
-import { type ScienceStudy } from '@clio/core/v3';
+import { scienceLogSchema, type ScienceStudy } from '@clio/core/v3';
 import { studyGraphFixture as study } from '../../../tests/fixtures/science-log-graph';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -55,25 +55,26 @@ const entry = (
 });
 
 /** One experiment observed 20 times, and one evidence entry citing every observation. */
-const trialsStudy = (): ScienceStudy => ({
-  ...study,
-  entries: [
-    entry('q', 'root', 'question', { statement: 'Which strategy is best?' }),
-    entry('h', 'root', 'hypothesis', { claim: 'A beats B' }, [{ to: 'q', relation: 'question' }]),
-    entry('e', 'trial', 'experiment', { method: '20 trials' }, [
-      { to: 'h', relation: 'hypothesis' },
-    ]),
-    ...Array.from({ length: 20 }, (_, i) =>
-      entry(`o${i}`, 'trial', 'observation', { result: `trial ${i}` }, [
-        { to: 'e', relation: 'experiment' },
+const trialsStudy = (): ScienceStudy =>
+  scienceLogSchema.parse({
+    ...study,
+    entries: [
+      entry('q', 'root', 'question', { statement: 'Which strategy is best?' }),
+      entry('h', 'root', 'hypothesis', { claim: 'A beats B' }, [{ to: 'q', relation: 'question' }]),
+      entry('e', 'trial', 'experiment', { method: '20 trials' }, [
+        { to: 'h', relation: 'hypothesis' },
       ]),
-    ),
-    entry('v', 'trial', 'evidence', { interpretation: 'A wins' }, [
-      ...Array.from({ length: 20 }, (_, i) => ({ to: `o${i}`, relation: 'observation' })),
-      { to: 'h', relation: 'supports' },
-    ]),
-  ],
-});
+      ...Array.from({ length: 20 }, (_, i) =>
+        entry(`o${i}`, 'trial', 'observation', { result: `trial ${i}` }, [
+          { to: 'e', relation: 'experiment' },
+        ]),
+      ),
+      entry('v', 'trial', 'evidence', { interpretation: 'A wins' }, [
+        ...Array.from({ length: 20 }, (_, i) => ({ to: `o${i}`, relation: 'observation' })),
+        { to: 'h', relation: 'supports' },
+      ]),
+    ],
+  }) as ScienceStudy;
 
 describe('study overview', () => {
   it("draws an experiment's observations as one node with counted links", () => {
