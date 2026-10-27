@@ -123,7 +123,7 @@ function StudyTreeNode({
         )}
       >
         <button
-          className="flex min-w-0 flex-1 items-baseline gap-1.5 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-w-0 flex-1 basis-32 items-baseline gap-1.5 overflow-hidden rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => onSelect(node)}
           title={tooltip(node)}
           type="button"
