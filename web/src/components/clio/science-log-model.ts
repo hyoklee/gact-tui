@@ -420,6 +420,11 @@ export function studyTree(study: ScienceStudy): StudyNode {
 }
 
 /** The DOM id an entry's card carries, so a citation can bring it into view. */
+/** The element id of a study view's panel, for opening it in place. */
+export function studyViewDomId(entry: string): string {
+  return `study-view-${entry}`;
+}
+
 export function scienceEntryDomId(entryId: string): string {
   return `science-entry-${entryId}`;
 }

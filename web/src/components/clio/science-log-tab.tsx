@@ -15,6 +15,7 @@ import {
   branchTitle,
   messageForCall,
   scienceEntryDomId,
+  studyViewDomId,
   studyTree,
   type StudyNode,
 } from './science-log-model';
@@ -22,6 +23,7 @@ import { ScienceLogPanel } from './science-log-panel';
 import type { ScienceFileReference } from './science-log-sources';
 import { StudyTree } from './study-tree';
 import { StudyViews } from './study-views';
+import { useStudyViewFocus } from '@/lib/a2ui/open-view';
 import { StudyGraph, type StudyGraphScope } from './study-graph';
 import { observationGroups } from './study-graph-model';
 import type { SubagentOpenTarget } from './subagent-card';
@@ -159,6 +161,32 @@ export function ScienceLogView({
     () => branchEntries(study.entries, selectedBranch),
     [selectedBranch, study.entries],
   );
+  const [openedView, setOpenedView] = useState<string>();
+  const openView = useCallback((entry: string) => {
+    setStudyView('views');
+    setOpenedView(entry);
+  }, []);
+  // `openView` from any surface asks for one of this study's views: shown once per ask.
+  const requestedView = useStudyViewFocus((state) => state.entry);
+  const request = useStudyViewFocus((state) => state.nonce);
+  const [answered, setAnswered] = useState<number>();
+  if (
+    requestedView &&
+    request !== answered &&
+    study.views.some((view) => view.entry === requestedView)
+  ) {
+    setAnswered(request);
+    setStudyView('views');
+    setOpenedView(requestedView);
+  }
+  useEffect(() => {
+    if (answered !== undefined) useStudyViewFocus.getState().clear();
+  }, [answered]);
+  useEffect(() => {
+    // Runs after Views has rendered, so the opened view's panel is in the page.
+    if (openedView && mode === 'views')
+      document.getElementById(studyViewDomId(openedView))?.scrollIntoView?.({ block: 'start' });
+  }, [openedView, mode]);
   return (
     <div className="@container/science-log flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-auto p-3 [&>*]:shrink-0">
       <ToggleGroup
@@ -263,8 +291,10 @@ export function ScienceLogView({
             onOpenTask={onOpenTask}
             onSelect={selectNode}
             onSelectEntry={selectEntry}
+            onOpenView={views ? openView : undefined}
             root={tree}
             selectedBranch={selectedBranch}
+            views={study.views}
           />
           <ScienceLogPanel
             backlinks={cited}

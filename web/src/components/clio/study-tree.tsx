@@ -1,3 +1,4 @@
+import type { ScienceView } from '@clio/core/v3';
 import { ListTreeIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -73,6 +74,10 @@ export interface StudyTreeProps {
   onOpenFolder?: (path: string) => void;
   /** Whether a folder can be opened here; without it every folder opens. */
   folderAvailable?: (path: string) => boolean;
+  /** The study's attached views; each branch lists the ones it attached. */
+  views?: readonly ScienceView[];
+  /** Open one of the study's views (its `view` entry id). */
+  onOpenView?: (entry: string) => void;
 }
 
 /**
@@ -98,7 +103,14 @@ function StudyTreeNode({
   onOpenTask,
   onOpenFolder,
   folderAvailable,
+  views,
+  onOpenView,
 }: StudyTreeProps & { node: StudyNode; level: number }) {
+  // A branch lists the views it attached; the root question lists the study's own.
+  const attached =
+    onOpenView && (node.kind === 'branch' || (node.kind === 'question' && level === 1))
+      ? (views ?? []).filter((view) => view.session_id === node.branch)
+      : [];
   const selected =
     node.kind !== 'hypothesis' && node.kind !== 'reframe' && node.branch === selectedBranch;
   const label = `${kindLabel(node)}: ${node.title}, ${node.state.label}`;
@@ -160,6 +172,21 @@ function StudyTreeNode({
           path={node.folder}
         />
       ) : null}
+      {attached.length ? (
+        <p className="flex min-w-0 flex-wrap items-center gap-1 pl-3 text-[11px] text-muted-foreground">
+          <span>{attached.length === 1 ? 'View' : 'Views'}</span>
+          {attached.map((view) => (
+            <button
+              className="underline decoration-border underline-offset-2 hover:text-foreground"
+              key={view.entry}
+              onClick={() => onOpenView?.(view.entry)}
+              type="button"
+            >
+              {view.title || 'Untitled view'}
+            </button>
+          ))}
+        </p>
+      ) : null}
       {node.derivedFrom.length ? (
         <p className="flex min-w-0 flex-wrap items-center gap-1 pl-3 text-[11px] text-muted-foreground">
           <span aria-hidden="true">↳</span> Derived from
@@ -187,8 +214,10 @@ function StudyTreeNode({
               onOpenTask={onOpenTask}
               onSelect={onSelect}
               onSelectEntry={onSelectEntry}
+              onOpenView={onOpenView}
               root={child}
               selectedBranch={selectedBranch}
+              views={views}
             />
           ))}
         </ul>

@@ -111,6 +111,8 @@ export type ClioWorkbenchOpenRequest =
   | { kind: 'flow'; handle: string; label?: string }
   | { kind: 'resources'; section?: Exclude<CanvasResourceKind, 'session'> }
   | { kind: 'session' }
+  /** The Science log tab, as `openView` opens a study view in it. */
+  | { kind: 'science-log' }
   | { kind: 'terminal'; cwd: string };
 
 export interface ClioWorkbenchHandle {
@@ -434,6 +436,9 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
             return;
           case 'session':
             openTab(sessionTab);
+            return;
+          case 'science-log':
+            openTab(scienceLogTab);
             return;
           case 'terminal':
             openTab({

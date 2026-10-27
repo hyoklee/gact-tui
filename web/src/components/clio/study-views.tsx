@@ -2,7 +2,7 @@ import { a2uiSurfaceSchema, type ScienceStudy, type ScienceView } from '@clio/co
 import { useMemo } from 'react';
 import { useA2uiSessionRegistry } from '@/lib/a2ui/processor-store';
 import { ClioA2UISurface } from './a2ui-surface';
-import { branchTitle } from './science-log-model';
+import { branchTitle, studyViewDomId } from './science-log-model';
 
 /**
  * The study's views: the dashboards its conversations attached with `view`
@@ -56,8 +56,9 @@ function StudyViewPanel({
   return (
     <section
       aria-label={view.title || 'Study view'}
-      className="min-w-0 space-y-2"
+      className="min-w-0 scroll-mt-3 space-y-2"
       data-slot="study-view"
+      id={studyViewDomId(view.entry)}
     >
       <header className="space-y-0.5 px-1">
         <h3 className="text-sm font-medium">{view.title || 'Untitled view'}</h3>
