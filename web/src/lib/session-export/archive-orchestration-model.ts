@@ -1,9 +1,12 @@
 import {
   messageSchema,
+  modelChoiceSchema,
   subagentSchema,
   toolInvocationSchema,
   type Message,
+  type ModelChoice,
   type SubagentRun,
+  type ToolInvocation,
 } from '@clio/core/v3';
 import { subagentsForTool } from '@/components/clio/subagent-tool-link';
 import { usePluginViews } from '@/hooks/use-plugin-views';
@@ -44,11 +47,18 @@ export function decodedMessages(view: ArchiveTranscriptView | undefined): Messag
   });
 }
 
+function decodedTools(view: ArchiveTranscriptView | undefined): ToolInvocation[] {
+  return (view?.tools ?? []).flatMap((value) => {
+    const result = toolInvocationSchema.safeParse(value);
+    return result.success ? [result.data] : [];
+  });
+}
+
 /**
  * The spawn behind a child session: the parent's subagent record for it and the
  * parent message that shows that spawn, when the parent's transcript has one.
  */
-export function archiveSpawn(
+export function archiveSubagentSpawn(
   childId: string,
   parentView: ArchiveTranscriptView | undefined,
 ): { subagent?: SubagentRun; messageId?: string } {
@@ -59,12 +69,7 @@ export function archiveSpawn(
     })
     .find((row) => row.child_session_id === childId);
   if (!subagent) return {};
-  const tools = new Map(
-    (parentView?.tools ?? []).flatMap((value) => {
-      const result = toolInvocationSchema.safeParse(value);
-      return result.success ? [[result.data.id, result.data] as const] : [];
-    }),
-  );
+  const tools = new Map(decodedTools(parentView).map((tool) => [tool.id, tool] as const));
   const byId = { [subagent.id]: subagent };
   const message = decodedMessages(parentView).find((row) =>
     row.blocks.some(
@@ -76,6 +81,161 @@ export function archiveSpawn(
   return { subagent, messageId: message?.id };
 }
 
+/** A child session as the call that started it recorded it. */
+export interface ArchiveSpawnCall {
+  /** The session that made the call, the call and the message that shows it. */
+  sessionId: string;
+  callId: string;
+  messageId?: string;
+  childSessionId: string;
+  /** A fork copies its caller; any other spawn delegates to a new agent. */
+  forked: boolean;
+  /** The agent asked for, when the call named one. */
+  agent?: string;
+  /** The model the child ran on and why, when the call reports it. */
+  model?: ModelChoice;
+  /** What the child was asked: its assignment, or a fork's note. */
+  assignment?: string;
+  startedAt?: string;
+}
+
+const SPAWN_TOOLS = new Set(['spawn_agent_task', 'spawn_skill_task', 'spawn_agents_parallel']);
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value === 'string' && /^\s*[{[]/u.test(value)) {
+    try {
+      return record(JSON.parse(value));
+    } catch {
+      return undefined;
+    }
+  }
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value : undefined);
+
+/** The children one recorded call started, each with what the call says about it. */
+function spawnCalls(
+  sessionId: string,
+  tool: ToolInvocation,
+): Omit<ArchiveSpawnCall, 'messageId'>[] {
+  const forked = tool.name === 'fork';
+  if (!forked && !SPAWN_TOOLS.has(tool.name)) return [];
+  const input = record(tool.input) ?? {};
+  const output = record(tool.output);
+  if (!output) return [];
+  // A batch returns one outcome per requested assignment, in order.
+  const batch = tool.name === 'spawn_agents_parallel';
+  const requests = batch && Array.isArray(input['spawns']) ? input['spawns'] : [];
+  const entries = batch
+    ? Array.isArray(output['spawned'] ?? output['outcomes'])
+      ? ((output['spawned'] ?? output['outcomes']) as unknown[])
+      : []
+    : [output];
+  return entries.flatMap((value, index) => {
+    const entry = record(value);
+    const child = text(entry?.['session_id']);
+    if (!entry || !child || child === sessionId) return [];
+    const request = batch ? (record(requests[index]) ?? {}) : input;
+    const model = modelChoiceSchema.safeParse(entry['model']);
+    return [
+      {
+        sessionId,
+        callId: tool.id,
+        childSessionId: child,
+        forked,
+        agent: text(entry['agent']) ?? text(request['agent']) ?? text(request['skill']),
+        model: model.success ? model.data : undefined,
+        assignment: forked
+          ? (text(entry['note']) ?? text(input['note']))
+          : (text(entry['assignment']) ?? text(request['task'])),
+        startedAt: tool.started_at,
+      },
+    ];
+  });
+}
+
+/**
+ * Every spawn and fork the exported sessions recorded, by the child session it
+ * started. A fork copies its caller's transcript, calls included; a call is kept
+ * where it was made (the earliest record), not where a copy repeats it.
+ */
+export function archiveSpawnCalls(
+  views: Readonly<Record<string, ArchiveTranscriptView>>,
+): Map<string, ArchiveSpawnCall> {
+  const calls = new Map<string, ArchiveSpawnCall>();
+  for (const [sessionId, view] of Object.entries(views)) {
+    const messages = decodedMessages(view);
+    for (const tool of decodedTools(view)) {
+      for (const call of spawnCalls(sessionId, tool)) {
+        const known = calls.get(call.childSessionId);
+        if (known && (known.startedAt ?? '') <= (call.startedAt ?? '')) continue;
+        const message = messages.find((row) =>
+          row.blocks.some((block) => block.type === 'tool' && block.tool_id === tool.id),
+        );
+        calls.set(call.childSessionId, { ...call, messageId: message?.id });
+      }
+    }
+  }
+  return calls;
+}
+
+/** The answer a session ended with: the last answer text of its last reply. */
+export function archiveFinalAnswer(view: ArchiveTranscriptView | undefined): string | undefined {
+  for (const message of [...decodedMessages(view)].reverse()) {
+    if (message.role !== 'assistant') continue;
+    const answer = message.blocks
+      .filter(
+        (block): block is Extract<typeof block, { type: 'text' }> =>
+          block.type === 'text' && (!block.channel || block.channel === 'answer'),
+      )
+      .map((block) => block.text.trim())
+      .filter(Boolean)
+      .at(-1);
+    if (answer) return answer;
+  }
+  return undefined;
+}
+
+/**
+ * Sessions in reading order: each child after its parent, below the session
+ * whose call started it (a fork under the session it copies), siblings in the
+ * order they started.
+ */
+export function archiveSessionOrder<
+  T extends { session: { id: string; created_at?: string }; relationship?: ArchiveRelationship },
+>(rows: readonly T[], calls: ReadonlyMap<string, ArchiveSpawnCall>): T[] {
+  const ids = new Set(rows.map((row) => row.session.id));
+  const parentOf = (row: T) => {
+    const caller = calls.get(row.session.id)?.sessionId;
+    const parent = caller && ids.has(caller) ? caller : row.relationship?.parent_session_id;
+    return parent && ids.has(parent) && parent !== row.session.id ? parent : undefined;
+  };
+  const children = new Map<string | undefined, T[]>();
+  for (const row of rows) {
+    const parent = parentOf(row);
+    children.set(parent, [...(children.get(parent) ?? []), row]);
+  }
+  const started = (row: T) => calls.get(row.session.id)?.startedAt ?? row.session.created_at ?? '';
+  const ordered: T[] = [];
+  const seen = new Set<string>();
+  const visit = (row: T) => {
+    if (seen.has(row.session.id)) return;
+    seen.add(row.session.id);
+    ordered.push(row);
+    const kids = [...(children.get(row.session.id) ?? [])].sort((a, b) =>
+      started(a).localeCompare(started(b)),
+    );
+    kids.forEach(visit);
+  };
+  (children.get(undefined) ?? []).forEach(visit);
+  // A cycle in recorded parents leaves rows unreached; keep them, in export order.
+  rows.forEach(visit);
+  return ordered;
+}
+
 /** Whether the archive has a study, or views outside one, to offer as a section. */
 export function useArchiveSections(
   sessionId: string,
@@ -85,4 +245,29 @@ export function useArchiveSections(
   const inStudy = log.data?.in_study === true;
   const { views } = usePluginViews(sessionId, { sessions, enabled: log.data?.in_study === false });
   return { science: inStudy, views: !inStudy && views.length > 0 };
+}
+
+/**
+ * A fork call presents the fork by name only; in an archive that carries the
+ * fork's conversation, that name becomes a link to it, as a spawn's is.
+ */
+export function withForkSessionLink(tool: ToolInvocation): ToolInvocation {
+  const output = tool.output;
+  const child =
+    tool.name === 'fork' && output && typeof output === 'object' && !Array.isArray(output)
+      ? (output as Record<string, unknown>)['session_id']
+      : undefined;
+  const subject = tool.presentation?.subject;
+  if (typeof child !== 'string' || !child || !subject || !tool.presentation) return tool;
+  return {
+    ...tool,
+    presentation: {
+      ...tool.presentation,
+      blocks: tool.presentation.blocks.map((block) =>
+        block.id === subject && block.type === 'text'
+          ? { ...block, type: 'link', target: 'session', uri: child }
+          : block,
+      ),
+    },
+  };
 }

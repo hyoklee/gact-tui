@@ -72,6 +72,13 @@ export function PresentationLink({
     open = () => navigation.onOpenResource?.(resource);
   else if (block.target === 'session' && child && navigation?.onOpenSubagent)
     open = (event) => navigation.onOpenSubagent?.(child, subagentOpenTarget(event));
+  else if (
+    block.target === 'session' &&
+    uri &&
+    navigation?.onOpenSession &&
+    navigation.sessionAvailable?.(uri)
+  )
+    open = () => navigation.onOpenSession?.(uri);
   else if (block.target === 'work' && navigation?.onOpenWork) open = navigation.onOpenWork;
   else if (block.target === 'surface' && navigation?.surfaces?.[uri])
     open = () => {

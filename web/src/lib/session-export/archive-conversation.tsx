@@ -21,6 +21,7 @@ import type { ClioConversationProps } from '@/components/clio/conversation-types
 import { A2uiReferenceSessionProvider } from '@/lib/a2ui/reference-session';
 import type { ConversationDisplayMode } from '@/providers/conversation-display-provider';
 import { messageMarkIds } from '@/lib/message-marks';
+import { withForkSessionLink } from './archive-orchestration-model';
 
 export interface ArchiveTranscriptView {
   messages: unknown[];
@@ -44,6 +45,8 @@ export function ArchiveConversation({
   onOpenFolder,
   folderAvailable,
   nodeFolder,
+  onOpenSession,
+  sessionAvailable,
 }: {
   sessionId: string;
   metadata?: Record<string, unknown>;
@@ -58,6 +61,9 @@ export function ArchiveConversation({
   folderAvailable?: (path: string) => boolean;
   /** The folder each exported session worked in, from its recorded metadata. */
   nodeFolder?: (sessionId: string) => string | undefined;
+  /** Open an exported session's section; only sessions `sessionAvailable` accepts open. */
+  onOpenSession?: (sessionId: string) => void;
+  sessionAvailable?: (sessionId: string) => boolean;
 }) {
   const markedMessageIds = useMemo(() => messageMarkIds(metadata), [metadata]);
   const [modes, setModes] = useState<Record<string, ConversationDisplayMode>>({});
@@ -67,6 +73,7 @@ export function ArchiveConversation({
     const captured = snapshot.responses[
       `GET /v1/sessions/${encodeURIComponent(sessionId)}/interactions?include_recent_resolved=true&resolved_limit=100`
     ]?.json as { interactions?: unknown[] } | undefined;
+    const tools = view.tools.map((value) => withForkSessionLink(toolInvocationSchema.parse(value)));
     const interactions = [
       ...new Map(
         [...(captured?.interactions ?? []), ...(view.interactions ?? [])].map((value) => {
@@ -95,7 +102,7 @@ export function ArchiveConversation({
     return {
       messages,
       interactions,
-      tools: index(view.tools.map((value) => toolInvocationSchema.parse(value))),
+      tools: index(tools),
       tasks: index(view.tasks.map((value) => taskSchema.parse(value))),
       subagents: index(view.subagents.map((value) => subagentSchema.parse(value))),
       artifacts: index(artifacts),
@@ -117,6 +124,8 @@ export function ArchiveConversation({
           onOpenFolder,
           folderAvailable,
           nodeFolder,
+          onOpenSession,
+          sessionAvailable,
         }}
       >
         <section id={sessionId} className="flex min-w-0 flex-col gap-6">

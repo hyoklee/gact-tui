@@ -42,7 +42,10 @@ import {
 } from './lib/session-export/archive-orchestration';
 import {
   archiveMessageDomId,
+  archiveSessionOrder,
+  archiveSpawnCalls,
   useArchiveSections,
+  type ArchiveSpawnCall,
   type ArchiveRelationship,
   type ArchiveTarget,
 } from './lib/session-export/archive-orchestration-model';
@@ -55,7 +58,7 @@ declare global {
 }
 configureArchiveMapWorker(import.meta.env.VITE_CLIO_ARCHIVE_MAP_WORKER);
 interface TranscriptRow {
-  session: { id: string; title: string; metadata?: Record<string, unknown> };
+  session: { id: string; title: string; created_at?: string; metadata?: Record<string, unknown> };
   messages: { id: string; role: string; created_at?: string; parts: RecordedPart[] }[];
   tool_records: RecordedTool[];
   loaded_skills: { event_id: string; skill_id?: string; file?: string; content?: string }[];
@@ -78,6 +81,8 @@ interface ArchiveData {
 let data: ArchiveData;
 let rows: TranscriptRow[];
 let ids: string[];
+/** The recorded call that started each exported child session. */
+let spawnCalls: Map<string, ArchiveSpawnCall>;
 
 export function SavedView({ value }: { value: unknown }) {
   const result = a2uiSurfaceSchema.safeParse(value);
@@ -172,6 +177,8 @@ export function Review() {
       node?.scrollIntoView({ block: 'start' });
     });
   };
+  const titleOf = (sessionId: string | undefined) =>
+    rows.find((other) => other.session.id === sessionId)?.session.title ?? '';
   const tools = rows.reduce((count, row) => count + row.tool_records.length, 0);
   const skills = rows.reduce((count, row) => count + row.loaded_skills.length, 0);
   return (
@@ -240,15 +247,21 @@ export function Review() {
         <TabsContent value="conversation">
           {rows.map((row) => (
             <div key={row.session.id} className="space-y-4" data-archive-session={row.session.id}>
-              {row.relationship && (
+              {(row.relationship || spawnCalls.has(row.session.id)) && (
                 <ArchiveSessionHeader
+                  call={spawnCalls.get(row.session.id)}
                   onOpen={open}
-                  parentTitle={
-                    rows.find((other) => other.session.id === row.relationship!.parent_session_id)
-                      ?.session.title ?? ''
+                  parentTitle={titleOf(
+                    spawnCalls.get(row.session.id)?.sessionId ??
+                      row.relationship?.parent_session_id,
+                  )}
+                  parentView={
+                    row.relationship
+                      ? data.transcript_views[row.relationship.parent_session_id]
+                      : undefined
                   }
-                  parentView={data.transcript_views[row.relationship.parent_session_id]}
                   row={row}
+                  view={data.transcript_views[row.session.id]}
                 />
               )}
               <ArchiveConversation
@@ -261,6 +274,8 @@ export function Review() {
                 folderAvailable={folderAvailable}
                 nodeFolder={nodeFolder}
                 onOpenFolder={openFolder}
+                onOpenSession={(sessionId) => open({ sessionId })}
+                sessionAvailable={(sessionId) => ids.includes(sessionId)}
                 onOpenSubagent={(subagent) => {
                   if (subagent.child_session_id && ids.includes(subagent.child_session_id))
                     open({ sessionId: subagent.child_session_id });
@@ -452,7 +467,9 @@ async function mountReview(): Promise<void> {
     : undefined;
   if (!dashboard) {
     data = decodedData as ArchiveData;
-    rows = [data.transcript, ...data.transcript.children];
+    spawnCalls = archiveSpawnCalls(data.transcript_views);
+    // Each child below the session that started it, in the order they started.
+    rows = archiveSessionOrder([data.transcript, ...data.transcript.children], spawnCalls);
     ids = rows.map((row) => row.session.id);
   }
   const repository = new ClioRepository(

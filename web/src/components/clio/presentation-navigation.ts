@@ -34,5 +34,12 @@ type Navigation = Pick<
     folderAvailable?: (path: string) => boolean;
     /** The folder a session worked in, in an isolated run, where this surface records it. */
     nodeFolder?: (sessionId: string) => string | undefined;
+    /**
+     * Open another session's conversation by id, where this surface carries it
+     * (an export opens only the sessions it includes, as `sessionAvailable`
+     * says). Session links use it when no subagent record resolves them.
+     */
+    onOpenSession?: (sessionId: string) => void;
+    sessionAvailable?: (sessionId: string) => boolean;
   };
 export const PresentationNavigation = createContext<Navigation | null>(null);

@@ -5,6 +5,7 @@ import {
   conversationForkOrigin,
   forkAuthorLabel,
 } from '@/components/clio/conversation-fork-origin';
+import { ContentMarkdown } from '@/components/clio/content-markdown';
 import { messageForCall } from '@/components/clio/science-log-model';
 import { ScienceLogView } from '@/components/clio/science-log-tab';
 import { PluginViewList, PluginViewsSection } from '@/components/clio/plugin-views-panel';
@@ -12,6 +13,7 @@ import { ClioStatus } from '@/components/clio/status';
 import { useRepository } from '@/hooks/use-repository';
 import { usePluginViews } from '@/hooks/use-plugin-views';
 import { useScienceLog } from '@/hooks/use-science-log';
+import { MODEL_CHOICE_SOURCE } from '@/lib/flow-run-usage';
 import type { PluginViewSession } from '@/lib/plugin-view-model';
 import type { ArchiveTranscriptView } from './archive-conversation';
 import {
@@ -20,8 +22,10 @@ import {
   type ArchiveFileInventory,
 } from './archive-file-reference';
 import {
-  archiveSpawn,
+  archiveFinalAnswer,
+  archiveSubagentSpawn,
   decodedMessages,
+  type ArchiveSpawnCall,
   type ArchiveSessionRow,
   type ArchiveTarget,
 } from './archive-orchestration-model';
@@ -29,17 +33,26 @@ import {
 /**
  * What a child session is in the archive, above its transcript: how it was
  * reached (delegated or forked, and by whom), its agent and model, what it was
- * asked and what it returned, with a link back to where it was started.
+ * asked and what it returned, with a link back to where it was started. The
+ * parent's subagent record is used when the export has one; otherwise the call
+ * that started the child (`call`) and the child's own last answer say the same.
  */
 export function ArchiveSessionHeader({
   row,
   parentTitle,
   parentView,
+  call,
+  view,
   onOpen,
 }: {
   row: ArchiveSessionRow;
+  /** The title of the session that started this one. */
   parentTitle: string;
   parentView?: ArchiveTranscriptView;
+  /** The recorded call that started this session, when an exported session made it. */
+  call?: ArchiveSpawnCall;
+  /** This session's own transcript, for the answer it returned. */
+  view?: ArchiveTranscriptView;
   onOpen: (target: ArchiveTarget) => void;
 }) {
   const repository = useRepository();
@@ -51,14 +64,25 @@ export function ArchiveSessionHeader({
     staleTime: Infinity,
   });
   const relationship = row.relationship;
-  const spawn = useMemo(() => archiveSpawn(sessionId, parentView), [parentView, sessionId]);
-  if (!relationship) return null;
+  const spawn = useMemo(() => archiveSubagentSpawn(sessionId, parentView), [parentView, sessionId]);
+  const answer = useMemo(() => archiveFinalAnswer(view), [view]);
+  if (!relationship && !call) return null;
   const origin = conversationForkOrigin(session.data);
-  const forked = relationship.attribution === 'session_fork' || Boolean(origin);
+  const forked =
+    relationship?.attribution === 'session_fork' || Boolean(origin) || Boolean(call?.forked);
   const author = forkAuthorLabel(origin);
-  const agent = spawn.subagent?.agent_id || session.data?.agent_id || '';
-  const model = [session.data?.provider_id, session.data?.model_id].filter(Boolean).join(' / ');
-  const parent = relationship.parent_session_id;
+  const subagent = spawn.subagent;
+  const agent = subagent?.agent_id || session.data?.agent_id || call?.agent || '';
+  const choice = subagent?.model_choice ?? call?.model;
+  const why = choice ? (MODEL_CHOICE_SOURCE[choice.source] ?? choice.source) : '';
+  const ran = [session.data?.provider_id, session.data?.model_id].filter(Boolean).join(' / ');
+  const model = ran && why ? `${ran} (${why})` : ran;
+  const state = subagent?.state ?? session.data?.state;
+  const assignment = subagent?.task || call?.assignment;
+  const result = subagent?.result || answer;
+  const back: ArchiveTarget = call
+    ? { sessionId: call.sessionId, messageId: call.messageId, callId: call.callId }
+    : { sessionId: relationship!.parent_session_id, messageId: spawn.messageId };
   return (
     <header
       aria-label={`How ${row.session.title || sessionId} was started`}
@@ -67,14 +91,10 @@ export function ArchiveSessionHeader({
     >
       <p>
         {forked ? 'Forked from ' : 'Delegated by '}
-        <button
-          className="font-medium underline"
-          onClick={() => onOpen({ sessionId: parent, messageId: spawn.messageId })}
-          type="button"
-        >
-          {parentTitle || parent}
+        <button className="font-medium underline" onClick={() => onOpen(back)} type="button">
+          {parentTitle || back.sessionId}
         </button>
-        {spawn.messageId ? ' — back to where it was started' : ''}
+        {back.messageId ? ' — back to where it was started' : ''}
       </p>
       {author ? <p>{author}</p> : null}
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
@@ -90,24 +110,28 @@ export function ArchiveSessionHeader({
             <dd>{model}</dd>
           </>
         ) : null}
-        {spawn.subagent ? (
+        {state ? (
           <>
             <dt className="text-muted-foreground">State</dt>
             <dd>
-              <ClioStatus value={spawn.subagent.state} />
+              <ClioStatus value={state} />
             </dd>
           </>
         ) : null}
-        {spawn.subagent?.task ? (
+        {assignment ? (
           <>
-            <dt className="text-muted-foreground">Assignment</dt>
-            <dd className="whitespace-pre-wrap">{spawn.subagent.task}</dd>
+            <dt className="text-muted-foreground">{forked ? 'Fork note' : 'Assignment'}</dt>
+            <dd className="whitespace-pre-wrap">{assignment}</dd>
           </>
         ) : null}
-        {spawn.subagent?.result ? (
+        {result ? (
           <>
             <dt className="text-muted-foreground">Result</dt>
-            <dd className="whitespace-pre-wrap">{spawn.subagent.result}</dd>
+            <dd className="min-w-0">
+              <ContentMarkdown className="max-h-48 overflow-y-auto text-xs leading-5">
+                {result}
+              </ContentMarkdown>
+            </dd>
           </>
         ) : null}
       </dl>
