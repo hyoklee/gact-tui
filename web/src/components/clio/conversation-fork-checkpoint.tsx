@@ -23,8 +23,7 @@ export function ConversationForkCheckpoint({
         <GitBranchIcon className="size-3.5" />
       </CheckpointIcon>
       <span className="min-w-0 text-xs leading-5 text-muted-foreground">
-        <strong className="font-medium text-foreground">Branched here</strong>
-        {' · '}
+        <strong className="font-medium text-foreground">Branched here</strong> from{' '}
         {workspaceId ? (
           <Link
             className="underline decoration-border underline-offset-4 hover:text-primary"
