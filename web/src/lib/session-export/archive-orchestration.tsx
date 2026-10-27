@@ -151,7 +151,7 @@ export function ArchiveSessionHeader({
         {assignment ? (
           <>
             <dt className="text-muted-foreground">{forked ? 'Fork note' : 'Assignment'}</dt>
-            <dd className="whitespace-pre-wrap">{assignment}</dd>
+            <dd className="max-h-48 overflow-y-auto whitespace-pre-wrap">{assignment}</dd>
           </>
         ) : null}
         {result ? (
