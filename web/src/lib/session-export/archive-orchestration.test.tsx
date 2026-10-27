@@ -630,7 +630,7 @@ describe('exported orchestration', () => {
     ).toBeVisible();
   });
 
-  it('draws the study: its views, tree and log, with citations followable to the transcript', async () => {
+  it('draws the study: its tree and log, its views on request, with citations followable to the transcript', async () => {
     const user = userEvent.setup();
     const { snapshot } = await exportArchive();
     const onOpen = vi.fn<(target: ArchiveTarget) => void>();
@@ -638,13 +638,16 @@ describe('exported orchestration', () => {
     const tree = await screen.findByRole('tree', { name: 'Study tree' });
     expect(within(tree).getByText(/What sets the period/u)).toBeVisible();
     // The plugin's view, from both branches' events, drawn by the chart kernel.
+    await user.click(await screen.findByRole('radio', { name: 'Views' }));
     const readings = await screen.findByRole('region', { name: 'Bench readings' });
     expect(within(readings).getByText(/2 items from 2 sessions/u)).toBeVisible();
     await waitFor(
       () => expect(readings.querySelector('[data-slot="a2ui-chart-view"]')).not.toBeNull(),
       { timeout: 10_000 },
     );
-    await user.click(within(tree).getAllByRole('button', { name: /Arm sweep/u })[0]!);
+    await user.click(screen.getByRole('radio', { name: 'List' }));
+    const listTree = await screen.findByRole('tree', { name: 'Study tree' });
+    await user.click(within(listTree).getAllByRole('button', { name: /Arm sweep/u })[0]!);
     const log = await screen.findByRole('region', { name: 'Log of Arm sweep' });
     await user.click(within(log).getByRole('button', { name: /View in transcript/u }));
     expect(onOpen).toHaveBeenCalledWith({
