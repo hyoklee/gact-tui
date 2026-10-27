@@ -1,10 +1,15 @@
-import { flowRunActive, type SubagentRun } from '@clio/core/v3';
+import { flowRunActive, type FlowRun, type SubagentRun } from '@clio/core/v3';
 import { useMutation, useQueries, useQuery } from '@tanstack/react-query';
 import { useRepository } from '@/hooks/use-repository';
 import { agentTaskToSubagent } from '@/lib/session-agent-tasks';
 import { queryKeys } from '@/lib/query-keys';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import type { SubagentOpenTarget } from '@/components/clio/subagent-card';
+import {
+  runAsksQuestions,
+  runQuestions,
+  type FlowQuestion,
+} from '@/components/clio/flow-run-edits';
 
 /** Cadence for re-reading a running flow. Unit: milliseconds. */
 export const FLOW_RUN_POLL_MS = 2_000;
@@ -99,4 +104,46 @@ export function useFlowTaskAnswer(handle: string | undefined, enabled: boolean, 
       return (texts.at(-1) ?? '').trim();
     },
   });
+}
+
+const NO_QUESTIONS: FlowQuestion[] = [];
+
+/**
+ * The approval questions a workflow run asked (a fork's, an added step's) with
+ * the answers, read from the session that started it and its descendants. Read
+ * only for a run that can ask, and again while it runs.
+ */
+export function useFlowQuestions(
+  sessionId: string,
+  run: FlowRun | null | undefined,
+  enabled = true,
+): FlowQuestion[] {
+  const repository = useRepository();
+  const { settings } = useConnectionSettings();
+  const asks = Boolean(run && runAsksQuestions(run));
+  const active = Boolean(run && flowRunActive(run));
+  const questions = useQuery({
+    queryKey: queryKeys.key('flow-questions', settings.endpoint, sessionId),
+    enabled: Boolean(sessionId) && asks && enabled,
+    queryFn: ({ signal }) => repository.flowQuestions(sessionId, signal),
+    refetchInterval: active ? FLOW_RUN_POLL_MS : false,
+  });
+  if (!run || !questions.data) return NO_QUESTIONS;
+  return runQuestions(run, questions.data);
+}
+
+/**
+ * The child session behind a task (a workflow step, a fork), read when
+ * `enabled`; empty until known.
+ */
+export function useTaskChildSession(handle: string | undefined, enabled = true): string {
+  const repository = useRepository();
+  const { settings } = useConnectionSettings();
+  const task = useQuery({
+    queryKey: queryKeys.key('task-child-session', settings.endpoint, handle ?? ''),
+    enabled: Boolean(handle) && enabled,
+    staleTime: Infinity,
+    queryFn: async ({ signal }) => (await repository.agentTask(handle!, signal)).child_session_id,
+  });
+  return task.data ?? '';
 }

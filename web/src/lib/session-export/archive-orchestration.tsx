@@ -15,6 +15,11 @@ import { useScienceLog } from '@/hooks/use-science-log';
 import type { PluginViewSession } from '@/lib/plugin-view-model';
 import type { ArchiveTranscriptView } from './archive-conversation';
 import {
+  archiveFileHref,
+  archiveFolderPath,
+  type ArchiveFileInventory,
+} from './archive-file-reference';
+import {
   archiveSpawn,
   decodedMessages,
   type ArchiveSessionRow,
@@ -112,16 +117,24 @@ export function ArchiveSessionHeader({
 
 /**
  * The study's Science log in the archive: its views, tree and log, with
- * citations followable to the entry and to the transcript turn that wrote it.
+ * citations followable to the entry and to the transcript turn that wrote it;
+ * each Observation's sources and each analysis followable to the cited call's
+ * turn, cited files and node folders linked to the files the export includes.
  */
 export function ArchiveScienceLog({
   sessionId,
   views,
+  inventory,
   onOpen,
+  onOpenFolder,
 }: {
   sessionId: string;
   views: Readonly<Record<string, ArchiveTranscriptView>>;
+  /** The export's included files, to link cited files and node folders to them. */
+  inventory?: ArchiveFileInventory;
   onOpen: (target: ArchiveTarget) => void;
+  /** Show an included folder's files (the export's Files section). */
+  onOpenFolder?: (path: string) => void;
 }) {
   const log = useScienceLog(sessionId);
   if (!log.data?.in_study) return null;
@@ -134,12 +147,31 @@ export function ArchiveScienceLog({
       : undefined;
     onOpen({ sessionId: session, messageId, callId: entry.invocation || undefined });
   };
+  const viewCall = (session: string, callId: string) =>
+    onOpen({
+      sessionId: session,
+      messageId: messageForCall(decodedMessages(views[session]), session, callId),
+      callId,
+    });
   return (
     <ScienceLogView
       onOpenTask={(handle) => {
         const branch = study.branches.find((row) => row.handle === handle);
         if (branch) onOpen({ sessionId: branch.session_id });
       }}
+      fileHref={
+        inventory
+          ? (file) =>
+              (file.artifactId
+                ? archiveFileHref(`artifact://${file.artifactId}`, inventory)
+                : undefined) ?? (file.path ? archiveFileHref(file.path, inventory) : undefined)
+          : undefined
+      }
+      folderAvailable={(path) =>
+        Boolean(inventory && archiveFolderPath(path, inventory) !== undefined)
+      }
+      onOpenFolder={onOpenFolder}
+      onViewCall={viewCall}
       onViewInTranscript={viewInTranscript}
       sessionId={sessionId}
       study={study}

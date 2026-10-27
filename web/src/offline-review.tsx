@@ -13,7 +13,7 @@ import { ArchiveConnectionProvider } from './providers/connection-provider';
 import { RepositoryOverrideProvider } from './providers/repository-override';
 import { ArchiveTransport } from './lib/session-export/archive-transport';
 import { ArchiveFileList } from './lib/session-export/archive-file-list';
-import { archiveFileHref } from './lib/session-export/archive-file-reference';
+import { archiveFileHref, archiveFolderPath } from './lib/session-export/archive-file-reference';
 import { ArchiveEvidence } from './lib/session-export/archive-evidence';
 import {
   type RecordedPart,
@@ -135,6 +135,24 @@ export function Review() {
     if (fallback) fallback.hidden = true;
     document.getElementById('root')!.hidden = false;
   }, []);
+  // A node folder opens the Files section filtered to that folder's included files.
+  const [filesSearch, setFilesSearch] = useState('');
+  const folderAvailable = (path: string) =>
+    data.manifest.mode !== 'transcript' && archiveFolderPath(path, data.manifest) !== undefined;
+  const openFolder = (path: string) => {
+    const folder = archiveFolderPath(path, data.manifest);
+    if (!folder || data.manifest.mode === 'transcript') return;
+    setFilesSearch(folder);
+    setSection('files');
+    history.replaceState(null, '', '#included-files');
+  };
+  // Each exported session's folder in an isolated run, as its record carries it.
+  const nodeFolder = (sessionId: string) => {
+    const value = rows.find((row) => row.session.id === sessionId)?.session.metadata?.[
+      'node_folder'
+    ];
+    return typeof value === 'string' && value ? value : undefined;
+  };
   const sessions = rows.map((row) => ({ id: row.session.id, title: row.session.title }));
   const sections = useArchiveSections(data.transcript.session.id, sessions);
   // Go to a session's section, or to one message (and tool call) in it.
@@ -240,6 +258,9 @@ export function Review() {
                 snapshot={data.snapshot}
                 onOpenArtifact={setOpened}
                 onOpenFile={setOpened}
+                folderAvailable={folderAvailable}
+                nodeFolder={nodeFolder}
+                onOpenFolder={openFolder}
                 onOpenSubagent={(subagent) => {
                   if (subagent.child_session_id && ids.includes(subagent.child_session_id))
                     open({ sessionId: subagent.child_session_id });
@@ -250,7 +271,9 @@ export function Review() {
         </TabsContent>
         <TabsContent value="science">
           <ArchiveScienceLog
+            inventory={data.manifest.mode === 'transcript' ? undefined : data.manifest}
             onOpen={open}
+            onOpenFolder={openFolder}
             sessionId={data.transcript.session.id}
             views={data.transcript_views}
           />
@@ -280,7 +303,11 @@ export function Review() {
             Transcript contains the recorded work. Effects adds touched artifacts and inputs. Full
             also includes the workspace snapshot.
           </p>
-          <ArchiveFileList files={data.manifest.files} />
+          <ArchiveFileList
+            files={data.manifest.files}
+            initialSearch={filesSearch}
+            key={filesSearch}
+          />
         </TabsContent>
         <TabsContent value="evidence">
           <ArchiveEvidence

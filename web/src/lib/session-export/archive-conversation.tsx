@@ -41,6 +41,9 @@ export function ArchiveConversation({
   onOpenArtifact,
   onOpenFile,
   onOpenSubagent,
+  onOpenFolder,
+  folderAvailable,
+  nodeFolder,
 }: {
   sessionId: string;
   metadata?: Record<string, unknown>;
@@ -50,6 +53,11 @@ export function ArchiveConversation({
   onOpenFile: ClioConversationProps['onOpenFile'];
   /** Open a child agent's conversation (its section of the archive). */
   onOpenSubagent?: ClioConversationProps['onOpenSubagent'];
+  /** Show a folder's included files; only folders `folderAvailable` accepts open. */
+  onOpenFolder?: (path: string) => void;
+  folderAvailable?: (path: string) => boolean;
+  /** The folder each exported session worked in, from its recorded metadata. */
+  nodeFolder?: (sessionId: string) => string | undefined;
 }) {
   const markedMessageIds = useMemo(() => messageMarkIds(metadata), [metadata]);
   const [modes, setModes] = useState<Record<string, ConversationDisplayMode>>({});
@@ -101,7 +109,15 @@ export function ArchiveConversation({
   return (
     <A2uiReferenceSessionProvider value={sessionId}>
       <PresentationNavigation.Provider
-        value={{ ...entities, onOpenArtifact, onOpenFile, onOpenSubagent }}
+        value={{
+          ...entities,
+          onOpenArtifact,
+          onOpenFile,
+          onOpenSubagent,
+          onOpenFolder,
+          folderAvailable,
+          nodeFolder,
+        }}
       >
         <section id={sessionId} className="flex min-w-0 flex-col gap-6">
           {entities.messages.map((message, index) => (

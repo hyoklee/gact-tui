@@ -10,13 +10,14 @@ import {
   ArtifactHeader,
   ArtifactTitle,
 } from '@/components/ai-elements/artifact';
-import { useFlowRun, useOpenTaskHandle } from '@/hooks/use-flow-run';
+import { useFlowQuestions, useFlowRun, useOpenTaskHandle } from '@/hooks/use-flow-run';
 import {
   rowDuration,
   useFlowPresentation,
   useSessionAgentRef,
 } from '@/hooks/use-flow-presentation';
-import { FlowApprovalDecisions, FlowScript, FlowStall, FlowVerdictView } from './flow-run-parts';
+import { FlowEdits } from './flow-run-edit-list';
+import { FlowScript, FlowStall, FlowVerdictView } from './flow-run-parts';
 import { flowRunStatus, flowTaskHistoryUnavailable, stepTally } from './flow-run-presentation';
 import { FlowUsageSummary } from './flow-run-usage';
 import { FlowRunDetails, FlowRunFullScreen } from './flow-run-view';
@@ -56,6 +57,7 @@ export function FlowRunCard({
   const [fullScreen, setFullScreen] = useState(false);
   const title = `${flow.label} run`;
   const data = run.data;
+  const questions = useFlowQuestions(sessionId, data, near || fullScreen);
   const status = data ? flowRunStatus(data) : undefined;
   const { steps, members, verdict, closing, runElapsed } = presentation;
   const rows = data?.view || data?.execution?.length ? steps : members;
@@ -132,6 +134,7 @@ export function FlowRunCard({
               fontSize={12}
               onOpenHandle={openHandle}
               presentation={presentation}
+              questions={questions}
               usage={data.usage}
               historyUnavailable={historyUnavailable}
             />
@@ -139,6 +142,7 @@ export function FlowRunCard({
             {data.outcome ? (
               <FlowStall
                 cancelled={data.status === 'cancelled'}
+                details
                 onOpenHandle={openHandle}
                 outcome={data.outcome}
               />
@@ -153,7 +157,7 @@ export function FlowRunCard({
                   : `${data.view.awaiting_approval.length} proposed steps are waiting for your approval.`}
               </p>
             ) : null}
-            <FlowApprovalDecisions run={data} />
+            <FlowEdits onOpenHandle={openHandle} questions={questions} run={data} steps={steps} />
             {closing && data.status === 'completed' ? (
               <FlowVerdictView clamp flow={data.flow} verdict={verdict} />
             ) : null}
@@ -187,6 +191,7 @@ export function FlowRunCard({
               }}
               openError={open.error?.message}
               presentation={presentation}
+              questions={questions}
               run={data}
             />
           </FlowRunFullScreen>

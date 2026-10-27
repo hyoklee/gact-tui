@@ -3,7 +3,7 @@ import { resolveSessionReference, readResolvedReferenceBytes } from './a2ui/refe
 import type { ArtifactTableQueryResult } from './artifact-preview-repository.js';
 import {
   captureSessionOrchestration,
-  type CapturedStudies,
+  type CapturedOrchestration,
 } from './session-export-orchestration.js';
 
 export type SessionExportMode = 'transcript' | 'effects' | 'full';
@@ -71,8 +71,8 @@ export async function captureSessionReview(
   };
   const json = (path: string, body?: unknown) =>
     captured.request({ method: body ? 'POST' : 'GET', path, body, decode: (v) => v });
-  // A study is read by each of its branches; it is stored once.
-  const studies: CapturedStudies = new Map();
+  // A study is read by each of its branches, and a call cited twice: each is stored once.
+  const orchestration: CapturedOrchestration = { studies: new Map(), transforms: new Set() };
   for (const sid of sessionIds) {
     const prefix = `/v1/sessions/${encodeURIComponent(sid)}`;
     // A dashboard captures its authored views and their data, not unrelated chat questions.
@@ -123,7 +123,7 @@ export async function captureSessionReview(
       await captureSessionOrchestration(
         (path) => json(path),
         sid,
-        studies,
+        orchestration,
         (path, message) => snapshot.failures.push({ path, message }),
         (path, sameAs) => {
           snapshot.responses[sessionReviewRequestKey('GET', path)] = {

@@ -16,6 +16,7 @@ import {
   type StudyNode,
 } from './science-log-model';
 import { ScienceLogPanel } from './science-log-panel';
+import type { ScienceFileReference } from './science-log-sources';
 import { PluginViewsSection } from './plugin-views-panel';
 import { StudyTree } from './study-tree';
 import type { SubagentOpenTarget } from './subagent-card';
@@ -53,7 +54,10 @@ export function ScienceLogTab({
     <ScienceLogView
       onOpenFolder={onOpenFolder}
       onOpenTask={(handle) => openTask.mutate({ handle, target: 'canvas' })}
-      onViewInTranscript={(entry) => void viewInTranscript(entry)}
+      onViewCall={(session, callId) => void viewInTranscript(session, callId)}
+      onViewInTranscript={(entry) =>
+        void viewInTranscript(entry.session || entry.branch, entry.invocation)
+      }
       sessionId={sessionId}
       study={log.data}
       views={<PluginViewsSection sessionId={sessionId} />}
@@ -68,6 +72,12 @@ export interface ScienceLogViewProps {
   onOpenTask?: (handle: string) => void;
   onOpenFolder?: (path: string) => void;
   onViewInTranscript?: (entry: ScienceEntry) => void;
+  /** Scroll the transcript to a call an entry cites (a source or an analysis). */
+  onViewCall?: (sessionId: string, callId: string) => void;
+  /** A link to a cited file, when this surface carries it. */
+  fileHref?: (file: ScienceFileReference) => string | undefined;
+  /** Whether a node folder can be opened here; without it every folder opens. */
+  folderAvailable?: (path: string) => boolean;
   /** The study's plugin views, drawn above the tree. */
   views?: ReactNode;
 }
@@ -79,6 +89,9 @@ export function ScienceLogView({
   onOpenTask,
   onOpenFolder,
   onViewInTranscript,
+  onViewCall,
+  fileHref,
+  folderAvailable,
   views,
 }: ScienceLogViewProps) {
   const tree = useMemo(() => studyTree(study), [study]);
@@ -126,6 +139,7 @@ export function ScienceLogView({
     <div className="flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-auto p-3 [&>*]:shrink-0">
       {views}
       <StudyTree
+        folderAvailable={folderAvailable}
         onOpenFolder={onOpenFolder}
         onOpenTask={onOpenTask}
         onSelect={selectNode}
@@ -140,6 +154,8 @@ export function ScienceLogView({
         entries={entries}
         focusedEntry={focusedEntry}
         onSelectEntry={selectEntry}
+        fileHref={fileHref}
+        onViewCall={onViewCall}
         onViewInTranscript={onViewInTranscript}
         titles={titles}
       />
@@ -148,7 +164,8 @@ export function ScienceLogView({
 }
 
 /**
- * Scroll the transcript to the tool call that wrote an entry: in this session
+ * Scroll the transcript to a recorded tool call (the one that wrote an entry, or
+ * one an entry cites): in this session
  * through the transcript's own `#message-…/activity-…` anchor, in another branch
  * by opening that session at the same anchor.
  */
@@ -156,9 +173,7 @@ function useTranscriptJump(sessionId: string, workspaceId: string) {
   const navigate = useNavigate();
   const repository = useRepository();
   return useCallback(
-    async (entry: ScienceEntry) => {
-      const session = entry.session || entry.branch;
-      const callId = entry.invocation;
+    async (session: string, callId: string) => {
       if (!session || !callId) return;
       const loaded = Object.values(useLiveStore.getState().entities.messages);
       let messageId = messageForCall(loaded, session, callId);
@@ -174,7 +189,7 @@ function useTranscriptJump(sessionId: string, workspaceId: string) {
         }
       }
       if (!messageId) {
-        toast.error('The tool call that wrote this entry is not in the transcript.');
+        toast.error('That tool call is not in the transcript.');
         return;
       }
       const hash = `#message-${encodeURIComponent(messageId)}/activity-${encodeURIComponent(callId)}`;

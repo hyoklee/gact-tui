@@ -22,3 +22,20 @@ export function useScienceLog(sessionId: string, enabled = true) {
     retry: false,
   });
 }
+
+/**
+ * The record of one tool call a study cites: the script it ran, its input and
+ * output files with their hashes, and its environment. Read when `enabled`;
+ * a settled call's record does not change.
+ */
+export function useTransformRecord(callId: string, enabled = true) {
+  const repository = useRepository();
+  const { settings } = useConnectionSettings();
+  return useQuery({
+    queryKey: queryKeys.key('transform-record', settings.endpoint, callId),
+    enabled: Boolean(callId) && enabled,
+    queryFn: ({ signal }) => repository.transformRecord(callId, signal),
+    staleTime: Infinity,
+    retry: false,
+  });
+}

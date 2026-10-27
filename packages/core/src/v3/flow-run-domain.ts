@@ -208,3 +208,12 @@ export type FlowRunUsage = NonNullable<FlowRun['usage']>;
 export function flowRunActive(run: Pick<FlowRun, 'status'>): boolean {
   return run.status === 'running';
 }
+
+/**
+ * The questions a flow run asks are owned by its step sessions and attended by
+ * the session that started it: read them with its descendants, answered ones
+ * included. The live view and the exporter read this same path.
+ */
+export function flowQuestionsPath(sessionId: string): string {
+  return `/v1/sessions/${encodeURIComponent(sessionId)}/interactions?include_children=true&include_recent_resolved=true&resolved_limit=100`;
+}

@@ -1,6 +1,7 @@
-import { FolderIcon, ListTreeIcon } from 'lucide-react';
+import { ListTreeIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { NodeFolder } from './node-folder';
 import type { ScienceState, StudyNode } from './science-log-model';
 
 /** A state chip: the state in text, tinted with the matching science-state token. */
@@ -70,6 +71,8 @@ export interface StudyTreeProps {
   onOpenTask?: (handle: string) => void;
   /** Open a branch's node folder in the Files view. */
   onOpenFolder?: (path: string) => void;
+  /** Whether a folder can be opened here; without it every folder opens. */
+  folderAvailable?: (path: string) => boolean;
 }
 
 /**
@@ -94,6 +97,7 @@ function StudyTreeNode({
   onSelectEntry,
   onOpenTask,
   onOpenFolder,
+  folderAvailable,
 }: StudyTreeProps & { node: StudyNode; level: number }) {
   const selected =
     node.kind !== 'hypothesis' && node.kind !== 'reframe' && node.branch === selectedBranch;
@@ -145,20 +149,17 @@ function StudyTreeNode({
             <ListTreeIcon aria-hidden="true" /> Task
           </Button>
         ) : null}
-        {node.folder && onOpenFolder ? (
-          <Button
-            aria-label={`Open the folder of ${node.title}`}
-            className="h-5 px-1.5 text-[11px]"
-            onClick={() => onOpenFolder(node.folder!)}
-            size="xs"
-            title={node.folder}
-            type="button"
-            variant="ghost"
-          >
-            <FolderIcon aria-hidden="true" /> Folder
-          </Button>
-        ) : null}
       </div>
+      {node.folder ? (
+        <NodeFolder
+          className="pl-3"
+          name={node.title}
+          onOpen={
+            onOpenFolder && (folderAvailable?.(node.folder) ?? true) ? onOpenFolder : undefined
+          }
+          path={node.folder}
+        />
+      ) : null}
       {node.derivedFrom.length ? (
         <p className="flex min-w-0 flex-wrap items-center gap-1 pl-3 text-[11px] text-muted-foreground">
           <span aria-hidden="true">↳</span> Derived from
@@ -181,6 +182,7 @@ function StudyTreeNode({
               key={child.key}
               level={level + 1}
               node={child}
+              folderAvailable={folderAvailable}
               onOpenFolder={onOpenFolder}
               onOpenTask={onOpenTask}
               onSelect={onSelect}

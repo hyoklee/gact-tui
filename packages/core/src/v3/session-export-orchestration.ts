@@ -1,12 +1,16 @@
 import { TransportError, cursorPageQuery } from './transport.js';
+import { flowQuestionsPath } from './flow-run-domain.js';
+import { studyCitedCalls, transformRecordPath } from './transform-record.js';
 
 /**
  * What an export records of how a session ran, beside its transcript: the
  * session record, its task rows (the Work view's direct children, flows among
  * them), the Work ledger, every flow run's checkpoint view with the task record
- * of each call (so a step opens its answer and conversation), and the study
- * the session belongs to. Each read uses the exact path the live views use, so
- * the offline viewer replays them through the same components.
+ * of each call (so a step opens its answer and conversation), the questions
+ * its flows asked with their answers, and the study the session belongs to
+ * with the record of every call the study cites. Each read uses the exact path
+ * the live views use, so the offline viewer replays them through the same
+ * components.
  */
 
 /** One captured GET, returning the decoded JSON or throwing the transport's error. */
@@ -14,6 +18,13 @@ export type OrchestrationRead = (path: string) => Promise<unknown>;
 
 /** A study already captured under one session, by every branch it covers. */
 export type CapturedStudies = Map<string, string>;
+
+/** What an export has already captured across its sessions, so each read is stored once. */
+export interface CapturedOrchestration {
+  studies: CapturedStudies;
+  /** The `call_id`s whose transform record is captured. */
+  transforms: Set<string>;
+}
 
 const MAX_FLOW_DEPTH = 8;
 
@@ -44,7 +55,7 @@ export function sessionTaskRowsPath(sessionId: string, cursor?: string): string 
 export async function captureSessionOrchestration(
   read: OrchestrationRead,
   sessionId: string,
-  studies: CapturedStudies,
+  captured: CapturedOrchestration,
   fail: (path: string, message: string) => void,
   alias: (path: string, sameAs: string) => void,
 ): Promise<void> {
@@ -61,6 +72,7 @@ export async function captureSessionOrchestration(
   await attempt(prefix);
   await attempt(`${prefix}/work?cursor=0`);
 
+  const { studies, transforms } = captured;
   const covered = studies.get(sessionId);
   if (covered) alias(`${prefix}/science-log`, covered);
   else {
@@ -69,6 +81,13 @@ export async function captureSessionOrchestration(
       for (const branch of study.branches) {
         const id = text(record(branch)?.session_id);
         if (id && id !== sessionId && !studies.has(id)) studies.set(id, `${prefix}/science-log`);
+      }
+    // Every call the study cites: what it ran, where, and the files it read and wrote.
+    if (study?.in_study === true && Array.isArray(study.entries))
+      for (const call of studyCitedCalls(study.entries)) {
+        if (transforms.has(call)) continue;
+        transforms.add(call);
+        await attempt(transformRecordPath(call));
       }
   }
 
@@ -117,4 +136,6 @@ export async function captureSessionOrchestration(
     for (const child of nested) await captureFlow(child, depth + 1);
   };
   for (const handle of flows) await captureFlow(handle, 0);
+  // The questions the runs asked (approvals of forks and added steps), with the answers.
+  if (flows.length) await attempt(flowQuestionsPath(sessionId));
 }

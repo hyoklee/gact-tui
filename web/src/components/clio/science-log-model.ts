@@ -156,8 +156,13 @@ export function measurements(entry: ScienceEntry): Measurement[] {
 export interface LineageRow {
   callId: string;
   tool: string;
+  /** The call's arguments as recorded, without the runtime's own bookkeeping keys. */
+  args: Record<string, unknown>;
+  startedAt: string;
   completedAt: string;
+  /** SHA-256 of the call's result, as recorded. */
   digest: string;
+  /** The session that made the call (the cited call's branch or a delegate). */
   session: string;
 }
 
@@ -167,13 +172,52 @@ export function lineage(entry: ScienceEntry): LineageRow[] {
   return rows.flatMap((raw) => {
     if (!raw || typeof raw !== 'object') return [];
     const row = raw as Record<string, unknown>;
+    const args =
+      row['args'] && typeof row['args'] === 'object' && !Array.isArray(row['args'])
+        ? Object.fromEntries(
+            Object.entries(row['args'] as Record<string, unknown>).filter(
+              ([key]) => !key.startsWith('_clio_'),
+            ),
+          )
+        : {};
     return [
       {
         callId: display(row['call_id']),
         tool: display(row['tool']),
-        completedAt: display(row['completed_at'] || row['started_at']),
-        digest: display(row['result_sha256']).slice(0, 12),
-        session: display(row['session']),
+        args,
+        startedAt: display(row['started_at']),
+        completedAt: display(row['completed_at']),
+        digest: display(row['result_sha256']),
+        session: display(row['session']) || entry.session || entry.branch,
+      },
+    ];
+  });
+}
+
+/** One file an observation's cited calls read or wrote, or the script one ran. */
+export interface SourceFile {
+  callId: string;
+  direction: 'used' | 'generated' | 'script';
+  artifactId: string;
+  path: string;
+  sha256: string;
+}
+
+/** The files an observation's cited calls read and wrote, from its `fields.artifacts`. */
+export function sourceFiles(entry: ScienceEntry): SourceFile[] {
+  const rows = Array.isArray(entry.fields['artifacts']) ? entry.fields['artifacts'] : [];
+  return rows.flatMap((raw) => {
+    if (!raw || typeof raw !== 'object') return [];
+    const row = raw as Record<string, unknown>;
+    const direction = display(row['direction']);
+    if (direction !== 'used' && direction !== 'generated' && direction !== 'script') return [];
+    return [
+      {
+        callId: display(row['call_id']),
+        direction,
+        artifactId: display(row['artifact_id']),
+        path: display(row['path'] || row['name'] || row['external_ref'] || row['cmd']),
+        sha256: display(row['sha256']),
       },
     ];
   });

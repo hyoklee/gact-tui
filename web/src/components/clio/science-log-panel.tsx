@@ -8,12 +8,17 @@ import {
   entryReference,
   entryState,
   entrySummary,
-  lineage,
   measurements,
   outgoing,
   scienceEntryDomId,
   type EntryEdge,
 } from './science-log-model';
+import {
+  AnalysisCall,
+  ObservationSources,
+  type ScienceCallLinks,
+  type ScienceFileReference,
+} from './science-log-sources';
 import { ScienceStateChip } from './study-tree';
 
 export interface ScienceLogPanelProps {
@@ -30,6 +35,10 @@ export interface ScienceLogPanelProps {
   onSelectEntry: (entryId: string) => void;
   /** Scroll the transcript to the tool call that wrote the entry. */
   onViewInTranscript?: (entry: ScienceEntry) => void;
+  /** Scroll the transcript to a call an entry cites (a source or an analysis). */
+  onViewCall?: (sessionId: string, callId: string) => void;
+  /** A link to a cited file, when this surface carries it. */
+  fileHref?: (file: ScienceFileReference) => string | undefined;
 }
 
 /** One branch's log: its entries in order, each with its key field, status and links both ways. */
@@ -42,7 +51,10 @@ export function ScienceLogPanel({
   focusedEntry,
   onSelectEntry,
   onViewInTranscript,
+  onViewCall,
+  fileHref,
 }: ScienceLogPanelProps) {
+  const links: ScienceCallLinks = { onViewCall, fileHref, titles };
   return (
     <section aria-label={`Log of ${branchTitle}`} className="grid min-w-0 gap-2">
       <h3 className="text-xs font-medium text-muted-foreground">
@@ -57,6 +69,7 @@ export function ScienceLogPanel({
               byId={byId}
               entry={entry}
               focused={entry.id === focusedEntry}
+              callLinks={links}
               key={entry.id}
               onSelectEntry={onSelectEntry}
               onViewInTranscript={onViewInTranscript}
@@ -77,11 +90,13 @@ function ScienceEntryCard({
   byId,
   titles,
   backlinks,
+  callLinks,
   onSelectEntry,
   onViewInTranscript,
 }: {
   entry: ScienceEntry;
   focused: boolean;
+  callLinks: ScienceCallLinks;
   byId: ReadonlyMap<string, ScienceEntry>;
   titles: ReadonlyMap<string, string>;
   backlinks: readonly EntryEdge[];
@@ -141,7 +156,7 @@ function ScienceEntryCard({
           </Button>
         ) : null}
       </div>
-      <EntryBody entry={entry} reference={reference} />
+      <EntryBody entry={entry} links={callLinks} reference={reference} />
       {entry.status_reason ? (
         <p className="text-muted-foreground">Status reason: {entry.status_reason}</p>
       ) : null}
@@ -154,7 +169,7 @@ function ScienceEntryCard({
           rows={backlinks.map((edge) => [edge.relation, reference(edge.from)])}
         />
       ) : null}
-      {entry.type === 'observation' ? <Sources entry={entry} /> : null}
+      {entry.type === 'observation' ? <ObservationSources entry={entry} links={callLinks} /> : null}
     </li>
   );
 }
@@ -193,9 +208,11 @@ function Fact({ label, value }: { label: string; value: string }) {
 /** The entry's key field by type: the statement, claim, method, measurements, interpretation or claims. */
 function EntryBody({
   entry,
+  links,
   reference,
 }: {
   entry: ScienceEntry;
+  links: ScienceCallLinks;
   reference: (id: string) => ReactNode;
 }) {
   switch (entry.type) {
@@ -236,10 +253,17 @@ function EntryBody({
           <p className="min-w-0 [overflow-wrap:anywhere]">{field(entry, 'interpretation')}</p>
           <Fact label="Strength" value={field(entry, 'strength')} />
           <Fact label="Seed" value={field(entry, 'seed')} />
+          {field(entry, 'analysis_call') ? (
+            <AnalysisCall
+              links={links}
+              reference={field(entry, 'analysis_call')}
+              session={entry.session || entry.branch}
+            />
+          ) : null}
         </>
       );
     case 'conclusion':
-      return <ConclusionBody entry={entry} reference={reference} />;
+      return <ConclusionBody entry={entry} links={links} reference={reference} />;
     default:
       return entrySummary(entry) ? (
         <p className="min-w-0 [overflow-wrap:anywhere]">{entrySummary(entry)}</p>
@@ -249,9 +273,11 @@ function EntryBody({
 
 function ConclusionBody({
   entry,
+  links,
   reference,
 }: {
   entry: ScienceEntry;
+  links: ScienceCallLinks;
   reference: (id: string) => ReactNode;
 }) {
   const claims = Array.isArray(entry.fields['claims']) ? entry.fields['claims'] : [];
@@ -275,6 +301,13 @@ function ConclusionBody({
                     </span>
                   ))}
                 </p>
+              ) : null}
+              {typeof claim['analysis_call'] === 'string' && claim['analysis_call'] ? (
+                <AnalysisCall
+                  links={links}
+                  reference={claim['analysis_call']}
+                  session={entry.session || entry.branch}
+                />
               ) : null}
             </li>
           );
@@ -327,36 +360,6 @@ function MeasurementTable({ entry }: { entry: ScienceEntry }) {
         </tbody>
       </table>
     </div>
-  );
-}
-
-/** An observation's sources (its recorded calls), collapsed by default. */
-function Sources({ entry }: { entry: ScienceEntry }) {
-  const rows = lineage(entry);
-  if (!rows.length) return null;
-  return (
-    <details className="min-w-0 text-[11px]">
-      <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-        Sources ({rows.length})
-      </summary>
-      <ul className="mt-1 grid min-w-0 gap-0.5">
-        {rows.map((row, index) => (
-          <li className="flex min-w-0 flex-wrap gap-x-2" key={`${row.callId}:${index}`}>
-            <span className="font-medium">{row.tool || 'tool call'}</span>
-            {row.completedAt ? (
-              <time className="text-muted-foreground" dateTime={row.completedAt}>
-                {formatTime(row.completedAt)}
-              </time>
-            ) : null}
-            {row.digest ? (
-              <span className="font-mono text-muted-foreground" title="Result digest (SHA-256)">
-                {row.digest}
-              </span>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-    </details>
   );
 }
 

@@ -4,7 +4,7 @@ import { useCallback, useState, type ReactNode } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { useFlowRun, useOpenTaskHandle } from '@/hooks/use-flow-run';
+import { useFlowQuestions, useFlowRun, useOpenTaskHandle } from '@/hooks/use-flow-run';
 import {
   rowDuration,
   useFlowPresentation,
@@ -14,8 +14,9 @@ import {
 } from '@/hooks/use-flow-presentation';
 import { cn } from '@/lib/utils';
 import { ContentMarkdown } from './content-markdown';
+import type { FlowQuestion } from './flow-run-edits';
+import { FlowEdits } from './flow-run-edit-list';
 import {
-  FlowApprovalDecisions,
   FlowApprovals,
   FlowScript,
   FlowStall,
@@ -58,6 +59,7 @@ export function FlowRunView({
   const agentRef = useSessionAgentRef(sessionId);
   const presentation = useFlowPresentation(run.data, agentRef, args, sessionId);
   const [fullScreen, setFullScreen] = useState(false);
+  const questions = useFlowQuestions(sessionId, run.data);
   if (run.isPending) {
     return (
       <p className="p-4 text-sm text-muted-foreground" role="status">
@@ -94,6 +96,7 @@ export function FlowRunView({
       }}
       openError={open.error?.message}
       presentation={presentation}
+      questions={questions}
       run={data}
     />
   );
@@ -159,8 +162,11 @@ export function FlowRunDetails({
   onOpenHandle,
   onFullScreen,
   openError,
+  questions = [],
 }: {
   run: FlowRun;
+  /** The approval questions the run asked, with the answers. */
+  questions?: readonly FlowQuestion[];
   handle: string;
   label?: string;
   args?: Record<string, unknown>;
@@ -235,6 +241,7 @@ export function FlowRunDetails({
       fontSize={wide ? 14 : 12}
       onOpenHandle={onOpenHandle}
       presentation={presentation}
+      questions={questions}
       scale={wide ? 1.5 : 1}
       usage={run.usage}
       historyUnavailable={historyUnavailable}
@@ -296,7 +303,13 @@ export function FlowRunDetails({
           view={workflow}
         />
       ) : null}
-      <FlowApprovalDecisions run={run} />
+      <FlowEdits
+        onOpenHandle={onOpenHandle}
+        questions={questions}
+        run={run}
+        showAwaiting={false}
+        steps={steps}
+      />
       {/* Full screen gives the diagram the whole width, to follow (or record) the run. */}
       {track}
       {after}

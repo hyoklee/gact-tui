@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { FlowPresentation } from '@/hooks/use-flow-presentation';
 import { FlowDiagram } from './flow-diagram';
+import type { FlowQuestion } from './flow-run-edits';
 import type { FlowPick } from './flow-railroad';
 import { FlowLegend, FlowPickDetails } from './flow-run-parts';
 
@@ -21,8 +22,11 @@ export function FlowTrack({
   className,
   usage,
   historyUnavailable,
+  questions,
   active = true,
 }: {
+  /** The approval questions the run asked, shown on the step each is about. */
+  questions?: readonly FlowQuestion[];
   flow: string;
   presentation: FlowPresentation;
   /** The run's usage, for the model each selected call's child runs on. */
@@ -108,6 +112,7 @@ export function FlowTrack({
           onClose={() => setSelected(undefined)}
           onOpenHandle={onOpenHandle}
           pick={pick}
+          questions={questions}
           usage={usage}
         />
       ) : null}
