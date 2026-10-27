@@ -32,11 +32,25 @@ export interface ArchiveTranscripts {
 
 const MESSAGES_PATH = /^\/v1\/sessions\/([^/?]+)\/messages$/u;
 
+/** The text of a page's inert data block (a dashboard export's file bytes, base64). */
+export type ArchiveBlockReader = (id: string) => string | null | undefined;
+
+const pageBlock: ArchiveBlockReader = (id) =>
+  typeof document === 'undefined' ? undefined : document.getElementById(id)?.textContent;
+
+function decodeBase64(text: string): Uint8Array {
+  return Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+}
+
 /** Read captured responses and query captured tables; never contacts a live service. */
 export class ArchiveTransport implements ClioTransport {
+  /** Each embedded file is decoded once, on its first read. */
+  private readonly embedded = new Map<string, Uint8Array>();
+
   public constructor(
     private readonly snapshot: SessionReviewSnapshot,
     private readonly transcripts: ArchiveTranscripts = {},
+    private readonly block: ArchiveBlockReader = pageBlock,
   ) {}
   public async request<T>(request: TransportRequest<T>): Promise<T> {
     const match = request.path.match(/^\/v1\/artifacts\/([^/]+)\/table-query$/u);
@@ -89,12 +103,30 @@ export class ArchiveTransport implements ClioTransport {
         response.error.details,
       );
     let value =
-      response.bytes === undefined
-        ? response.json
-        : Uint8Array.from(atob(response.bytes), (c) => c.charCodeAt(0));
+      response.embedded !== undefined
+        ? this.embeddedBytes(response.embedded)
+        : response.bytes === undefined
+          ? response.json
+          : decodeBase64(response.bytes);
     if (request.responseType === 'text' && value instanceof Uint8Array)
       value = new TextDecoder().decode(value);
     return request.decode(value);
+  }
+
+  /** A file the page carries as an inert base64 block (a dashboard export, #1823). */
+  private embeddedBytes(id: string): Uint8Array {
+    const cached = this.embedded.get(id);
+    if (cached) return cached;
+    const text = this.block(id);
+    if (!text)
+      throw new TransportError(
+        'This file was not included in the exported page.',
+        404,
+        'archive_content_unavailable',
+      );
+    const bytes = decodeBase64(text);
+    this.embedded.set(id, bytes);
+    return bytes;
   }
 
   /** A session's messages, answered from the transcript the archive carries. */

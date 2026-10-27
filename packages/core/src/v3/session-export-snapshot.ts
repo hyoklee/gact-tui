@@ -13,6 +13,13 @@ export interface SessionReviewSnapshot {
     {
       json?: unknown;
       bytes?: string;
+      /**
+       * A dashboard export names the artifact instead of carrying its bytes; the
+       * server copies them into the page as the inert block named by `embedded`.
+       */
+      artifact?: string;
+      /** The id of the page's inert data block that holds this read's base64 bytes. */
+      embedded?: string;
       error?: { message: string; status?: number; code?: string; details?: unknown };
       /** This read answers exactly as the captured read under that key (stored once). */
       same_as?: string;
@@ -159,6 +166,15 @@ export async function captureSessionReview(
           !/csv|parquet/iu.test(resolved.media_type ?? '') &&
           !/\.(csv|parquet)$/iu.test(resolved.name)
         ) {
+          // A dashboard export names each file; the server streams its bytes into the
+          // page (#1823), so no file is read whole into this snapshot or the request.
+          if (selectedSurfaces && resolved.kind === 'artifact' && resolved.artifact_id) {
+            const reference = { artifact: resolved.artifact_id };
+            const direct = `/v1/artifacts/${encodeURIComponent(resolved.artifact_id)}/bytes`;
+            for (const path of new Set([direct, resolved.fetch_path]))
+              snapshot.responses[sessionReviewRequestKey('GET', path)] = reference;
+            continue;
+          }
           await readResolvedReferenceBytes(captured, resolved);
           continue;
         }
