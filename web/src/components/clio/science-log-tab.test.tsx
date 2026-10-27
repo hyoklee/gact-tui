@@ -157,13 +157,14 @@ function wrapper({ children }: PropsWithChildren) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-function renderWorkbench(inStudy: boolean | undefined) {
+function renderWorkbench(inStudy: boolean | undefined, pluginViews?: boolean) {
   return render(
     <ClioWorkbench
       artifacts={[]}
       diffs={[]}
       files={[]}
       inStudy={inStudy}
+      pluginViews={pluginViews}
       onOpenSubagent={vi.fn()}
       onUndoDiff={vi.fn()}
       sessionId="sess_root"
@@ -189,6 +190,27 @@ describe('Science log tab', () => {
       'aria-selected',
       'true',
     );
+  });
+
+  it('offers Views beside the others only when the tree outside a study recorded views', async () => {
+    const { unmount } = renderWorkbench(false, false);
+    expect(screen.queryByRole('tab', { name: 'Views' })).not.toBeInTheDocument();
+    unmount();
+    window.localStorage.clear();
+
+    renderWorkbench(false, true);
+    expect(await screen.findByRole('tab', { name: 'Views' })).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Observability' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it('draws the study views above the tree', () => {
+    render(<ScienceLogView sessionId="sess_root" study={study} views={<p>Live boards</p>} />);
+    const views = screen.getByText('Live boards');
+    const tree = screen.getByRole('tree', { name: 'Study tree' });
+    expect(views.compareDocumentPosition(tree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('draws the study tree with each node state in text, forks labelled', async () => {

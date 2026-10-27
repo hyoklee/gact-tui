@@ -20,24 +20,43 @@ export function useScienceLogTab(
   setTabs: Dispatch<SetStateAction<WorkbenchTab[]>>,
   activeTabId: string,
 ): { tabs: WorkbenchTab[]; activeTabId: string } {
+  return useOfferedTab(scienceLogTab, inStudy, sessionId, tabs, setTabs, activeTabId);
+}
+
+/**
+ * A tab that exists only while `available` says so: `true` adds it once per
+ * session (without taking focus), `false` removes it, and unknown hides a
+ * restored copy without discarding it.
+ */
+export function useOfferedTab(
+  tab: WorkbenchTab,
+  available: boolean | undefined,
+  sessionId: string,
+  tabs: readonly WorkbenchTab[],
+  setTabs: Dispatch<SetStateAction<WorkbenchTab[]>>,
+  activeTabId: string,
+): { tabs: WorkbenchTab[]; activeTabId: string } {
   const offered = useRef(new Set<string>());
+  const { kind } = tab;
   useEffect(() => {
-    if (inStudy === true && sessionId && !offered.current.has(sessionId)) {
+    if (available === true && sessionId && !offered.current.has(sessionId)) {
       offered.current.add(sessionId);
       setTabs((current) =>
-        current.some((tab) => tab.kind === 'science-log') ? current : [...current, scienceLogTab],
+        current.some((row) => row.kind === kind) ? current : [...current, tab],
       );
-    } else if (inStudy === false) {
+    } else if (available === false) {
       setTabs((current) =>
-        current.some((tab) => tab.kind === 'science-log')
-          ? current.filter((tab) => tab.kind !== 'science-log')
+        current.some((row) => row.kind === kind)
+          ? current.filter((row) => row.kind !== kind)
           : current,
       );
     }
-  }, [inStudy, sessionId, setTabs]);
-  const shown = inStudy === true ? [...tabs] : tabs.filter((tab) => tab.kind !== 'science-log');
+    // The tab constant is stable per kind.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [available, kind, sessionId, setTabs]);
+  const shown = available === true ? [...tabs] : tabs.filter((row) => row.kind !== kind);
   return {
     tabs: shown,
-    activeTabId: shown.some((tab) => tab.id === activeTabId) ? activeTabId : (shown[0]?.id ?? ''),
+    activeTabId: shown.some((row) => row.id === activeTabId) ? activeTabId : (shown[0]?.id ?? ''),
   };
 }

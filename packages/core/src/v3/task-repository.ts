@@ -3,6 +3,7 @@ import { flowRunSchema, type FlowRun } from './flow-run-domain.js';
 import { MemoryRepository } from './memory-repository.js';
 import { TransportError } from './transport.js';
 import { readScienceLog, type ScienceLog } from './science-log.js';
+import { readPluginViewEvents, type PluginViewEvent } from './plugin-view.js';
 
 const coreReferenceSchema = z.object({
   session_id: z.string(),
@@ -98,6 +99,11 @@ export class TaskRepository extends MemoryRepository {
   /** The study a session belongs to (its branches and entries), or `in_study: false`. */
   public scienceLog(sessionId: string, signal?: AbortSignal): Promise<ScienceLog> {
     return readScienceLog(this.transport, sessionId, signal);
+  }
+
+  /** The plugin view events one session's tool results recorded, oldest first. */
+  public pluginViewEvents(sessionId: string, signal?: AbortSignal): Promise<PluginViewEvent[]> {
+    return readPluginViewEvents(this.transport, sessionId, signal);
   }
 
   /** One paginated Core snapshot of the authenticated human's work across sessions. */

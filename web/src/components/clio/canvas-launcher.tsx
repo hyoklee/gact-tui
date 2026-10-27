@@ -3,6 +3,7 @@ import {
   ActivityIcon,
   BotIcon,
   BoxIcon,
+  ChartColumnIcon,
   FlaskConicalIcon,
   FolderIcon,
   PaperclipIcon,
@@ -30,7 +31,8 @@ export type CanvasResourceKind =
   | 'resources'
   | 'artifacts'
   | 'agent'
-  | 'science-log';
+  | 'science-log'
+  | 'plugin-views';
 
 /** Opens one peer canvas tab instead of nesting unrelated resource types. */
 export function CanvasLauncher({
@@ -40,6 +42,7 @@ export function CanvasLauncher({
   subagents = [],
   finishedWorkHidden = false,
   scienceLog = false,
+  views = false,
 }: {
   onOpen: (kind: CanvasResourceKind) => void;
   /** Opens one child agent of this session as a canvas tab beside the conversation. */
@@ -50,6 +53,8 @@ export function CanvasLauncher({
   finishedWorkHidden?: boolean;
   /** The session belongs to a study, so its Science log can open. */
   scienceLog?: boolean;
+  /** The session's tree recorded plugin views outside a study, so its Views can open. */
+  views?: boolean;
 }) {
   const openableSubagents = subagents.filter((subagent) => subagent.child_session_id);
   return (
@@ -76,6 +81,11 @@ export function CanvasLauncher({
         {scienceLog ? (
           <DropdownMenuItem onSelect={() => onOpen('science-log')}>
             <FlaskConicalIcon aria-hidden="true" /> Science log
+          </DropdownMenuItem>
+        ) : null}
+        {views ? (
+          <DropdownMenuItem onSelect={() => onOpen('plugin-views')}>
+            <ChartColumnIcon aria-hidden="true" /> Views
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuSeparator />
