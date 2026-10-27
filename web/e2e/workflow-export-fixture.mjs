@@ -173,8 +173,6 @@ const responses = {
 
 /** The export page's HTML, as a reader opens it from disk. */
 export function workflowExportHtml(webRoot) {
-  const javascript = readFileSync(resolve(webRoot, 'dist/offline-review.js'), 'utf8');
-  const stylesheet = readFileSync(resolve(webRoot, 'dist/offline-review.css'), 'utf8');
   const transcript = {
     ...row('sess_root', 'Workflow review'),
     exported_at: at(9),
@@ -191,6 +189,16 @@ export function workflowExportHtml(webRoot) {
     snapshot: { responses, sessions: {}, tables: {}, failures: [] },
     embedded_tool_outputs: {},
   };
+  return archiveExportHtml(webRoot, data, 'Workflow review');
+}
+
+/**
+ * An export page as the service assembles one: the production offline renderer
+ * with `data` gzip-packed into the page, under the export's Content-Security-Policy.
+ */
+export function archiveExportHtml(webRoot, data, title) {
+  const javascript = readFileSync(resolve(webRoot, 'dist/offline-review.js'), 'utf8');
+  const stylesheet = readFileSync(resolve(webRoot, 'dist/offline-review.css'), 'utf8');
   const packed = gzipSync(Buffer.from(JSON.stringify(data))).toString('base64');
   const scripts = [
     `window.CLIO_EXPORT_DATA=${JSON.stringify(packed)};`,
@@ -206,7 +214,7 @@ export function workflowExportHtml(webRoot) {
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     `<meta http-equiv="Content-Security-Policy" content="${policy}">` +
-    `<title>Workflow review · archive</title><style>${stylesheet}</style></head><body>` +
+    `<title>${title} · archive</title><style>${stylesheet}</style></head><body>` +
     '<div id="archive-status" role="status"></div>' +
     '<div id="archive-document"><p>Saved document.</p></div><div id="root" hidden></div>' +
     scripts.map((script) => `<script>${script}</script>`).join('') +
