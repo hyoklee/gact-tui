@@ -4,6 +4,87 @@ The transcript should explain what the agent did, what it learned or changed,
 and what is happening now. Technical details preserve maximum observability
 without forcing the reader to decode JSON to understand the work.
 
+## Adding or changing a tool
+
+Human presentation is part of a tool's contract. Before coding, write a concrete
+example of its collapsed row and expanded request/result. Establish what the
+reader needs to know, then use the existing shared readers to show it.
+
+| Operation      | Compact row                                                                | Content on expansion                                                               |
+| -------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Delegate       | `Delegate to [Independent audit]` and status mark                          | Named assignment, recorded agent/model, actual assignment text.                    |
+| Wait           | `Wait for [Build package] and [Independent audit] (1 returned, 1 running)` | Named result tabs containing the actual returned reports; no pending panel.        |
+| Search         | `Search tasks for “calibration” (2 matches)` with useful scope/filter      | Linked matching tasks and relevant excerpts.                                       |
+| Send a message | `Send message to [Independent audit]`                                      | Actual sent message.                                                               |
+| Change memory  | `Correct [Color preferences]` and status mark                              | Actual change, such as `Favourite color: ~~red~~ → blue`, and `Scope: [Personal]`. |
+| Edit a file    | `Edit [agenda.md]` and status mark                                         | Truthful bounded diff, with access to the complete retained change.                |
+
+These are content examples, not six new component designs. Do not put every
+argument in a new Input box or repeat the row under an Output heading. A simple
+acknowledgement or wait with no returned content has no disclosure. Technical
+details remain independently reachable. In a mixed wait, only returned content
+or collection errors get tabs; do not explain again that pending tasks continue.
+
+### Implementation path
+
+1. For a supported first-party tool, add or update its declaration in
+   `web/src/components/clio/tool-operation-contract.ts`. Choose the existing
+   family and consequential subject/query/instruction fields. Use short actions
+   with meaningful objects: `Search tasks`, not bare `Inspect`. Do not introduce
+   compatibility aliases or hardcode an inventory count as a product limit.
+2. Keep result semantics at their existing owner: producer-authored
+   `ToolPresentation` blocks, the owning adapter, or the operation projection in
+   `tool-operation.ts`/`tool-operation-data.ts`. Reuse `ToolOperationResult`,
+   `ToolOperationSearch`, `ToolOperationValue` and `ToolResultPresentation`.
+   Extend a shared reader when needed; do not add a per-tool card, file viewer
+   or parallel raw-result parser. Unknown MCP tools retain the standard fallback.
+3. Use exact task/session/file/resource identities and the existing
+   `PresentationLink` navigation. Display names should be the links themselves.
+   Preserve captured requests and results; never fetch today's state as a
+   substitute for missing historical content. Keep routine IDs, cursors,
+   scheduler policy and transport options in Technical details.
+4. Preserve outcome distinctions. Submission accepted, execution returned and
+   work accepted by review are different events. A failed fetch cannot acquire
+   a success tick merely because its transport returned. An interruption has
+   its own recorded cause. Never infer third-party failure from an arbitrary
+   `status` field. Keep ordinary tool marks quiet; task-kind colors belong to
+   the Work/task surfaces.
+5. Bound long content using the existing preview, paging and full-content
+   mechanisms. Use readable column widths and font sizes. Mount only the
+   selected result tab, paginate large collections, defer nested data and cancel
+   reads on close. A closed tool must not load every child's transcript or other
+   sessions. Readable expansion must not open Technical details or duplicate a
+   flow card already owned by the conversation.
+
+### Required input/output showcase
+
+Add representative inputs and matching recorded result shapes in the existing
+test/review fixtures. Use enough data to exercise real layout: long assignments,
+wrapped names, multi-page results, multiple returned reports, nested values or a
+large diff as appropriate. Include a small success and the applicable running,
+empty, partial, refused, failed and interrupted cases. Keep all synthetic values
+in tests or fixtures, never production implementations.
+
+Assert the actual readable input and result, the correct named navigation,
+truthful status and access to complete retained content. Test null, false, zero
+and empty text when those are valid results. Do not stop at "tool registered",
+"panel mounted" or "call completed". Preserve the exact technical evidence.
+
+Use `tool-operation.test.ts` for semantic projection, the owning presentation
+tests for its content, and `tool-operation-result.test.tsx` for shared readers.
+Extend `web/tests/review/tool-operations.tsx` and
+`web/e2e/tool-operations.spec.ts` for interactive production-component examples.
+Run applicable unit, type and lint checks plus the component browser suite in
+`web/playwright.components.config.ts`. Inspect desktop and phone rendering,
+chat and Evidence, disclosure, keyboard/focus, real link actions, paging and
+overflow. Technical details should require an intentional action.
+
+Showcases demonstrate presentation. Fresh native tool/agent runs must separately
+establish that the work and all consequential intermediate outcomes were correct.
+Record that distinction in the change's validation evidence.
+
+## Shared presentation behavior
+
 Tools share one operation row in chat and Evidence. The row contains the action,
 named links, consequential query/filter context and useful counts. Status marks
 remain quiet; interruptions use an amber stop mark with the cause on hover.
