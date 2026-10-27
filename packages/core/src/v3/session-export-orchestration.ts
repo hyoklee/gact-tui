@@ -80,8 +80,10 @@ export async function captureSessionOrchestration(
     for (const row of Array.isArray(page?.processes) ? page.processes : []) {
       const task = record(row);
       const handle = text(task?.handle) || text(task?.handle_id) || text(task?.id);
-      // A row whose child runs a flow: the railroad reads that flow's run.
-      if (handle && record(task?.flow)) flows.push(handle);
+      // A row whose child runs a flow program (not the plain `react` agent loop):
+      // the railroad reads that flow's run.
+      const flow = record(task?.flow);
+      if (handle && flow && text(flow.id) !== 'react') flows.push(handle);
     }
     cursor = text(page?.cursor) || undefined;
     if (cursor && seenCursors.has(cursor)) break;

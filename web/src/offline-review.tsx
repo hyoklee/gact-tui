@@ -145,9 +145,12 @@ export function Review() {
       : target.sessionId;
     history.replaceState(null, '', `#${anchor}`);
     requestAnimationFrame(() => {
+      // The saved document fallback repeats these ids while hidden; look in the review only.
+      const root = document.getElementById('root');
+      const find = (id: string) => root?.querySelector(`[id="${CSS.escape(id)}"]`);
       const node =
-        (target.messageId && document.getElementById(archiveMessageDomId(target.messageId))) ||
-        document.getElementById(target.sessionId);
+        (target.messageId && find(archiveMessageDomId(target.messageId))) ||
+        root?.querySelector(`[data-archive-session="${CSS.escape(target.sessionId)}"]`);
       node?.scrollIntoView({ block: 'start' });
     });
   };
@@ -218,7 +221,7 @@ export function Review() {
         </div>
         <TabsContent value="conversation">
           {rows.map((row) => (
-            <div key={row.session.id} className="space-y-4">
+            <div key={row.session.id} className="space-y-4" data-archive-session={row.session.id}>
               {row.relationship && (
                 <ArchiveSessionHeader
                   onOpen={open}
