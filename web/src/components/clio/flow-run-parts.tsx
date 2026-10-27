@@ -148,15 +148,17 @@ export function FlowPickDetails({
   return (
     <PickFrame
       badge={
-        step.kind === 'flow'
-          ? 'Flow'
-          : step.kind === 'editor'
-            ? 'Editor'
-            : step.addedBy
-              ? step.kind === 'proposal'
-                ? 'Proposed'
-                : 'Added'
-              : undefined
+        step.forkOf
+          ? 'Fork'
+          : step.kind === 'flow'
+            ? 'Flow'
+            : step.kind === 'editor'
+              ? 'Editor'
+              : step.addedBy
+                ? step.kind === 'proposal'
+                  ? 'Proposed'
+                  : 'Added'
+                : undefined
       }
       handle={step.handle}
       name={step.label ?? step.id}
@@ -185,7 +187,13 @@ export function FlowPickDetails({
         <Fact label="Model">{callModel(usage, step.handle)}</Fact>
       ) : null}
       {step.attempts > 1 ? <Fact label="Attempts">{step.attempts}</Fact> : null}
-      {step.addedBy ? (
+      {step.forkOf ? <Fact label="Fork of">{step.forkOf}</Fact> : null}
+      {step.alsoWaitsOn?.length ? (
+        <Fact label="Also waits on its forks">{step.alsoWaitsOn.join(', ')}</Fact>
+      ) : null}
+      {step.forkOf && step.note ? (
+        <Fact label="Fork note">{step.note}</Fact>
+      ) : step.addedBy ? (
         <Fact label={step.kind === 'proposal' ? 'Proposed by' : 'Added by'}>
           {step.addedBy}
           {step.note ? `: ${step.note}` : ''}

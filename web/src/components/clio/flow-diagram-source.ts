@@ -83,7 +83,10 @@ export function workflowAgentflowSource(
       .filter(Boolean)
       .join(' · ');
     const third = step.addedBy && step.kind !== 'proposal' ? `added by ${step.addedBy}` : '';
-    const label = [step.label ?? step.id, second, third].filter(Boolean).map(quoteSafe).join('\\n');
+    const name = step.forkOf
+      ? `${step.label ?? step.id} · fork of ${step.forkOf}`
+      : (step.label ?? step.id);
+    const label = [name, second, third].filter(Boolean).map(quoteSafe).join('\\n');
     lines.push(`  ${ids.get(step.id)}${shape(step.kind, label)}:::st-${step.status.tone}`);
     if (step.addedBy) lines.push(`  class ${ids.get(step.id)} st-added`);
   }

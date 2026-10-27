@@ -162,6 +162,10 @@ export interface FlowStep {
   note?: string;
   /** How many times it ran: more than one after a retry or an editor's repair. */
   attempts: number;
+  /** A fork: the step it is a copy of, drawn beside it (`<step>~<n>`). */
+  forkOf?: string;
+  /** The forks of the steps this one waits on: its wait covers them too. */
+  alsoWaitsOn?: string[];
 }
 
 /** The workflow's steps, in workflow order, then the proposals still waiting for approval. */
@@ -225,9 +229,10 @@ export function workflowSteps(run: FlowRun, agentRef: string): FlowStep[] {
       ...(addedBy.has(step.id) ? { addedBy: addedBy.get(step.id) || 'an editor' } : {}),
       ...(step.description ? { note: step.description } : {}),
       attempts: stepAttempts(run, step),
+      ...forkFields(step as Record<string, unknown>),
     }),
   );
-  const known = new Set(steps.map((step) => step.id));
+  const known = withForks(steps, view, run, agentRef);
   for (const proposal of view.awaiting_approval) {
     if (known.has(proposal.id)) continue;
     steps.push({
@@ -244,6 +249,73 @@ export function workflowSteps(run: FlowRun, agentRef: string): FlowStep[] {
     });
   }
   return steps;
+}
+
+/** A fork row's own fields: the step it copies and the note it diverges on. */
+function forkFields(step: Record<string, unknown>): Pick<FlowStep, 'forkOf' | 'note'> {
+  const forkOf = typeof step['fork_of'] === 'string' ? step['fork_of'] : '';
+  if (!forkOf) return {};
+  const note = typeof step['note'] === 'string' ? step['note'] : '';
+  return { forkOf, ...(note ? { note } : {}) };
+}
+
+/**
+ * Add the run's forks beside their steps and make each step's dependents wait on
+ * them too. A fork arrives as a step row right after its step (`fork_of` set) or
+ * in the view's `forks` list once the step's wait reported it; the list adds only
+ * forks the steps do not already carry. Returns the ids now present.
+ */
+function withForks(
+  steps: FlowStep[],
+  view: NonNullable<FlowRun['view']>,
+  run: FlowRun,
+  agentRef: string,
+): Set<string> {
+  const known = new Set(steps.map((step) => step.id));
+  const listed = Array.isArray((view as Record<string, unknown>)['forks'])
+    ? ((view as Record<string, unknown>)['forks'] as unknown[])
+    : [];
+  for (const raw of listed) {
+    const row = asRecord(raw);
+    const id = typeof row?.['id'] === 'string' ? row['id'] : '';
+    const forkOf = typeof row?.['fork_of'] === 'string' ? row['fork_of'] : '';
+    const original = steps.find((step) => step.id === forkOf);
+    if (!row || !id || !original || known.has(id)) continue;
+    const handle = typeof row['handle'] === 'string' ? row['handle'] : '';
+    const note = typeof row['note'] === 'string' ? row['note'] : '';
+    const status = typeof row['status'] === 'string' ? row['status'] : '';
+    let at = steps.indexOf(original) + 1;
+    while (steps[at]?.forkOf === forkOf) at += 1;
+    steps.splice(at, 0, {
+      id,
+      target: original.target,
+      targetLabel: flowTargetLabel(original.target, agentRef),
+      input: original.input,
+      after: [...original.after],
+      status:
+        !status && run.status === 'running'
+          ? workflowStepStatus({ status: 'running' })
+          : flowCallStatus(status),
+      ...(handle ? { handle } : {}),
+      kind: original.kind === 'editor' ? 'agent' : original.kind,
+      forkOf,
+      ...(note ? { note } : {}),
+      attempts: 1,
+    });
+    known.add(id);
+  }
+  const forks = new Map<string, string[]>();
+  for (const step of steps)
+    if (step.forkOf) forks.set(step.forkOf, [...(forks.get(step.forkOf) ?? []), step.id]);
+  if (!forks.size) return known;
+  for (const step of steps) {
+    if (step.forkOf) continue;
+    const extra = step.after.flatMap((id) => forks.get(id) ?? []).filter((id) => id !== step.id);
+    if (!extra.length) continue;
+    step.after = [...new Set([...step.after, ...extra])];
+    step.alsoWaitsOn = extra;
+  }
+  return known;
 }
 
 /**
