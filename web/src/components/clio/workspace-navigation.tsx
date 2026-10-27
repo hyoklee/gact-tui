@@ -38,6 +38,7 @@ import {
 } from '@/lib/workspace-labels';
 import { ClioInteractiveRow } from './interactive-row';
 import type { ResourceActions, ResourceTarget } from './resource-dialogs';
+import { nestAgentForks } from './conversation-fork-origin';
 import { SessionNavigationRow } from './workspace-navigation-session-row';
 
 interface WorkspaceNavigationProps {
@@ -317,13 +318,14 @@ function WorkspaceTreeItem({
       </ClioInteractiveRow>
       <CollapsibleContent>
         <div className="ml-2 grid min-w-0 gap-0.5 pl-2 group-data-[collapsible=icon]:hidden">
-          {visibleSessions.map((session) => (
+          {nestAgentForks(visibleSessions).map(({ session, depth }) => (
             <SessionNavigationRow
               actions={actions}
               activeSessionId={activeSessionId}
               attention={attentions[session.id]}
               agentLabel={sessionAgentLabel(session, agents)}
               key={session.id}
+              nestedDepth={depth}
               onAction={onAction}
               onDelete={onDelete}
               onDownloadSession={onDownloadSession}
