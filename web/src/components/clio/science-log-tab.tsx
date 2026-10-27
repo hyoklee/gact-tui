@@ -2,6 +2,9 @@ import type { ScienceEntry, ScienceStudy, SubagentRun } from '@clio/core/v3';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { ListIcon, NetworkIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useOpenTaskHandle } from '@/hooks/use-flow-run';
 import { useRepository } from '@/hooks/use-repository';
 import { useScienceLog } from '@/hooks/use-science-log';
@@ -19,6 +22,7 @@ import { ScienceLogPanel } from './science-log-panel';
 import type { ScienceFileReference } from './science-log-sources';
 import { PluginViewsSection } from './plugin-views-panel';
 import { StudyTree } from './study-tree';
+import { StudyGraph, type StudyGraphScope } from './study-graph';
 import type { SubagentOpenTarget } from './subagent-card';
 
 export interface ScienceLogTabProps {
@@ -52,6 +56,7 @@ export function ScienceLogTab({
     );
   return (
     <ScienceLogView
+      key={sessionId}
       onOpenFolder={onOpenFolder}
       onOpenTask={(handle) => openTask.mutate({ handle, target: 'canvas' })}
       onViewCall={(session, callId) => void viewInTranscript(session, callId)}
@@ -82,7 +87,7 @@ export interface ScienceLogViewProps {
   views?: ReactNode;
 }
 
-/** The study tree and one branch's log, with selection kept inside the tab. */
+/** List and graph views share entry selection, citations and the original record renderer. */
 export function ScienceLogView({
   study,
   sessionId,
@@ -106,6 +111,9 @@ export function ScienceLogView({
     : tree.branch;
   const [selectedBranch, setSelectedBranch] = useState(initial);
   const [focusedEntry, setFocusedEntry] = useState<string>();
+  const [studyView, setStudyView] = useState('list');
+  const [graphScope, setGraphScope] = useState<StudyGraphScope>('linked');
+  const selectedEntry = byId.get(focusedEntry || '') ?? byId.get(study.study) ?? study.entries[0];
   const selectEntry = useCallback(
     (entryId: string) => {
       const entry = byId.get(entryId);
@@ -120,7 +128,7 @@ export function ScienceLogView({
     setFocusedEntry(node.entry);
   };
   useEffect(() => {
-    if (!focusedEntry) return;
+    if (!focusedEntry || studyView !== 'list') return;
     // After the branch switch renders: bring the entry into view without animation.
     const frame = window.requestAnimationFrame(() => {
       const card = document.getElementById(scienceEntryDomId(focusedEntry));
@@ -128,37 +136,106 @@ export function ScienceLogView({
       card?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [focusedEntry, selectedBranch]);
+  }, [focusedEntry, selectedBranch, studyView]);
   const entries = useMemo(
     () => branchEntries(study.entries, selectedBranch),
     [selectedBranch, study.entries],
   );
   return (
-    // One scrolling column: views, tree and log each keep their full height, so a
-    // long tree never runs under the log below it.
-    <div className="flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-auto p-3 [&>*]:shrink-0">
+    <div className="@container/science-log flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-auto p-3 [&>*]:shrink-0">
       {views}
-      <StudyTree
-        folderAvailable={folderAvailable}
-        onOpenFolder={onOpenFolder}
-        onOpenTask={onOpenTask}
-        onSelect={selectNode}
-        onSelectEntry={selectEntry}
-        root={tree}
-        selectedBranch={selectedBranch}
-      />
-      <ScienceLogPanel
-        backlinks={cited}
-        branchTitle={titles.get(selectedBranch) || selectedBranch}
-        byId={byId}
-        entries={entries}
-        focusedEntry={focusedEntry}
-        onSelectEntry={selectEntry}
-        fileHref={fileHref}
-        onViewCall={onViewCall}
-        onViewInTranscript={onViewInTranscript}
-        titles={titles}
-      />
+      <ToggleGroup
+        aria-label="Study view"
+        type="single"
+        value={studyView}
+        onValueChange={(value) => {
+          if (value) setStudyView(value);
+        }}
+        variant="outline"
+        size="sm"
+        spacing={0}
+      >
+        <ToggleGroupItem value="list">
+          <ListIcon aria-hidden="true" />
+          List
+        </ToggleGroupItem>
+        <ToggleGroupItem value="graph">
+          <NetworkIcon aria-hidden="true" />
+          Graph
+        </ToggleGroupItem>
+      </ToggleGroup>
+      {studyView === 'graph' ? (
+        <div className="grid min-w-0 items-start gap-4 @min-[58rem]/science-log:grid-cols-[minmax(0,1fr)_21rem]">
+          <StudyGraph
+            study={study}
+            selectedEntry={selectedEntry?.id}
+            onSelectEntry={selectEntry}
+            scope={graphScope}
+            onScopeChange={setGraphScope}
+          />
+          {selectedEntry ? (
+            <aside
+              aria-label="Record inspector"
+              className="grid min-w-0 gap-3 rounded-md border bg-card p-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="min-w-0 text-xs text-muted-foreground">
+                  {titles.get(selectedEntry.branch) || selectedEntry.branch}
+                </span>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={() => {
+                    selectEntry(selectedEntry.id);
+                    setStudyView('list');
+                  }}
+                >
+                  <ListIcon aria-hidden="true" />
+                  Show in list
+                </Button>
+              </div>
+              <ScienceLogPanel
+                heading="Selected record"
+                showSelection={false}
+                backlinks={cited}
+                branchTitle={titles.get(selectedEntry.branch) || selectedEntry.branch}
+                byId={byId}
+                entries={[selectedEntry]}
+                focusedEntry={selectedEntry.id}
+                onSelectEntry={selectEntry}
+                fileHref={fileHref}
+                onViewCall={onViewCall}
+                onViewInTranscript={onViewInTranscript}
+                titles={titles}
+              />
+            </aside>
+          ) : null}
+        </div>
+      ) : (
+        <>
+          <StudyTree
+            folderAvailable={folderAvailable}
+            onOpenFolder={onOpenFolder}
+            onOpenTask={onOpenTask}
+            onSelect={selectNode}
+            onSelectEntry={selectEntry}
+            root={tree}
+            selectedBranch={selectedBranch}
+          />
+          <ScienceLogPanel
+            backlinks={cited}
+            branchTitle={titles.get(selectedBranch) || selectedBranch}
+            byId={byId}
+            entries={entries}
+            focusedEntry={focusedEntry}
+            onSelectEntry={selectEntry}
+            fileHref={fileHref}
+            onViewCall={onViewCall}
+            onViewInTranscript={onViewInTranscript}
+            titles={titles}
+          />
+        </>
+      )}
     </div>
   );
 }

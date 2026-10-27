@@ -25,6 +25,10 @@ export interface ScienceLogPanelProps {
   /** The selected branch's entries, in the order they were written. */
   entries: readonly ScienceEntry[];
   branchTitle: string;
+  /** Override the branch-log heading when showing a selected record in the graph inspector. */
+  heading?: string;
+  /** Hide the self-selection action when this panel already contains the selected record. */
+  showSelection?: boolean;
   /** Every entry of the study, to name a link's target in another branch. */
   byId: ReadonlyMap<string, ScienceEntry>;
   /** Branch titles by session id. */
@@ -45,6 +49,8 @@ export interface ScienceLogPanelProps {
 export function ScienceLogPanel({
   entries,
   branchTitle,
+  heading,
+  showSelection = true,
   byId,
   titles,
   backlinks,
@@ -56,10 +62,14 @@ export function ScienceLogPanel({
 }: ScienceLogPanelProps) {
   const links: ScienceCallLinks = { onViewCall, fileHref, titles };
   return (
-    <section aria-label={`Log of ${branchTitle}`} className="grid min-w-0 gap-2">
+    <section aria-label={heading || `Log of ${branchTitle}`} className="grid min-w-0 gap-2">
       <h3 className="text-xs font-medium text-muted-foreground">
-        Log of <span className="text-foreground">{branchTitle}</span>
-        {` · ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`}
+        {heading || (
+          <>
+            Log of <span className="text-foreground">{branchTitle}</span>
+            {` · ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`}
+          </>
+        )}
       </h3>
       {entries.length ? (
         <ol className="grid min-w-0 gap-2">
@@ -74,6 +84,7 @@ export function ScienceLogPanel({
               onSelectEntry={onSelectEntry}
               onViewInTranscript={onViewInTranscript}
               titles={titles}
+              selectable={showSelection}
             />
           ))}
         </ol>
@@ -93,6 +104,7 @@ function ScienceEntryCard({
   callLinks,
   onSelectEntry,
   onViewInTranscript,
+  selectable,
 }: {
   entry: ScienceEntry;
   focused: boolean;
@@ -102,6 +114,7 @@ function ScienceEntryCard({
   backlinks: readonly EntryEdge[];
   onSelectEntry: (entryId: string) => void;
   onViewInTranscript?: (entry: ScienceEntry) => void;
+  selectable: boolean;
 }) {
   // A conclusion's citations are drawn on its claims; the list keeps its other links.
   const links = outgoing(entry).filter(
@@ -143,6 +156,19 @@ function ScienceEntryCard({
           <time className="text-[11px] text-muted-foreground" dateTime={entry.created_at}>
             {formatTime(entry.created_at)}
           </time>
+        ) : null}
+        {selectable ? (
+          <Button
+            aria-label={`Select record: ${ENTRY_TYPE_LABELS[entry.type]}: ${entrySummary(entry) || entry.id}`}
+            aria-pressed={focused}
+            className="h-5 px-1.5 text-[11px]"
+            onClick={() => onSelectEntry(entry.id)}
+            size="xs"
+            type="button"
+            variant="ghost"
+          >
+            Inspect
+          </Button>
         ) : null}
         {entry.invocation && onViewInTranscript ? (
           <Button
