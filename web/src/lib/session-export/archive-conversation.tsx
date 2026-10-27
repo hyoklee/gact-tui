@@ -21,7 +21,7 @@ import type { ClioConversationProps } from '@/components/clio/conversation-types
 import { A2uiReferenceSessionProvider } from '@/lib/a2ui/reference-session';
 import type { ConversationDisplayMode } from '@/providers/conversation-display-provider';
 import { messageMarkIds } from '@/lib/message-marks';
-import { withForkSessionLink } from './archive-orchestration-model';
+import { withAskingCall, withForkSessionLink } from './archive-orchestration-model';
 
 export interface ArchiveTranscriptView {
   messages: unknown[];
@@ -74,7 +74,7 @@ export function ArchiveConversation({
       `GET /v1/sessions/${encodeURIComponent(sessionId)}/interactions?include_recent_resolved=true&resolved_limit=100`
     ]?.json as { interactions?: unknown[] } | undefined;
     const tools = view.tools.map((value) => withForkSessionLink(toolInvocationSchema.parse(value)));
-    const interactions = [
+    const recorded = [
       ...new Map(
         [...(captured?.interactions ?? []), ...(view.interactions ?? [])].map((value) => {
           const interaction = pendingInteractionSchema.parse(value);
@@ -82,6 +82,7 @@ export function ArchiveConversation({
         }),
       ).values(),
     ];
+    const interactions = withAskingCall(recorded, tools, sessionId);
     const messages = foldA2UIRevisionBlocks(
       projectA2UIActionMessages(
         view.messages

@@ -323,7 +323,7 @@ describe('exported subagent tree without subagent records', () => {
     expect(fork).toHaveTextContent('fork of level 1');
   });
 
-  it("opens each child from its spawn's link", async () => {
+  it("opens each child from its spawn's link, and shows the fork's approval at its call", async () => {
     const user = userEvent.setup();
     const onOpenSession = vi.fn<(sessionId: string) => void>();
     offline(
@@ -346,5 +346,11 @@ describe('exported subagent tree without subagent records', () => {
     expect(onOpenSession).toHaveBeenLastCalledWith('sess_fork');
     await user.click(screen.getByRole('button', { name: 'Open Subagent' }));
     expect(onOpenSession).toHaveBeenLastCalledWith('sess_explore');
+    // The approval follows the fork call, before the next call.
+    const question = screen.getByText("Fork 'level 1' as 'level 1~1'? Allow?");
+    const follows = (a: Element, b: Element) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(document.getElementById('tool-call_fork')!, question)).toBe(true);
+    expect(follows(question, document.getElementById('tool-call_explore')!)).toBe(true);
   });
 });

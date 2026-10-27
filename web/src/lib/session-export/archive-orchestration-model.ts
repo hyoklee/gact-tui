@@ -5,6 +5,7 @@ import {
   toolInvocationSchema,
   type Message,
   type ModelChoice,
+  type PendingInteraction,
   type SubagentRun,
   type ToolInvocation,
 } from '@clio/core/v3';
@@ -270,4 +271,35 @@ export function withForkSessionLink(tool: ToolInvocation): ToolInvocation {
       ),
     },
   };
+}
+
+/**
+ * A question a tool asked while it ran (a fork's approval) records the tool's
+ * name but not its call. Within one session, when exactly one call of that tool
+ * was running when the question was asked, the question is shown under it.
+ */
+export function withAskingCall(
+  interactions: PendingInteraction[],
+  tools: readonly ToolInvocation[],
+  sessionId: string,
+): PendingInteraction[] {
+  return interactions.map((interaction) => {
+    const name = interaction.source.tool_name;
+    if (interaction.source.invocation_id || !name || interaction.owner_session_id !== sessionId)
+      return interaction;
+    const asked = Date.parse(interaction.created_at);
+    const running = tools.filter((tool) => {
+      const started = Date.parse(tool.started_at ?? '');
+      const ended = Date.parse(tool.completed_at ?? '');
+      return (
+        tool.name === name &&
+        tool.session_id === sessionId &&
+        started <= asked &&
+        (Number.isNaN(ended) || asked <= ended)
+      );
+    });
+    return running.length === 1
+      ? { ...interaction, source: { ...interaction.source, invocation_id: running[0]!.id } }
+      : interaction;
+  });
 }
