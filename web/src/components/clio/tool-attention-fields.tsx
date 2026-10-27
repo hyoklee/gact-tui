@@ -37,8 +37,9 @@ export function ToolAttentionField({
   const active = new Map<number, number>();
   return (
     <section className="space-y-2">
-      <h4 className="text-xs font-medium uppercase text-muted-foreground">
-        {block.field === 'input' ? 'Arguments' : 'Result'} · attention
+      <h4 className="flex gap-3 text-xs font-medium uppercase text-muted-foreground">
+        <span>{block.field === 'input' ? 'Arguments' : 'Result'}</span>
+        <span>attention</span>
       </h4>
       <pre
         className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-xs"

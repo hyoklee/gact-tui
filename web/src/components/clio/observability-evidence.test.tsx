@@ -48,8 +48,8 @@ it('lets Evidence disclose the formatted tool result and preserves semantic fail
     />,
   );
   await userEvent.click(screen.getByRole('button', { name: 'Tool calls, 2 recorded' }));
-  expect(screen.getByRole('img', { name: 'Tool: succeeded' })).toBeVisible();
-  expect(screen.getByRole('img', { name: 'Tool: failed' })).toBeVisible();
+  expect(screen.getByRole('status', { name: 'Succeeded' })).toBeVisible();
+  expect(screen.getByRole('status', { name: 'Failed' })).toBeVisible();
   expect(screen.queryByText('Succeeded')).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: 'Show result for Fetch' }));
   expect(screen.getByRole('region', { name: 'Fetch: Result' })).toHaveTextContent(

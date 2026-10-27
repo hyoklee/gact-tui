@@ -11,6 +11,8 @@ const repository = vi.hoisted(() => ({
   transcript: vi.fn(),
 }));
 
+// These tests exercise cards already in the viewport; the viewport hook has its own tests.
+vi.mock('@/hooks/use-near-viewport', () => ({ useNearViewport: () => true }));
 vi.mock('@/hooks/use-repository', () => ({ useRepository: () => repository }));
 vi.mock('@/providers/connection-provider', () => ({
   useConnectionSettings: () => ({ settings: { endpoint: 'http://127.0.0.1:8787' } }),
@@ -184,6 +186,9 @@ describe('FlowRunCard', () => {
       />,
     );
     expect(await screen.findByText('Workflow run')).toBeVisible();
+    expect(screen.getAllByText('Workflow run')).toHaveLength(1);
+    await userEvent.click(screen.getByRole('button', { name: 'Activity: Used tools' }));
+    expect(screen.getByRole('button', { name: 'Show result for Run workflow' })).toBeDisabled();
     expect(screen.getAllByText('Workflow run')).toHaveLength(1);
     expect(repository.taskFlow).toHaveBeenCalledWith('sess_1', 'task_workflow', expect.anything());
   });

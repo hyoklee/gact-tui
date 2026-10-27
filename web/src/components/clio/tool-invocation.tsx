@@ -1,26 +1,19 @@
-import { INLINE_MEMORY_TOOLS } from './memory-presentation';
 import { toolResultRecord, asRecord } from './tool-result-shared';
 import type { AttentionBlock, ToolInvocation, WorkspaceResource } from '@clio/core/v3';
-import { WorkflowIcon, WrenchIcon } from 'lucide-react';
 import { InfoIcon } from '@/lib/icon-vocabulary';
-import { useContext, useEffect, useState } from 'react';
+import { lazy, Suspense, useContext, useEffect, useState } from 'react';
 import { ToolInput, ToolOutput } from '@/components/ai-elements/tool';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { Collapsible } from '@/components/ui/collapsible';
-import { ActivityRow } from './activity-row';
 import { ClioAttentionToolBadge } from './attention-tool-badge';
 import { ToolResultPresentation } from './tool-result-presentation';
 import { ToolDetailsContent } from './tool-details-content';
 import { PresentationLink } from './presentation-link';
 import {
-  getToolActionLabel,
   getToolSubject,
-  getToolHeaderMetadata,
-  getToolCompactMetadata,
   getToolStatus,
   getToolFailureDetail,
-  getToolInterruptionDetail,
   isA2uiCatalogLookup,
 } from './tool-presentation';
 import { PagedBlock } from './tool-result-primitives';
@@ -31,7 +24,7 @@ import { focusAttentionEvidence } from '@/lib/attention-evidence-navigation';
 import { ToolCompactRow } from './tool-compact-row';
 import { useToolDuration } from './use-tool-duration';
 import { formatDuration } from '@/lib/format';
-import { withTaskWaitPresentation } from './task-wait-presentation';
+import { withTaskWaitInterruption } from './task-wait-presentation';
 import { withTodoPresentation } from './todo-tool-presentation';
 import { withStorageToolPresentation } from './storage-tool-presentation';
 import { withSkillPresentation } from './skill-tool-presentation';
@@ -43,6 +36,13 @@ import {
   withAgentMessagePresentation,
 } from './agent-message-presentation';
 import { useLiveStore } from '@/store/live-store';
+import { toolOperation } from './tool-operation';
+import { ToolOperationResult } from './tool-operation-result';
+import { withOperationOutcome } from './tool-operation-outcome';
+
+const OperationFlow = lazy(() =>
+  import('./flow-run-card').then((module) => ({ default: module.FlowRunCard })),
+);
 
 export function ClioToolInvocation({
   attention,
@@ -52,6 +52,7 @@ export function ClioToolInvocation({
   defaultOpen,
   compact = false,
   surface = 'transcript',
+  flowResult = true,
 }: {
   tool?: ToolInvocation;
   defaultOpen?: boolean;
@@ -59,6 +60,8 @@ export function ClioToolInvocation({
   compact?: boolean;
   /** Evidence reuses the same results with its own list density and kind/status glyphs. */
   surface?: 'transcript' | 'evidence';
+  /** A conversation boundary may already own this flow's card. */
+  flowResult?: boolean;
   /** Attention-mode badge: this tool call's share of the selection's attention, and its intensity bucket. */
   attention?: { share: number; bucket: number };
   attentionFields?: readonly AttentionBlock[];
@@ -70,8 +73,10 @@ export function ClioToolInvocation({
   const recipientTitle = useLiveStore(
     (state) => state.entities.sessions[sentMessage?.sessionId ?? sentMessage?.target ?? '']?.title,
   );
-  const [open, setOpen] = useState(defaultOpen ?? false);
-  const [resultOpen, setResultOpen] = useState(() => INLINE_MEMORY_TOOLS.has(tool?.name ?? ''));
+  const [open, setOpen] = useState(false);
+  const [resultOpen, setResultOpen] = useState(
+    defaultOpen ?? (!compact && !['cancelled', 'interrupted'].includes(tool?.state ?? '')),
+  );
   const duration = useToolDuration(tool);
   useEffect(() => {
     let frame = 0;
@@ -103,25 +108,37 @@ export function ClioToolInvocation({
     flow?.handle && navigation?.onOpenFlow
       ? () => navigation.onOpenFlow?.(flow.handle!, `${flow.label} run`)
       : undefined;
-  const presentedTool = withAgentMessagePresentation(
-    withQuestionPresentation(
-      withMemoryPresentation(
-        withResourcePresentation(
-          withSkillPresentation(
-            withTaskWaitPresentation(withTodoPresentation(withStorageToolPresentation(tool))),
+  const presentedTool = withOperationOutcome(
+    withAgentMessagePresentation(
+      withQuestionPresentation(
+        withMemoryPresentation(
+          withResourcePresentation(
+            withSkillPresentation(
+              withTaskWaitInterruption(withTodoPresentation(withStorageToolPresentation(tool))),
+            ),
+            navigation?.resources,
           ),
-          navigation?.resources,
         ),
+        questionContext?.interactions,
       ),
-      questionContext?.interactions,
-    ),
-    agentMessageName(
-      sentMessage?.sessionId ?? sentMessage?.target,
-      navigation?.subagents,
-      recipientTitle,
+      agentMessageName(
+        sentMessage?.sessionId ?? sentMessage?.target,
+        navigation?.subagents,
+        recipientTitle,
+      ),
     ),
   );
   const subject = getToolSubject(presentedTool);
+  const operation = toolOperation(presentedTool, { subagents: navigation?.subagents });
+  if (flow?.handle) {
+    operation.expandable =
+      flowResult ||
+      Boolean(
+        tool.error ||
+          presentedTool.presentation?.blocks.some((block) => block.severity === 'error'),
+      );
+    operation.subjects = [{ id: 'flow-subject', type: 'text', label: flow.label }];
+  }
   const catalogContent = isA2uiCatalogLookup(presentedTool)
     ? (presentedTool.presentation?.blocks ?? [])
         .filter(
@@ -143,12 +160,7 @@ export function ClioToolInvocation({
   const declaredFailure = presentedTool.presentation?.blocks.some(
     (block) => block.severity === 'error' && (block.text?.trim() || block.content_ref),
   );
-  const headerMetadata = compact
-    ? getToolCompactMetadata(presentedTool)
-    : getToolHeaderMetadata(presentedTool);
-  const actionLabel = getToolActionLabel(presentedTool);
-  const summaryInHeader =
-    Boolean(headerMetadata) && headerMetadata === presentedTool.presentation?.summary?.trim();
+  const actionLabel = operation.action;
   const detailsTrigger = (
     <DialogTrigger asChild>
       <Button
@@ -170,144 +182,67 @@ export function ClioToolInvocation({
         id={`${surface === 'evidence' ? 'evidence-tool' : 'tool'}-${tool.id}`}
         tabIndex={-1}
       >
-        {compact ? (
-          <Collapsible open={resultOpen} onOpenChange={setResultOpen}>
-            <div className="flex min-w-0 items-center gap-1">
-              <ToolCompactRow
-                tool={presentedTool}
-                expanded={resultOpen}
-                duration={duration}
-                surface={surface}
-                attention={
-                  attention ? (
-                    <ClioAttentionToolBadge bucket={attention.bucket} share={attention.share} />
-                  ) : null
-                }
-              />
-              {surface !== 'evidence' &&
-              !resultOpen &&
-              subject?.type === 'link' &&
-              ['file', 'resource', 'artifact', 'session', 'url'].includes(subject.target ?? '') ? (
-                <PresentationLink block={subject} compact iconOnly />
+        <Collapsible open={resultOpen && operation.expandable} onOpenChange={setResultOpen}>
+          <div className="flex min-w-0 items-center gap-1">
+            <ToolCompactRow
+              tool={presentedTool}
+              operation={operation}
+              onOpenFlow={openFlow}
+              expanded={resultOpen}
+              duration={duration}
+              surface={surface}
+              attention={
+                attention ? (
+                  <ClioAttentionToolBadge bucket={attention.bucket} share={attention.share} />
+                ) : null
+              }
+            />
+            {detailsTrigger}
+          </div>
+          {resultOpen && operation.expandable ? (
+            <ToolDetailsContent
+              inline
+              title={`${actionLabel}: Result`}
+              bounded={
+                !presentedTool.presentation?.blocks.some((block) => block.type === 'terminal')
+              }
+            >
+              {failure && !declaredFailure ? (
+                <p
+                  role="alert"
+                  className={`whitespace-pre-wrap [overflow-wrap:anywhere] ${status === 'unknown' ? 'text-warning' : 'text-destructive'}`}
+                >
+                  {failure.length > 1200 ? `${failure.slice(0, 1200)}…` : failure}
+                </p>
               ) : null}
-              {detailsTrigger}
-            </div>
-            {resultOpen ? (
-              <ToolDetailsContent
-                inline
-                title={`${actionLabel}: Result`}
-                bounded={
-                  !presentedTool.presentation?.blocks.some((block) => block.type === 'terminal')
-                }
-              >
-                {failure && !declaredFailure ? (
-                  <p
-                    role="alert"
-                    className={`whitespace-pre-wrap [overflow-wrap:anywhere] ${status === 'unknown' ? 'text-warning' : 'text-destructive'}`}
-                  >
-                    {failure.length > 1200 ? `${failure.slice(0, 1200)}…` : failure}
-                  </p>
-                ) : null}
-                {openFlow ? (
-                  <Button variant="link" className="h-auto justify-start p-0" onClick={openFlow}>
-                    Open {flow!.label.toLowerCase()} run
-                  </Button>
-                ) : null}
-                {subject && presentedTool.presentation?.subject !== 'wait-targets' ? (
-                  <PresentationLink block={subject} />
-                ) : null}
-                {isA2uiCatalogLookup(presentedTool) && status === 'succeeded' ? (
-                  <p className="text-muted-foreground">
-                    Widget catalog loaded. Use technical details to inspect the full catalog.
-                  </p>
-                ) : (
-                  <ToolResultPresentation
-                    tool={presentedTool}
-                    subjectId={subject?.id}
-                    summaryInHeader={summaryInHeader}
+              {flowResult && flow?.handle && (sessionId || tool.session_id) ? (
+                <Suspense fallback={<p role="status">Loading flow…</p>}>
+                  <OperationFlow
+                    flow={{ ...flow, handle: flow.handle }}
+                    sessionId={sessionId || tool.session_id}
                   />
-                )}
-                {!presentedTool.presentation?.blocks.length &&
-                !presentedTool.presentation?.summary &&
-                !failure ? (
-                  <p className="text-muted-foreground">
-                    No formatted result was recorded. The original result is available in technical
-                    details.
-                  </p>
-                ) : null}
-              </ToolDetailsContent>
-            ) : null}
-          </Collapsible>
-        ) : (
-          <ActivityRow
-            icon={flow ? <WorkflowIcon className="size-4" /> : <WrenchIcon className="size-4" />}
-            title={
-              <span
-                className="flex w-full min-w-0 items-center gap-1"
-                data-slot="tool-action-label"
-              >
-                <span className="mr-1 shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {flow ? 'Flow' : 'Tool'}
-                </span>
-                <span className="min-w-0 [overflow-wrap:anywhere]">{actionLabel}</span>
-                {openFlow ? (
-                  <>
-                    <span aria-hidden="true">(</span>
-                    <Button
-                      aria-label={`Open ${flow!.label.toLowerCase()} run`}
-                      className="h-auto min-w-0 max-w-[42ch] shrink justify-start truncate p-0 text-left text-sm"
-                      onClick={openFlow}
-                      title={`Open ${flow!.label.toLowerCase()} run`}
-                      variant="link"
-                    >
-                      <span className="truncate">{flow!.label} run</span>
-                    </Button>
-                    <span aria-hidden="true">)</span>
-                  </>
-                ) : subject ? (
-                  <>
-                    <span aria-hidden="true">(</span>
-                    <PresentationLink block={subject} compact />
-                    <span aria-hidden="true">)</span>
-                  </>
-                ) : null}
-              </span>
-            }
-            metadata={headerMetadata}
-            status={status}
-            statusDetail={
-              (status === 'interrupted' ? getToolInterruptionDetail(presentedTool) : undefined) ||
-              failure
-            }
-            duration={duration}
-            attention={
-              attention ? (
-                <ClioAttentionToolBadge bucket={attention.bucket} share={attention.share} />
-              ) : null
-            }
-            action={detailsTrigger}
-          />
-        )}
-        {!compact ? (
-          <ToolResultPresentation
-            tool={presentedTool}
-            subjectId={subject?.id}
-            summaryInHeader={summaryInHeader}
-          />
-        ) : null}
-        {!compact &&
-        status === 'failed' &&
-        tool.error &&
-        !tool.presentation?.blocks.some(
-          (block) => block.severity === 'error' || block.text === tool.error,
-        ) ? (
-          <p
-            role="alert"
-            className="ml-7 whitespace-pre-wrap text-sm text-destructive [overflow-wrap:anywhere]"
-          >
-            {tool.error}
-          </p>
-        ) : null}
+                </Suspense>
+              ) : operation.kind !== 'declared' ? (
+                <ToolOperationResult operation={operation} tool={presentedTool} />
+              ) : isA2uiCatalogLookup(presentedTool) && status === 'succeeded' ? (
+                <p className="text-muted-foreground">
+                  Widget catalog loaded. Use technical details to inspect the full catalog.
+                </p>
+              ) : (
+                <ToolResultPresentation
+                  tool={presentedTool}
+                  subjectId={subject?.id}
+                  summaryInHeader
+                />
+              )}
+              {operation.scope ? (
+                <p className="ml-7 text-sm text-muted-foreground">
+                  Scope: <PresentationLink block={operation.scope} />
+                </p>
+              ) : null}
+            </ToolDetailsContent>
+          ) : null}
+        </Collapsible>
         <ToolDetailsContent inline={false} title={`${actionLabel}: Technical details`}>
           {duration !== undefined ? (
             <p className="text-sm tabular-nums text-muted-foreground">

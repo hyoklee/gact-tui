@@ -151,8 +151,10 @@ export function ProviderRefreshResults({ blocks }: { blocks: ToolPresentationBlo
   const failed = blocks.length - refreshed;
   return (
     <div className="min-w-0" data-slot="provider-refresh-results">
-      <p className="pb-1 text-sm text-muted-foreground">
-        {blocks.length} providers · {refreshed} refreshed · {failed} failed
+      <p className="flex flex-wrap gap-x-3 pb-1 text-sm text-muted-foreground">
+        <span>{blocks.length} providers</span>
+        <span>{refreshed} refreshed</span>
+        <span>{failed} failed</span>
       </p>
       <ul aria-label="Provider refresh results" className="divide-y border-y">
         {blocks.map((block) => (
