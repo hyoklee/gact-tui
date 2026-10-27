@@ -32,6 +32,8 @@ export const ACTIVE_SESSION_POLL_MS = 1_500;
  * notice an operator's out-of-band change, not to track live progress.
  */
 export const INFRASTRUCTURE_POLL_MS = 20_000;
+/** How often a server list is re-read while one of its MCP servers is being prepared. */
+export const MCP_PREPARING_POLL_MS = 2_000;
 
 /**
  * Refetch cadence for operations/administration panels (schedules, health,
