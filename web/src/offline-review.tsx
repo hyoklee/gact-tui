@@ -38,7 +38,6 @@ import { DashboardView } from './components/clio/dashboard-view';
 import {
   ArchiveScienceLog,
   ArchiveSessionHeader,
-  ArchiveViews,
 } from './lib/session-export/archive-orchestration';
 import {
   archiveMessageDomId,
@@ -158,8 +157,7 @@ export function Review() {
     ];
     return typeof value === 'string' && value ? value : undefined;
   };
-  const sessions = rows.map((row) => ({ id: row.session.id, title: row.session.title }));
-  const sections = useArchiveSections(data.transcript.session.id, sessions);
+  const sections = useArchiveSections(data.transcript.session.id);
   // Go to a session's section, or to one message (and tool call) in it.
   const open = (target: ArchiveTarget) => {
     setSection('conversation');
@@ -234,11 +232,6 @@ export function Review() {
                 Science log
               </TabsTrigger>
             )}
-            {sections.views && (
-              <TabsTrigger className="h-auto whitespace-normal px-3 py-2" value="views">
-                Views
-              </TabsTrigger>
-            )}
             {data.manifest.mode !== 'transcript' && (
               <TabsTrigger className="h-auto whitespace-normal px-3 py-2" value="files">
                 Files
@@ -298,9 +291,6 @@ export function Review() {
             sessionId={data.transcript.session.id}
             views={data.transcript_views}
           />
-        </TabsContent>
-        <TabsContent value="views">
-          <ArchiveViews sessionId={data.transcript.session.id} sessions={sessions} />
         </TabsContent>
         <TabsContent value="results">
           <h2 className="mb-3 text-2xl font-semibold">Saved results</h2>
@@ -482,10 +472,7 @@ async function mountReview(): Promise<void> {
     dashboard
       ? new ArchiveTransport(dashboard.snapshot)
       : // Message reads are answered from the transcripts the archive carries.
-        new ArchiveTransport(data.snapshot, {
-          views: data.transcript_views,
-          ledgers: Object.fromEntries(rows.map((row) => [row.session.id, row])),
-        }),
+        new ArchiveTransport(data.snapshot, { views: data.transcript_views }),
   );
   document.documentElement.classList.remove('dark');
   createRoot(document.getElementById('root')!).render(

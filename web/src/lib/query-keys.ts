@@ -56,7 +56,7 @@ export type ClioQueryNamespace =
   | 'relay-status'
   | 'task-flow'
   | 'science-log'
-  | 'plugin-view-events'
+  | 'study-source'
   | 'flow-task-time'
   | 'flow-task-answer'
   | 'flow-questions'

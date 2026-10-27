@@ -7,6 +7,7 @@ import {
 } from '@clio/core/v3';
 import type { QueryClient } from '@tanstack/react-query';
 import { scienceLogQueryKey } from '@/hooks/use-science-log';
+import { queryKeys } from '@/lib/query-keys';
 import { FrameBatcher, type FrameClock } from './frame-batcher';
 
 /** A `science.entry` frame's entry, or `undefined` for any other frame. */
@@ -39,9 +40,11 @@ export function mergeScienceEntries(
 
 /**
  * Merges live entries into the session's science log once per display frame,
- * then re-reads the log so statuses and new branches come from the server.
- * A log that cannot hold an entry yet (no study read, an unknown branch) is
- * only re-read.
+ * then re-reads the log so statuses, new branches and views come from the
+ * server. A log that cannot hold an entry yet (no study read, an unknown branch)
+ * is only re-read. Every live source a view reads of the entries' studies
+ * (`study://…`) is re-read too, so a view shows the new entry without the agent
+ * rebuilding it.
  */
 export class ScienceEntryMerger {
   private readonly batcher: FrameBatcher<ScienceEntry>;
@@ -57,6 +60,10 @@ export class ScienceEntryMerger {
       const merged = mergeScienceEntries(queryClient.getQueryData<ScienceLog>(key), entries);
       if (merged) queryClient.setQueryData(key, merged);
       void queryClient.invalidateQueries({ queryKey: key });
+      for (const study of new Set(entries.map((entry) => entry.study).filter(Boolean)))
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.key('study-source', endpoint, study),
+        });
     }, clock);
   }
 

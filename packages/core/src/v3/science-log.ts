@@ -21,6 +21,7 @@ export const scienceEntryTypeValues = [
   'reframe',
   'conclusion',
   'conflict',
+  'view',
 ] as const;
 
 export type ScienceEntryType = (typeof scienceEntryTypeValues)[number] | 'unknown';
@@ -74,6 +75,30 @@ export const scienceBranchSchema = z
 
 export type ScienceBranch = z.infer<typeof scienceBranchSchema>;
 
+/**
+ * A dashboard attached to the study with a `view` entry (Addendum B): the owner
+ * session's surface as it stands now, or `null` with a reason when the owner has
+ * since deleted it.
+ */
+export const scienceViewSchema = z
+  .object({
+    entry: z.string(),
+    session_id: z.string(),
+    surface_id: text,
+    title: text,
+    purpose: text,
+    serves: z.array(z.string()).catch([]).default([]),
+    created_at: text,
+    surface: z
+      .record(z.unknown())
+      .nullish()
+      .transform((value) => value ?? null),
+    reason: z.string().nullish(),
+  })
+  .passthrough();
+
+export type ScienceView = z.infer<typeof scienceViewSchema>;
+
 export const scienceLogSchema = z.union([
   z
     .object({
@@ -83,6 +108,7 @@ export const scienceLogSchema = z.union([
       root_session_id: text,
       branches: z.array(scienceBranchSchema).default([]),
       entries: z.array(scienceEntrySchema).default([]),
+      views: z.array(scienceViewSchema).catch([]).default([]),
     })
     .passthrough(),
   z.object({ session_id: z.string(), in_study: z.literal(false) }).passthrough(),

@@ -50,17 +50,16 @@ import '@/components/ai-elements/markdown';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ArchiveConnectionProvider } from '@/providers/connection-provider';
 import { RepositoryOverrideProvider } from '@/providers/repository-override';
+import { CLIO_WORKSPACE_CATALOG_ROW } from '@/test-fixtures/a2ui/v0_9_1/fixtures';
 import {
-  READINGS_CATALOG_ROW,
-  READINGS_COMPONENT,
-  reading,
-  recordedMessage,
-  viewPart,
-} from '@/test-fixtures/plugin-view/plugin-view-fixtures';
+  MEASUREMENTS,
+  measurementsTable,
+  readingsSurface,
+} from '@/test-fixtures/study-view/study-view-fixtures';
 import { ArchiveConversation, type ArchiveTranscriptView } from './archive-conversation';
-import { ArchiveScienceLog, ArchiveSessionHeader, ArchiveViews } from './archive-orchestration';
+import { ArchiveScienceLog, ArchiveSessionHeader } from './archive-orchestration';
 import type { ArchiveTarget } from './archive-orchestration-model';
-import { ArchiveTransport, type ArchiveTranscripts } from './archive-transport';
+import { ArchiveTransport } from './archive-transport';
 
 const at = (minute: number) => `2026-10-27T10:${String(minute).padStart(2, '0')}:00Z`;
 
@@ -272,6 +271,18 @@ const study = {
       invocation: 'call_conclude',
     },
   ],
+  views: [
+    {
+      entry: 'e_000000000004',
+      session_id: 'sess_root',
+      surface_id: 'readings',
+      title: 'Arm readings',
+      purpose: 'Watch the period against the arm length as branches measure.',
+      serves: ['e_000000000001'],
+      created_at: at(3),
+      surface: readingsSurface,
+    },
+  ],
 };
 
 /** The live service the export captures from: every read the export needs. */
@@ -336,12 +347,18 @@ function liveService(requests: string[]): ClioTransport {
       requests.push(request.path);
       const path = request.path;
       if (path in responses) return request.decode(responses[path]);
+      if (path === '/v1/studies/e_000000000001/table-query') {
+        expect((request.body as { source?: string }).source).toBe('measurements');
+        return request.decode(measurementsTable);
+      }
       if (path.endsWith('/a2ui/catalogs'))
-        return request.decode({ catalogs: [READINGS_CATALOG_ROW] });
+        return request.decode({ catalogs: [CLIO_WORKSPACE_CATALOG_ROW] });
       if (path.endsWith('/a2ui/capabilities'))
         return request.decode({
-          agent: { 'v0.9': { supportedCatalogIds: [READINGS_CATALOG_ROW.catalogId] } },
+          agent: { 'v0.9': { supportedCatalogIds: [CLIO_WORKSPACE_CATALOG_ROW.catalogId] } },
         });
+      if (path === '/v1/sessions/sess_root/a2ui/surfaces')
+        return request.decode({ surfaces: [readingsSurface] });
       if (path.endsWith('/a2ui/surfaces')) return request.decode({ surfaces: [] });
       if (path.includes('/interactions?')) return request.decode({ interactions: [] });
       if (path.includes('/async-processes?')) return request.decode({ processes: [] });
@@ -435,38 +452,6 @@ const views: Record<string, ArchiveTranscriptView> = {
   },
 };
 
-/** The recorded part ledgers the export carries, with the plugin's view events. */
-const ledgers: ArchiveTranscripts['ledgers'] = {
-  sess_root: {
-    messages: [
-      recordedMessage('m_root', 'sess_root', at(1), [
-        viewPart(
-          'call_r1',
-          {
-            key: 'r1',
-            group: 'sess_root',
-            rows: [reading(1, 'x', 1.4)],
-            component: READINGS_COMPONENT,
-          },
-          at(1),
-        ),
-      ]),
-    ],
-  },
-  sess_helper: {
-    messages: [
-      recordedMessage('m_measure', 'sess_helper', at(6), [
-        viewPart(
-          'call_measure',
-          { key: 'r1', group: 'sess_helper', rows: [reading(1, 'x', 1.9)] },
-          at(6),
-        ),
-      ]),
-    ],
-  },
-  sess_fork: { messages: [] },
-};
-
 async function exportArchive(): Promise<{ snapshot: SessionReviewSnapshot; requests: string[] }> {
   const requests: string[] = [];
   const snapshot = await captureSessionReview(liveService(requests), [
@@ -479,7 +464,7 @@ async function exportArchive(): Promise<{ snapshot: SessionReviewSnapshot; reque
 }
 
 function offline(snapshot: SessionReviewSnapshot, children: ReactNode) {
-  const repository = new ClioRepository(new ArchiveTransport(snapshot, { views, ledgers }));
+  const repository = new ClioRepository(new ArchiveTransport(snapshot, { views }));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
@@ -528,7 +513,7 @@ describe('exported orchestration', () => {
     expect(keys.some((key) => key.endsWith('/messages'))).toBe(false);
     expect(snapshot.failures).toEqual([]);
 
-    const repository = new ClioRepository(new ArchiveTransport(snapshot, { views, ledgers }));
+    const repository = new ClioRepository(new ArchiveTransport(snapshot, { views }));
     expect((await repository.taskFlow('sess_root', 'task_wf'))?.view?.steps).toHaveLength(3);
     expect((await repository.agentTask('task_fork')).child_session_id).toBe('sess_fork');
     const branchStudy = await repository.scienceLog('sess_helper');
@@ -537,7 +522,13 @@ describe('exported orchestration', () => {
       'ef'.repeat(32),
     );
     expect(await repository.flowQuestions('sess_root')).toHaveLength(1);
-    expect(await repository.pluginViewEvents('sess_helper')).toHaveLength(1);
+    // A view's live source is captured as it stood, and answered from the archive.
+    expect(snapshot.tables[MEASUREMENTS]).toMatchObject({ totalRows: 2, truncated: false });
+    const archived = await repository.studyTableQuery('e_000000000001', 'measurements', {
+      columns: ['value'],
+      limit: 10,
+    });
+    expect(archived.columns['value']).toEqual([1.4, 1.9]);
     expect((await repository.transcript('sess_helper')).messages[0]!.id).toBe('m_measure');
     expect((await repository.sessionRecord('sess_fork')).parent_session_id).toBe('sess_root');
   });
@@ -637,10 +628,10 @@ describe('exported orchestration', () => {
     offline(snapshot, <ArchiveScienceLog onOpen={onOpen} sessionId="sess_root" views={views} />);
     const tree = await screen.findByRole('tree', { name: 'Study tree' });
     expect(within(tree).getByText(/What sets the period/u)).toBeVisible();
-    // The plugin's view, from both branches' events, drawn by the chart kernel.
+    // The root's attached view, its chart reading the study's measurements as exported.
     await user.click(await screen.findByRole('radio', { name: 'Views' }));
-    const readings = await screen.findByRole('region', { name: 'Bench readings' });
-    expect(within(readings).getByText(/2 items from 2 sessions/u)).toBeVisible();
+    const readings = await screen.findByRole('region', { name: 'Arm readings' });
+    expect(within(readings).getByText(/Watch the period against the arm length/u)).toBeVisible();
     await waitFor(
       () => expect(readings.querySelector('[data-slot="a2ui-chart-view"]')).not.toBeNull(),
       { timeout: 10_000 },
@@ -655,25 +646,6 @@ describe('exported orchestration', () => {
       messageId: 'm_measure',
       callId: 'call_measure',
     });
-  });
-
-  it('draws views outside a study from the exported sessions', async () => {
-    const { snapshot } = await exportArchive();
-    snapshot.responses['GET /v1/sessions/sess_root/science-log'] = {
-      json: { session_id: 'sess_root', in_study: false },
-    };
-    offline(
-      snapshot,
-      <ArchiveViews
-        sessionId="sess_root"
-        sessions={[
-          { id: 'sess_root', title: 'Pendulum study' },
-          { id: 'sess_helper', title: 'Arm sweep' },
-        ]}
-      />,
-    );
-    const readings = await screen.findByRole('region', { name: 'Bench readings' });
-    expect(within(readings).getByText(/2 items from 2 sessions/u)).toBeVisible();
   });
 
   it("shows a workflow's edits and approval questions where they happened, and a step's folder", async () => {

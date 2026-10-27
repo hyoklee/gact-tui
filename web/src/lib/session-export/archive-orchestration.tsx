@@ -8,13 +8,11 @@ import {
 import { ContentMarkdown } from '@/components/clio/content-markdown';
 import { messageForCall } from '@/components/clio/science-log-model';
 import { ScienceLogView } from '@/components/clio/science-log-tab';
-import { PluginViewList } from '@/components/clio/plugin-views-panel';
+import { StudyViews } from '@/components/clio/study-views';
 import { ClioStatus } from '@/components/clio/status';
 import { useRepository } from '@/hooks/use-repository';
-import { usePluginViews } from '@/hooks/use-plugin-views';
 import { useScienceLog } from '@/hooks/use-science-log';
 import { MODEL_CHOICE_SOURCE } from '@/lib/flow-run-usage';
-import type { PluginViewSession } from '@/lib/plugin-view-model';
 import type { ArchiveTranscriptView } from './archive-conversation';
 import {
   archiveFileHref,
@@ -191,7 +189,6 @@ export function ArchiveScienceLog({
   onOpenFolder?: (path: string) => void;
 }) {
   const log = useScienceLog(sessionId);
-  const { views: studyViews } = usePluginViews(sessionId);
   if (!log.data?.in_study) return null;
   const study = log.data;
   const viewInTranscript = (entry: ScienceEntry) => {
@@ -230,20 +227,7 @@ export function ArchiveScienceLog({
       onViewInTranscript={viewInTranscript}
       sessionId={sessionId}
       study={study}
-      views={studyViews.length ? <PluginViewList views={studyViews} /> : undefined}
+      views={study.views.length ? <StudyViews readOnly study={study} /> : undefined}
     />
   );
-}
-
-/** The archive's views outside a study: those of the exported sessions. */
-export function ArchiveViews({
-  sessionId,
-  sessions,
-}: {
-  sessionId: string;
-  sessions: readonly PluginViewSession[];
-}) {
-  const { views } = usePluginViews(sessionId, { sessions });
-  if (!views.length) return null;
-  return <PluginViewList views={views} />;
 }

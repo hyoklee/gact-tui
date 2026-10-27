@@ -21,7 +21,6 @@ import { ClioSubagentCanvasView } from './subagent-canvas-view';
 import { AgentCompositionView } from './agent-composition-view';
 import { FlowRunView } from './flow-run-view';
 import { ScienceLogTab } from './science-log-tab';
-import { PluginViewsTab } from './plugin-views-panel';
 import { ArtifactBrowser, FileBrowser } from './workbench-resource-browser';
 import { WorkspaceTerminalPanel } from './workspace-terminal-panel';
 const KnowledgeSourceView = lazy(() =>
@@ -144,8 +143,6 @@ export function WorkbenchTabContent({
           workspaceId={workspaceId}
         />
       );
-    case 'plugin-views':
-      return <PluginViewsTab key={sessionId} sessionId={sessionId} />;
     case 'files':
       return (
         <FileBrowser

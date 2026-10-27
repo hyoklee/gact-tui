@@ -132,6 +132,7 @@ export async function captureSessionReview(
         },
       );
     const references = new Set<string>();
+    const studySources = new Set<string>();
     const walk = (value: unknown): void => {
       if (Array.isArray(value)) value.forEach(walk);
       else if (value && typeof value === 'object')
@@ -139,6 +140,7 @@ export async function captureSessionReview(
           if (typeof item === 'string' && /^(artifact:|artifact_|resource:|res_)/u.test(item)) {
             references.add(item);
           }
+          if (typeof item === 'string' && STUDY_SOURCE.test(item)) studySources.add(item);
           walk(item);
         });
     };
@@ -162,40 +164,26 @@ export async function captureSessionReview(
         }
         const id = resolved.artifact_id;
         if (!id) throw new Error('This data reference is not a registered table.');
-        let offset = 0;
-        let total = Infinity;
-        let table: ArtifactTableQueryResult | undefined;
-        while (offset < total) {
-          const page = (await json(`/v1/artifacts/${encodeURIComponent(id)}/table-query`, {
-            columns: [],
-            limit: 5000,
-            offset,
-            format: 'json',
-            downsample: { mode: 'none' },
-          })) as ArtifactTableQueryResult;
-          if (Number.isFinite(total) && page.totalRows !== total)
-            throw new Error('Table changed while its source rows were being exported.');
-          if (!table)
-            table = {
-              ...page,
-              columns: {},
-              rowKey: page.rowKey ? { ...page.rowKey, values: [] } : undefined,
-            };
-          const columns = table.columns;
-          for (const [name, values] of Object.entries(page.columns))
-            (columns[name] ??= []).push(...values);
-          if (table.rowKey && page.rowKey) table.rowKey.values.push(...page.rowKey.values);
-          total = page.totalRows;
-          if (!page.returnedRows && offset < total)
-            throw new Error('Table export stopped before all source rows were recorded.');
-          offset += page.returnedRows;
-        }
-        snapshot.tables[id] = {
-          ...table,
-          returnedRows: offset,
-          totalRows: total,
-          truncated: false,
-        };
+        snapshot.tables[id] = await captureTable(
+          (body) => json(`/v1/artifacts/${encodeURIComponent(id)}/table-query`, body),
+          {},
+        );
+      } catch (error) {
+        snapshot.failures.push({
+          path: uri,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    // A view's live study sources, as they stand at export (Addendum B), keyed by URI.
+    for (const uri of studySources) {
+      if (snapshot.tables[uri]) continue;
+      const [, study, source] = STUDY_SOURCE.exec(uri)!;
+      try {
+        snapshot.tables[uri] = await captureTable(
+          (body) => json(`/v1/studies/${encodeURIComponent(study!)}/table-query`, body),
+          { source },
+        );
       } catch (error) {
         snapshot.failures.push({
           path: uri,
@@ -205,4 +193,45 @@ export async function captureSessionReview(
     }
   }
   return snapshot;
+}
+
+/** A study source a view reads: `study://<study>/<measurements|entries|records/<name>>`. */
+const STUDY_SOURCE =
+  /^study:\/\/([A-Za-z0-9_-]+)\/(measurements|entries|records\/[A-Za-z0-9_.-]+)$/u;
+
+/** Every source row of one table, paged through its table-query route. */
+async function captureTable(
+  query: (body: Record<string, unknown>) => Promise<unknown>,
+  extra: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  let offset = 0;
+  let total = Infinity;
+  let table: ArtifactTableQueryResult | undefined;
+  while (offset < total) {
+    const page = (await query({
+      ...extra,
+      columns: [],
+      limit: 5000,
+      offset,
+      format: 'json',
+      downsample: { mode: 'none' },
+    })) as ArtifactTableQueryResult;
+    if (Number.isFinite(total) && page.totalRows !== total)
+      throw new Error('Table changed while its source rows were being exported.');
+    if (!table)
+      table = {
+        ...page,
+        columns: {},
+        rowKey: page.rowKey ? { ...page.rowKey, values: [] } : undefined,
+      };
+    const columns = table.columns;
+    for (const [name, values] of Object.entries(page.columns))
+      (columns[name] ??= []).push(...values);
+    if (table.rowKey && page.rowKey) table.rowKey.values.push(...page.rowKey.values);
+    total = page.totalRows;
+    if (!page.returnedRows && offset < total)
+      throw new Error('Table export stopped before all source rows were recorded.');
+    offset += page.returnedRows;
+  }
+  return { ...table, returnedRows: offset, totalRows: total, truncated: false };
 }

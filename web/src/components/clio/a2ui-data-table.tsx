@@ -51,6 +51,7 @@ import {
 } from './table-export-client';
 import {
   artifactIdFromDataUri,
+  TABLE_DATA_URI,
   type QueryRow,
   type TableDataQuery,
   useTableQueryRows,
@@ -692,10 +693,7 @@ const dataTableDataProperties = {
     .array(z.union([z.string(), z.object({ key: z.string(), label: z.string() }).strict()]))
     .optional(),
   rows: z.array(z.record(z.unknown())).optional(),
-  dataUri: z
-    .string()
-    .regex(/^artifact:\/\/artifact_[A-Za-z0-9_-]+$/u)
-    .optional(),
+  dataUri: z.string().regex(TABLE_DATA_URI).optional(),
   dataQuery: dataQuerySchema.optional(),
   // clio-schemas 0.5.1: a DynamicValue (a plain string, the old form, still parses).
   selection: CommonSchemas.DynamicValue.optional(),

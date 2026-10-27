@@ -6,7 +6,6 @@ import { LayoutGridIcon, ListIcon, NetworkIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useOpenTaskHandle } from '@/hooks/use-flow-run';
-import { usePluginViews } from '@/hooks/use-plugin-views';
 import { useRepository } from '@/hooks/use-repository';
 import { useScienceLog } from '@/hooks/use-science-log';
 import { useLiveStore } from '@/store/live-store';
@@ -21,8 +20,8 @@ import {
 } from './science-log-model';
 import { ScienceLogPanel } from './science-log-panel';
 import type { ScienceFileReference } from './science-log-sources';
-import { PluginViewList } from './plugin-views-panel';
 import { StudyTree } from './study-tree';
+import { StudyViews } from './study-views';
 import { StudyGraph, type StudyGraphScope } from './study-graph';
 import { observationGroups } from './study-graph-model';
 import type { SubagentOpenTarget } from './subagent-card';
@@ -42,10 +41,10 @@ export function ScienceLogTab({
   onOpenSubagent,
   onOpenFolder,
 }: ScienceLogTabProps) {
-  const log = useScienceLog(sessionId);
+  // While a branch runs, the attached dashboards may change between entries.
+  const log = useScienceLog(sessionId, true, true);
   const openTask = useOpenTaskHandle(onOpenSubagent);
   const viewInTranscript = useTranscriptJump(sessionId, workspaceId);
-  const { views } = usePluginViews(sessionId);
   if (log.isPending) return <p className="p-4 text-sm text-muted-foreground">Loading the study…</p>;
   if (log.error)
     return (
@@ -68,7 +67,7 @@ export function ScienceLogTab({
       }
       sessionId={sessionId}
       study={log.data}
-      views={views.length ? <PluginViewList views={views} /> : undefined}
+      views={log.data.views.length ? <StudyViews study={log.data} /> : undefined}
     />
   );
 }
@@ -86,7 +85,7 @@ export interface ScienceLogViewProps {
   fileHref?: (file: ScienceFileReference) => string | undefined;
   /** Whether a node folder can be opened here; without it every folder opens. */
   folderAvailable?: (path: string) => boolean;
-  /** The study's plugin views, drawn above the tree. */
+  /** The study's attached views; the Views mode shows only when there are some. */
   views?: ReactNode;
 }
 

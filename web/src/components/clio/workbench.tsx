@@ -10,7 +10,6 @@ import {
   BotIcon,
   BoxesIcon,
   BoxIcon,
-  ChartColumnIcon,
   FileCode2Icon,
   FlaskConicalIcon,
   FileDiffIcon,
@@ -60,7 +59,6 @@ import { workspaceFilePath } from '@/lib/workspace-file-path';
 import { useLiveStore } from '@/store/live-store';
 import { useWorkbenchTabVisibility } from './use-workbench-tab-visibility';
 import { scienceLogTab, useScienceLogTab } from './science-log-tab-state';
-import { pluginViewsTab, usePluginViewTab } from './plugin-view-tab-state';
 
 export interface ClioWorkbenchProps {
   workspaceId: string;
@@ -95,8 +93,6 @@ export interface ClioWorkbenchProps {
   requestedOpen?: { key: string; request: ClioWorkbenchOpenRequest };
   /** The session belongs to a study (its science log read says so); unknown hides the tab. */
   inStudy?: boolean;
-  /** The session's tree recorded plugin views outside a study; unknown hides the tab. */
-  pluginViews?: boolean;
 }
 
 export type ClioWorkbenchOpenRequest =
@@ -197,7 +193,6 @@ const canvasResourceTabs = {
   agent: agentTab,
   resources: resourceBrowserTab,
   'science-log': scienceLogTab,
-  'plugin-views': pluginViewsTab,
 } satisfies Record<CanvasResourceKind, WorkbenchTab>;
 
 const workbenchTabIcons = {
@@ -209,7 +204,6 @@ const workbenchTabIcons = {
   agent: BotIcon,
   resources: PaperclipIcon,
   'science-log': FlaskConicalIcon,
-  'plugin-views': ChartColumnIcon,
   'workspace-file': FileCode2Icon,
   diff: FileDiffIcon,
   artifact: BoxIcon,
@@ -254,7 +248,6 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
       finishedWorkHidden = false,
       requestedOpen,
       inStudy,
-      pluginViews,
     },
     ref,
   ) {
@@ -287,7 +280,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
     }, [activeTabId, onFilesViewActiveChange]);
 
     const study = useScienceLogTab(inStudy, sessionId, tabs, setTabs, activeTabId);
-    const shown = usePluginViewTab(pluginViews, sessionId, study.tabs, setTabs, study.activeTabId);
+    const shown = study;
     useWorkbenchTabVisibility(tabStripRef, activeTabRef, shown.activeTabId, shown.tabs, maximized);
 
     const openTab = useCallback((tab: WorkbenchTab) => {
@@ -623,7 +616,6 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
               subagents={subagents}
               finishedWorkHidden={finishedWorkHidden}
               scienceLog={inStudy === true}
-              views={pluginViews === true}
             />
             <Button
               aria-label={maximized ? 'Restore canvas beside conversation' : 'Maximize canvas'}

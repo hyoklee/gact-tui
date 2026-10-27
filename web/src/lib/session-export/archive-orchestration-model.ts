@@ -10,9 +10,7 @@ import {
   type ToolInvocation,
 } from '@clio/core/v3';
 import { subagentsForTool } from '@/components/clio/subagent-tool-link';
-import { usePluginViews } from '@/hooks/use-plugin-views';
 import { useScienceLog } from '@/hooks/use-science-log';
-import type { PluginViewSession } from '@/lib/plugin-view-model';
 import type { ArchiveTranscriptView } from './archive-conversation';
 
 /** How a descendant was reached, as the export recorded it. */
@@ -268,15 +266,10 @@ export function archiveSessionOrder<
   return ordered;
 }
 
-/** Whether the archive has a study, or views outside one, to offer as a section. */
-export function useArchiveSections(
-  sessionId: string,
-  sessions: readonly PluginViewSession[],
-): { science: boolean; views: boolean } {
+/** Whether the archive has a study to offer as a section. */
+export function useArchiveSections(sessionId: string): { science: boolean } {
   const log = useScienceLog(sessionId);
-  const inStudy = log.data?.in_study === true;
-  const { views } = usePluginViews(sessionId, { sessions, enabled: log.data?.in_study === false });
-  return { science: inStudy, views: !inStudy && views.length > 0 };
+  return { science: log.data?.in_study === true };
 }
 
 /**

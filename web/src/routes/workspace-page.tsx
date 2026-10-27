@@ -34,11 +34,11 @@ import { useDashboardReviewOpening } from '@/hooks/use-dashboard-review-opening'
 import { useA2uiCatalogRegistry } from '@/lib/a2ui/processor-store';
 import { WorkspaceSessionProviders } from '@/components/clio/workspace-session-providers';
 import { useRepository } from '@/hooks/use-repository';
-import { useCanvasStudy } from '@/components/clio/plugin-view-tab-state';
 import { useAttentionMode } from '@/hooks/use-attention-mode';
 import { useSessionHistoryActions } from '@/hooks/use-session-history-actions';
 import { useSessionDiffActions } from '@/hooks/use-session-diff-actions';
 import { useSessionCommands } from '@/hooks/use-session-commands';
+import { useScienceLog } from '@/hooks/use-science-log';
 import { useSessionMutations } from '@/hooks/use-session-mutations';
 import { useSessionMessageCount } from '@/hooks/use-session-message-count';
 import { useWorkspaceData } from '@/hooks/use-workspace-data';
@@ -187,7 +187,7 @@ export function WorkspacePage() {
     revealWorkbench({ kind: 'session' }),
   );
   const terminalActions = useWorkspaceTerminalActions(activeWorkspace?.path, revealWorkbench);
-  const study = useCanvasStudy(sessionId);
+  const inStudy = useScienceLog(sessionId).data?.in_study;
   const openAgent = useCallback(
     () => revealWorkbench({ kind: 'resources', section: 'agent' }),
     [revealWorkbench],
@@ -619,8 +619,7 @@ export function WorkspacePage() {
               onOpenSubagent={openSubagent}
               subagents={subagents}
               finishedWorkHidden={Boolean(workPages?.hasMore || workPages?.history)}
-              inStudy={study.inStudy}
-              pluginViews={study.pluginViews}
+              inStudy={inStudy}
               onUndoDiff={(targetSessionId, targetWorkspaceId, changeId) =>
                 diffActions.undo.mutateAsync({
                   sessionId: targetSessionId,

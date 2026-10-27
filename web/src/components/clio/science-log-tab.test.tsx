@@ -163,14 +163,13 @@ function wrapper({ children }: PropsWithChildren) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-function renderWorkbench(inStudy: boolean | undefined, pluginViews?: boolean) {
+function renderWorkbench(inStudy: boolean | undefined) {
   return render(
     <ClioWorkbench
       artifacts={[]}
       diffs={[]}
       files={[]}
       inStudy={inStudy}
-      pluginViews={pluginViews}
       onOpenSubagent={vi.fn()}
       onUndoDiff={vi.fn()}
       sessionId="sess_root"
@@ -198,18 +197,9 @@ describe('Science log tab', () => {
     );
   });
 
-  it('offers Views beside the others only when the tree outside a study recorded views', async () => {
-    const { unmount } = renderWorkbench(false, false);
+  it('offers no Views tab of its own: a view is a dashboard attached to a study', () => {
+    renderWorkbench(false);
     expect(screen.queryByRole('tab', { name: 'Views' })).not.toBeInTheDocument();
-    unmount();
-    window.localStorage.clear();
-
-    renderWorkbench(false, true);
-    expect(await screen.findByRole('tab', { name: 'Views' })).toBeVisible();
-    expect(screen.getByRole('tab', { name: 'Observability' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
   });
 
   it('gives views, the list and the graph the whole tab, one at a time', async () => {

@@ -3,7 +3,6 @@ import { flowQuestionsPath, flowRunSchema, type FlowRun } from './flow-run-domai
 import { MemoryRepository } from './memory-repository.js';
 import { TransportError } from './transport.js';
 import { readScienceLog, type ScienceLog } from './science-log.js';
-import { readPluginViewEvents, type PluginViewEvent } from './plugin-view.js';
 import { readTransformRecord, type TransformRecord } from './transform-record.js';
 import type { PendingInteraction } from './interaction-domain.js';
 import { pendingInteractionListSchema } from './repository-decoders.js';
@@ -121,11 +120,6 @@ export class TaskRepository extends MemoryRepository {
       signal,
     });
     return result.interactions as PendingInteraction[];
-  }
-
-  /** The plugin view events one session's tool results recorded, oldest first. */
-  public pluginViewEvents(sessionId: string, signal?: AbortSignal): Promise<PluginViewEvent[]> {
-    return readPluginViewEvents(this.transport, sessionId, signal);
   }
 
   /** One paginated Core snapshot of the authenticated human's work across sessions. */

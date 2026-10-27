@@ -9,7 +9,6 @@ import { FrameBatcher } from '@/lib/streaming/frame-batcher';
 import { abortableDelay, nextReconnectDelay } from '@/lib/streaming/reconnect';
 import { streamNoticeForFrame } from '@/lib/streaming/stream-notices';
 import { ScienceEntryMerger } from '@/lib/streaming/science-log-updates';
-import { PluginViewRefresher } from '@/lib/streaming/plugin-view-updates';
 import { taskUpdateForFrame } from '@/lib/streaming/task-updates';
 import { useConnectionSettings } from '@/providers/connection-provider';
 import { useLiveStore } from '@/store/live-store';
@@ -87,8 +86,6 @@ export function useSessionLiveStream({
     const invalidations = new QueryInvalidationBatcher(queryClient);
     // Science log entries merge into the study read once per display frame.
     const science = new ScienceEntryMerger(queryClient, settings.endpoint, sessionId);
-    // Settled tool calls may carry plugin view events; their read refreshes once per frame.
-    const views = new PluginViewRefresher(queryClient, settings.endpoint, sessionId);
     let reconnectDelay = STREAM_RECONNECT_BASE_MS;
     let resumeCursor = initialCursor;
     let reconcileBeforeConnect = false;
@@ -155,7 +152,6 @@ export function useSessionLiveStream({
             }
             batcher.push(frame);
             science.push(frame);
-            views.push(frame);
             if (frame.eventName === 'message.completed') {
               batcher.flush();
             }
@@ -199,7 +195,6 @@ export function useSessionLiveStream({
       batcher.stop({ flush: true });
       invalidations.stop({ flush: true });
       science.stop({ flush: true });
-      views.stop({ flush: true });
     };
   }, [
     applyFrames,

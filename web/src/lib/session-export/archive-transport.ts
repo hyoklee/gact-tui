@@ -1,5 +1,4 @@
 import {
-  PLUGIN_VIEW_PARTS_HEADERS,
   TransportError,
   sessionReviewRequestKey,
   type ClioTransport,
@@ -13,8 +12,7 @@ import { queryArchiveTable } from './archive-table-query';
 /**
  * The transcripts an archive already carries, so a read of a session's
  * messages is answered from them instead of from a second captured copy:
- * `views` are the projected transcripts the conversation renders, `ledgers`
- * the recorded parts (for reads that ask for the part ledger).
+ * `views` are the projected transcripts the conversation renders.
  */
 export interface ArchiveTranscripts {
   views?: Readonly<
@@ -30,16 +28,9 @@ export interface ArchiveTranscripts {
       }
     >
   >;
-  ledgers?: Readonly<Record<string, { messages: unknown[] }>>;
 }
 
 const MESSAGES_PATH = /^\/v1\/sessions\/([^/?]+)\/messages$/u;
-
-function asksForPartLedger(request: TransportRequest<unknown>): boolean {
-  return Object.entries(PLUGIN_VIEW_PARTS_HEADERS).every(
-    ([name, value]) => request.headers?.[name] === value,
-  );
-}
 
 /** Read captured responses and query captured tables; never contacts a live service. */
 export class ArchiveTransport implements ClioTransport {
@@ -55,6 +46,18 @@ export class ArchiveTransport implements ClioTransport {
           this.snapshot.tables[decodeURIComponent(match[1])] as unknown as ArtifactTableQueryResult,
           request.body as ArtifactTableQueryRequest,
         ),
+      );
+    }
+    const study = request.path.match(/^\/v1\/studies\/([^/]+)\/table-query$/u);
+    const studyBody = request.body as (ArtifactTableQueryRequest & { source?: string }) | undefined;
+    const studyTable = study
+      ? this.snapshot.tables[`study://${decodeURIComponent(study[1]!)}/${studyBody?.source ?? ''}`]
+      : undefined;
+    // A study source answers as it stood at export: the archive holds no later entries.
+    if (request.method === 'POST' && studyTable) {
+      const { source: _source, ...query } = studyBody!;
+      return request.decode(
+        queryArchiveTable(studyTable as unknown as ArtifactTableQueryResult, query),
       );
     }
     if (request.method !== 'GET')
@@ -99,10 +102,6 @@ export class ArchiveTransport implements ClioTransport {
     const match = request.path.match(MESSAGES_PATH);
     if (!match) return undefined;
     const sessionId = decodeURIComponent(match[1]!);
-    if (asksForPartLedger(request)) {
-      const ledger = this.transcripts.ledgers?.[sessionId];
-      return ledger ? { messages: ledger.messages } : undefined;
-    }
     const view = this.transcripts.views?.[sessionId];
     if (!view) return undefined;
     return {
