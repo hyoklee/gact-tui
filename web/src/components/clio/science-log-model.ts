@@ -53,27 +53,13 @@ export function entryState(entry: Pick<ScienceEntry, 'status' | 'type'>): Scienc
 }
 
 /**
- * A branch's state in text: running while its task runs; else the latest
- * settled hypothesis it wrote or tests (supported, refuted or superseded); else
- * its task status.
+ * A branch's own state in text: its task's status (running while it runs). A
+ * hypothesis the branch settled carries its own state on its own node; the
+ * branch does not borrow it.
  */
-export function branchState(branch: ScienceBranch, entries: readonly ScienceEntry[]): ScienceState {
+export function branchState(branch: ScienceBranch): ScienceState {
   const task = branch.task_status.trim();
   if (RUNNING.has(task)) return { label: 'running', tone: 'running' };
-  const byId = new Map(entries.map((entry) => [entry.id, entry]));
-  const own = entries.filter((entry) => entry.branch === branch.session_id);
-  const hypotheses = new Set([
-    ...own.filter((entry) => entry.type === 'hypothesis').map((entry) => entry.id),
-    ...own.flatMap((entry) =>
-      entry.links.flatMap((link) => (byId.get(link.to)?.type === 'hypothesis' ? [link.to] : [])),
-    ),
-  ]);
-  const settled = [...hypotheses]
-    .map((id) => byId.get(id)!)
-    .toSorted((left, right) => left.created_at.localeCompare(right.created_at))
-    .map(entryState)
-    .filter((state) => state.tone !== 'neutral');
-  if (settled.length) return settled.at(-1)!;
   if (task) return { label: task.replaceAll('_', ' '), tone: 'neutral' };
   return { label: 'no task status', tone: 'neutral' };
 }
@@ -345,7 +331,7 @@ export function studyTree(study: ScienceStudy): StudyNode {
       title: branchTitle(branch),
       relation: branchRelation(branch, titles),
       branchRelation: branch.relation,
-      state: branchState(branch, entries),
+      state: branchState(branch),
       ...(branch.note ? { note: branch.note } : {}),
       ...(branch.handle ? { handle: branch.handle } : {}),
       ...(branch.node_folder ? { folder: branch.node_folder } : {}),
@@ -369,10 +355,11 @@ export function studyTree(study: ScienceStudy): StudyNode {
     ...(question ? { entry: question.id } : {}),
     title: (question && entrySummary(question)) || 'Study question',
     relation: rootBranch ? `asked in ${branchTitle(rootBranch)}` : undefined,
-    state: rootBranch
-      ? branchState(rootBranch, entries)
-      : question
-        ? entryState(question)
+    // The question's own status; the root branch's task state only when no question is logged.
+    state: question
+      ? entryState(question)
+      : rootBranch
+        ? branchState(rootBranch)
         : { label: 'recorded', tone: 'neutral' },
     ...(rootBranch?.handle ? { handle: rootBranch.handle } : {}),
     ...(rootBranch?.node_folder ? { folder: rootBranch.node_folder } : {}),

@@ -85,7 +85,13 @@ const study = scienceLogSchema.parse({
     },
   ],
   entries: [
-    entry(1, 'sess_root', 'question', { statement: 'Which law governs the decay rate?' }),
+    entry(
+      1,
+      'sess_root',
+      'question',
+      { statement: 'Which law governs the decay rate?' },
+      { status: 'open' },
+    ),
     entry(
       2,
       'sess_root',
@@ -236,8 +242,15 @@ describe('Science log tab', () => {
         name: 'Hypothesis: The rate is quadratic in load, refuted',
       }),
     ).toBeVisible();
+    // Each node shows its own status: the question is still open although a
+    // hypothesis under it is refuted, and a step shows its task's state.
     expect(
-      within(tree).getByRole('treeitem', { name: 'Step: Linear trial, supported' }),
+      within(tree).getByRole('treeitem', {
+        name: 'Question: Which law governs the decay rate?, open',
+      }),
+    ).toBeVisible();
+    expect(
+      within(tree).getByRole('treeitem', { name: 'Step: Linear trial, completed' }),
     ).toBeVisible();
     const quadratic = within(tree).getByRole('treeitem', {
       name: 'Step: Quadratic trial, running',

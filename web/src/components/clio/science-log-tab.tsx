@@ -6,7 +6,6 @@ import { useOpenTaskHandle } from '@/hooks/use-flow-run';
 import { useRepository } from '@/hooks/use-repository';
 import { useScienceLog } from '@/hooks/use-science-log';
 import { useLiveStore } from '@/store/live-store';
-import { cn } from '@/lib/utils';
 import {
   backlinks,
   branchEntries,
@@ -122,14 +121,9 @@ export function ScienceLogView({
     [selectedBranch, study.entries],
   );
   return (
-    <div
-      className={cn(
-        'grid h-full min-h-0 gap-3 overflow-auto p-3',
-        views
-          ? 'grid-rows-[auto_minmax(0,auto)_minmax(0,1fr)]'
-          : 'grid-rows-[minmax(0,auto)_minmax(0,1fr)]',
-      )}
-    >
+    // One scrolling column: views, tree and log each keep their full height, so a
+    // long tree never runs under the log below it.
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-auto p-3 [&>*]:shrink-0">
       {views}
       <StudyTree
         onOpenFolder={onOpenFolder}
