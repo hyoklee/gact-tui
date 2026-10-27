@@ -81,7 +81,7 @@ export function workflowAgentflowSource(
       step.targetLabel === 'this agent' ? '' : step.targetLabel,
     ]
       .filter(Boolean)
-      .join(' · ');
+      .join(', ');
     const third = step.addedBy && step.kind !== 'proposal' ? `added by ${step.addedBy}` : '';
     const label = [step.label ?? step.id, second, third].filter(Boolean).map(quoteSafe).join('\\n');
     lines.push(`  ${ids.get(step.id)}${shape(step.kind, label)}:::st-${step.status.tone}`);
