@@ -117,8 +117,14 @@ describe('plugin views', () => {
     renderWithClient(<PluginViewsTab sessionId="sess_root" />);
     const view = await screen.findByRole('region', { name: 'Bench readings' });
     expect(within(view).getByText(/2 items from 2 sessions/u)).toBeVisible();
-    await waitFor(() => expect(view.querySelector('[data-slot="a2ui-chart-view"]')).not.toBeNull());
-    await waitFor(() => expect(embedded.specs.length).toBeGreaterThan(0));
+    await waitFor(
+      () => expect(view.querySelector('[data-slot="a2ui-chart-view"]')).not.toBeNull(),
+      {
+        // The chart kernel loads lazily; a loaded suite takes longer than the default second.
+        timeout: 10_000,
+      },
+    );
+    await waitFor(() => expect(embedded.specs.length).toBeGreaterThan(0), { timeout: 10_000 });
     const spec = JSON.stringify(embedded.specs.at(-1));
     // Both sessions' rows, each with its session's title as its branch.
     expect(spec).toContain('"branch":"Pendulum bench"');

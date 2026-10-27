@@ -35,6 +35,17 @@ import {
 import { ArtifactView, TextResourceView } from './components/clio/resource-viewers';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './components/ui/dialog';
 import { DashboardView } from './components/clio/dashboard-view';
+import {
+  ArchiveScienceLog,
+  ArchiveSessionHeader,
+  ArchiveViews,
+} from './lib/session-export/archive-orchestration';
+import {
+  archiveMessageDomId,
+  useArchiveSections,
+  type ArchiveRelationship,
+  type ArchiveTarget,
+} from './lib/session-export/archive-orchestration-model';
 
 declare global {
   interface Window {
@@ -49,6 +60,7 @@ interface TranscriptRow {
   tool_records: RecordedTool[];
   loaded_skills: { event_id: string; skill_id?: string; file?: string; content?: string }[];
   recording: unknown;
+  relationship?: ArchiveRelationship;
 }
 interface ArchiveData {
   transcript_views: Record<string, ArchiveTranscriptView>;
@@ -114,13 +126,31 @@ export function Review() {
         ? 'files'
         : location.hash === '#results'
           ? 'results'
-          : 'conversation',
+          : location.hash === '#science' || location.hash === '#views'
+            ? location.hash.slice(1)
+            : 'conversation',
   );
   useEffect(() => {
     const fallback = document.getElementById('archive-document');
     if (fallback) fallback.hidden = true;
     document.getElementById('root')!.hidden = false;
   }, []);
+  const sessions = rows.map((row) => ({ id: row.session.id, title: row.session.title }));
+  const sections = useArchiveSections(data.transcript.session.id, sessions);
+  // Go to a session's section, or to one message (and tool call) in it.
+  const open = (target: ArchiveTarget) => {
+    setSection('conversation');
+    const anchor = target.messageId
+      ? `${archiveMessageDomId(target.messageId)}${target.callId ? `/activity-${target.callId}` : ''}`
+      : target.sessionId;
+    history.replaceState(null, '', `#${anchor}`);
+    requestAnimationFrame(() => {
+      const node =
+        (target.messageId && document.getElementById(archiveMessageDomId(target.messageId))) ||
+        document.getElementById(target.sessionId);
+      node?.scrollIntoView({ block: 'start' });
+    });
+  };
   const tools = rows.reduce((count, row) => count + row.tool_records.length, 0);
   const skills = rows.reduce((count, row) => count + row.loaded_skills.length, 0);
   return (
@@ -166,6 +196,16 @@ export function Review() {
             <TabsTrigger className="h-auto whitespace-normal px-3 py-2" value="results">
               Results
             </TabsTrigger>
+            {sections.science && (
+              <TabsTrigger className="h-auto whitespace-normal px-3 py-2" value="science">
+                Science log
+              </TabsTrigger>
+            )}
+            {sections.views && (
+              <TabsTrigger className="h-auto whitespace-normal px-3 py-2" value="views">
+                Views
+              </TabsTrigger>
+            )}
             {data.manifest.mode !== 'transcript' && (
               <TabsTrigger className="h-auto whitespace-normal px-3 py-2" value="files">
                 Files
@@ -178,16 +218,42 @@ export function Review() {
         </div>
         <TabsContent value="conversation">
           {rows.map((row) => (
-            <ArchiveConversation
-              key={row.session.id}
-              sessionId={row.session.id}
-              metadata={row.session.metadata}
-              view={data.transcript_views[row.session.id]}
-              snapshot={data.snapshot}
-              onOpenArtifact={setOpened}
-              onOpenFile={setOpened}
-            />
+            <div key={row.session.id} className="space-y-4">
+              {row.relationship && (
+                <ArchiveSessionHeader
+                  onOpen={open}
+                  parentTitle={
+                    rows.find((other) => other.session.id === row.relationship!.parent_session_id)
+                      ?.session.title ?? ''
+                  }
+                  parentView={data.transcript_views[row.relationship.parent_session_id]}
+                  row={row}
+                />
+              )}
+              <ArchiveConversation
+                sessionId={row.session.id}
+                metadata={row.session.metadata}
+                view={data.transcript_views[row.session.id]}
+                snapshot={data.snapshot}
+                onOpenArtifact={setOpened}
+                onOpenFile={setOpened}
+                onOpenSubagent={(subagent) => {
+                  if (subagent.child_session_id && ids.includes(subagent.child_session_id))
+                    open({ sessionId: subagent.child_session_id });
+                }}
+              />
+            </div>
           ))}
+        </TabsContent>
+        <TabsContent value="science">
+          <ArchiveScienceLog
+            onOpen={open}
+            sessionId={data.transcript.session.id}
+            views={data.transcript_views}
+          />
+        </TabsContent>
+        <TabsContent value="views">
+          <ArchiveViews sessionId={data.transcript.session.id} sessions={sessions} />
         </TabsContent>
         <TabsContent value="results">
           <h2 className="mb-3 text-2xl font-semibold">Saved results</h2>
@@ -359,7 +425,15 @@ async function mountReview(): Promise<void> {
     rows = [data.transcript, ...data.transcript.children];
     ids = rows.map((row) => row.session.id);
   }
-  const repository = new ClioRepository(new ArchiveTransport(dashboard?.snapshot ?? data.snapshot));
+  const repository = new ClioRepository(
+    dashboard
+      ? new ArchiveTransport(dashboard.snapshot)
+      : // Message reads are answered from the transcripts the archive carries.
+        new ArchiveTransport(data.snapshot, {
+          views: data.transcript_views,
+          ledgers: Object.fromEntries(rows.map((row) => [row.session.id, row])),
+        }),
+  );
   document.documentElement.classList.remove('dark');
   createRoot(document.getElementById('root')!).render(
     <ReviewBoundary>

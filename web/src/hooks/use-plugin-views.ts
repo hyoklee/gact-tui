@@ -95,14 +95,16 @@ export function usePluginViews(
   const study = useScienceLog(sessionId, enabled);
   const liveSessions = useLiveStore((state) => state.entities.sessions);
   const branches = study.data?.in_study ? study.data.branches : undefined;
+  // Callers may pass a fresh list each render; its content, not its identity, keys the tree.
+  const given = options.sessions ? JSON.stringify(options.sessions) : '';
   const tree = useMemo(
     () =>
-      options.sessions
-        ? [...options.sessions]
+      given
+        ? (JSON.parse(given) as PluginViewSession[])
         : branches
           ? studyViewSessions(branches)
           : descendantViewSessions(liveSessions, sessionId),
-    [branches, liveSessions, options.sessions, sessionId],
+    [branches, given, liveSessions, sessionId],
   );
   const catalogs = useQueries({
     queries: tree.map((session) => ({

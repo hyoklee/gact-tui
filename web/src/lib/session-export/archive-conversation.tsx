@@ -40,6 +40,7 @@ export function ArchiveConversation({
   snapshot,
   onOpenArtifact,
   onOpenFile,
+  onOpenSubagent,
 }: {
   sessionId: string;
   metadata?: Record<string, unknown>;
@@ -47,6 +48,8 @@ export function ArchiveConversation({
   snapshot: SessionReviewSnapshot;
   onOpenArtifact: ClioConversationProps['onOpenArtifact'];
   onOpenFile: ClioConversationProps['onOpenFile'];
+  /** Open a child agent's conversation (its section of the archive). */
+  onOpenSubagent?: ClioConversationProps['onOpenSubagent'];
 }) {
   const markedMessageIds = useMemo(() => messageMarkIds(metadata), [metadata]);
   const [modes, setModes] = useState<Record<string, ConversationDisplayMode>>({});
@@ -97,7 +100,9 @@ export function ArchiveConversation({
   }, [sessionId, snapshot, view]);
   return (
     <A2uiReferenceSessionProvider value={sessionId}>
-      <PresentationNavigation.Provider value={{ ...entities, onOpenArtifact, onOpenFile }}>
+      <PresentationNavigation.Provider
+        value={{ ...entities, onOpenArtifact, onOpenFile, onOpenSubagent }}
+      >
         <section id={sessionId} className="flex min-w-0 flex-col gap-6">
           {entities.messages.map((message, index) => (
             <ConversationMessageRow
@@ -113,6 +118,7 @@ export function ArchiveConversation({
               }
               onOpenArtifact={onOpenArtifact}
               onOpenFile={onOpenFile}
+              onOpenSubagent={onOpenSubagent}
             />
           ))}
         </section>

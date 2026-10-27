@@ -1,6 +1,10 @@
 import { TransportError, type ClioTransport, type TransportRequest } from './transport.js';
 import { resolveSessionReference, readResolvedReferenceBytes } from './a2ui/reference-transport.js';
 import type { ArtifactTableQueryResult } from './artifact-preview-repository.js';
+import {
+  captureSessionOrchestration,
+  type CapturedStudies,
+} from './session-export-orchestration.js';
 
 export type SessionExportMode = 'transcript' | 'effects' | 'full';
 export interface SessionReviewSnapshot {
@@ -10,6 +14,8 @@ export interface SessionReviewSnapshot {
       json?: unknown;
       bytes?: string;
       error?: { message: string; status?: number; code?: string; details?: unknown };
+      /** This read answers exactly as the captured read under that key (stored once). */
+      same_as?: string;
     }
   >;
   sessions: Record<string, unknown[]>;
@@ -65,6 +71,8 @@ export async function captureSessionReview(
   };
   const json = (path: string, body?: unknown) =>
     captured.request({ method: body ? 'POST' : 'GET', path, body, decode: (v) => v });
+  // A study is read by each of its branches; it is stored once.
+  const studies: CapturedStudies = new Map();
   for (const sid of sessionIds) {
     const prefix = `/v1/sessions/${encodeURIComponent(sid)}`;
     // A dashboard captures its authored views and their data, not unrelated chat questions.
@@ -110,6 +118,19 @@ export async function captureSessionReview(
     snapshot.sessions[sid] = response.surfaces;
     await json(`${prefix}/a2ui/catalogs`);
     await json(`${prefix}/a2ui/capabilities`);
+    // How the session ran: its record, task rows, flow runs and study.
+    if (selectedSurfaces?.[sid] === undefined)
+      await captureSessionOrchestration(
+        (path) => json(path),
+        sid,
+        studies,
+        (path, message) => snapshot.failures.push({ path, message }),
+        (path, sameAs) => {
+          snapshot.responses[sessionReviewRequestKey('GET', path)] = {
+            same_as: sessionReviewRequestKey('GET', sameAs),
+          };
+        },
+      );
     const references = new Set<string>();
     const walk = (value: unknown): void => {
       if (Array.isArray(value)) value.forEach(walk);

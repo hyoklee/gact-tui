@@ -70,6 +70,7 @@ export * from './plugin-review-schemas.js';
 export * from './repository.js';
 export * from './session-history-repository.js';
 export * from './session-export-snapshot.js';
+export * from './session-export-orchestration.js';
 export * from './dashboard-report.js';
 export * from './session-observability-repository.js';
 export * from './schemas.js';
