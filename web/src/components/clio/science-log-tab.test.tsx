@@ -212,11 +212,20 @@ describe('Science log tab', () => {
     );
   });
 
-  it('draws the study views above the tree', () => {
+  it('gives views, the list and the graph the whole tab, one at a time', async () => {
+    const user = userEvent.setup();
     render(<ScienceLogView sessionId="sess_root" study={study} views={<p>Live boards</p>} />);
-    const views = screen.getByText('Live boards');
-    const tree = screen.getByRole('tree', { name: 'Study tree' });
-    expect(views.compareDocumentPosition(tree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('tree', { name: 'Study tree' })).toBeVisible();
+    expect(screen.queryByText('Live boards')).toBeNull();
+    await user.click(screen.getByRole('radio', { name: 'Views' }));
+    expect(screen.getByText('Live boards')).toBeVisible();
+    expect(screen.queryByRole('tree', { name: 'Study tree' })).toBeNull();
+  });
+
+  it('offers no Views choice when the study has none', () => {
+    render(<ScienceLogView sessionId="sess_root" study={study} />);
+    expect(screen.queryByRole('radio', { name: 'Views' })).toBeNull();
+    expect(screen.getByRole('radio', { name: 'List' })).toBeVisible();
   });
 
   it('draws the study tree with each node state in text, forks labelled', async () => {

@@ -8,7 +8,7 @@ import {
 import { ContentMarkdown } from '@/components/clio/content-markdown';
 import { messageForCall } from '@/components/clio/science-log-model';
 import { ScienceLogView } from '@/components/clio/science-log-tab';
-import { PluginViewList, PluginViewsSection } from '@/components/clio/plugin-views-panel';
+import { PluginViewList } from '@/components/clio/plugin-views-panel';
 import { ClioStatus } from '@/components/clio/status';
 import { useRepository } from '@/hooks/use-repository';
 import { usePluginViews } from '@/hooks/use-plugin-views';
@@ -191,6 +191,7 @@ export function ArchiveScienceLog({
   onOpenFolder?: (path: string) => void;
 }) {
   const log = useScienceLog(sessionId);
+  const { views: studyViews } = usePluginViews(sessionId);
   if (!log.data?.in_study) return null;
   const study = log.data;
   const viewInTranscript = (entry: ScienceEntry) => {
@@ -229,7 +230,7 @@ export function ArchiveScienceLog({
       onViewInTranscript={viewInTranscript}
       sessionId={sessionId}
       study={study}
-      views={<PluginViewsSection sessionId={sessionId} />}
+      views={studyViews.length ? <PluginViewList views={studyViews} /> : undefined}
     />
   );
 }

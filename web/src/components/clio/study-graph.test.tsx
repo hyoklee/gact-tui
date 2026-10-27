@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ScienceLogView } from './science-log-tab';
-import { studyGraph, studyGraphNeighborhood } from './study-graph-model';
+import { studyGraph, studyGraphNeighborhood, studyGraphOverview } from './study-graph-model';
 
 vi.mock('@/hooks/use-repository', () => ({ useRepository: () => ({}) }));
 vi.mock('@xyflow/react', () => ({
@@ -52,6 +52,66 @@ const entry = (
   status,
   created_at: `2026-10-27T10:00:00Z`,
   invocation: `call-${id}`,
+});
+
+/** One experiment observed 20 times, and one evidence entry citing every observation. */
+const trialsStudy = (): ScienceStudy => ({
+  ...study,
+  entries: [
+    entry('q', 'root', 'question', { statement: 'Which strategy is best?' }),
+    entry('h', 'root', 'hypothesis', { claim: 'A beats B' }, [{ to: 'q', relation: 'question' }]),
+    entry('e', 'trial', 'experiment', { method: '20 trials' }, [
+      { to: 'h', relation: 'hypothesis' },
+    ]),
+    ...Array.from({ length: 20 }, (_, i) =>
+      entry(`o${i}`, 'trial', 'observation', { result: `trial ${i}` }, [
+        { to: 'e', relation: 'experiment' },
+      ]),
+    ),
+    entry('v', 'trial', 'evidence', { interpretation: 'A wins' }, [
+      ...Array.from({ length: 20 }, (_, i) => ({ to: `o${i}`, relation: 'observation' })),
+      { to: 'h', relation: 'supports' },
+    ]),
+  ],
+});
+
+describe('study overview', () => {
+  it("draws an experiment's observations as one node with counted links", () => {
+    const overview = studyGraphOverview(trialsStudy());
+    expect(overview.nodes.map((node) => node.id).sort()).toEqual(['e', 'group:e', 'h', 'q', 'v']);
+    expect(overview.nodes.find((node) => node.id === 'group:e')).toMatchObject({
+      title: '20 observations',
+      members: Array.from({ length: 20 }, (_, i) => `o${i}`),
+    });
+    expect(overview.edges).toContainEqual(
+      expect.objectContaining({
+        source: 'group:e',
+        target: 'e',
+        relation: 'experiment',
+        count: 20,
+      }),
+    );
+    expect(overview.edges).toContainEqual(
+      expect.objectContaining({
+        source: 'v',
+        target: 'group:e',
+        relation: 'observation',
+        count: 20,
+      }),
+    );
+  });
+
+  it('opens every grouped observation in the inspector', async () => {
+    const user = userEvent.setup();
+    render(<ScienceLogView sessionId="root" study={trialsStudy()} />);
+    await user.click(screen.getByRole('radio', { name: 'Graph' }));
+    await user.click(screen.getByRole('button', { name: 'Entire study' }));
+    expect(screen.getByText('24 entries, 43 recorded links')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: /^Observations: 20 observations/ }));
+    const inspector = screen.getByRole('complementary', { name: 'Record inspector' });
+    expect(within(inspector).getByRole('heading', { name: '20 observations' })).toBeVisible();
+    expect(within(inspector).getAllByText(/^trial \d+$/)).toHaveLength(20);
+  });
 });
 
 describe('recorded study graph', () => {

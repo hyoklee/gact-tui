@@ -44,7 +44,14 @@ import {
   viewPart,
 } from '@/test-fixtures/plugin-view/plugin-view-fixtures';
 import { useLiveStore } from '@/store/live-store';
-import { PluginViewsSection, PluginViewsTab } from './plugin-views-panel';
+import { usePluginViews } from '@/hooks/use-plugin-views';
+import { PluginViewList, PluginViewsTab } from './plugin-views-panel';
+
+/** The views the Science log tab shows: the hook, then the list. */
+function StudyViews({ sessionId }: { sessionId: string }) {
+  const { views } = usePluginViews(sessionId);
+  return <PluginViewList views={views} />;
+}
 
 const events: Record<string, PluginViewEvent[]> = {
   sess_root: pluginViewEventsFromMessages('sess_root', [
@@ -192,7 +199,7 @@ describe('plugin views', () => {
           ),
         ],
       });
-      renderWithClient(<PluginViewsSection sessionId="sess_root" />);
+      renderWithClient(<StudyViews sessionId="sess_root" />);
       const view = await screen.findByRole('region', { name: 'Bench readings' });
       // The law is named in words, not by a colour or a mark alone.
       const law = await within(view).findByText(/Shadow: the current law, hypothesis/u);
@@ -221,15 +228,6 @@ describe('plugin views', () => {
     const view = await screen.findByRole('region', { name: 'Bench readings' });
     expect(within(view).getByText(/1 item from 1 session/u)).toBeVisible();
     expect(repository.pluginViewEvents).not.toHaveBeenCalledWith('sess_child', expect.anything());
-  });
-
-  it('shows nothing above a study tree until a view is recorded', async () => {
-    repository.pluginViewEvents.mockResolvedValue([]);
-    const { container } = renderWithClient(
-      <PluginViewsSection sessionId="sess_root" sessions={[{ id: 'sess_root', title: 'Root' }]} />,
-    );
-    await waitFor(() => expect(repository.pluginViewEvents).toHaveBeenCalled());
-    expect(container).toBeEmptyDOMElement();
   });
 
   it('says when a session tree has no views', async () => {

@@ -20,6 +20,7 @@ import { ENTRY_TYPE_LABELS } from './science-log-model';
 import {
   studyGraph,
   studyGraphNeighborhood,
+  studyGraphOverview,
   type StudyGraphModel,
   type StudyGraphNode,
 } from './study-graph-model';
@@ -58,18 +59,36 @@ export function StudyGraph({
 }: StudyGraphProps) {
   const container = useRef<HTMLDivElement>(null);
   const model = useMemo(() => studyGraph(study), [study]);
+  // The whole study draws each experiment's observations as one node, so a large
+  // study stays readable; the linked scope shows the individual entries.
+  const overview = useMemo(() => studyGraphOverview(study, model), [study, model]);
   const focused = scope === 'linked' && selectedEntry ? selectedEntry : undefined;
-  const graph = useMemo(
-    () => layoutStudyGraph(focused ? studyGraphNeighborhood(model, focused) : model),
-    [model, focused],
-  );
+  const graph = useMemo(() => {
+    if (!focused) return layoutStudyGraph(overview);
+    const source = focused.startsWith('group:') ? overview : model;
+    return layoutStudyGraph(studyGraphNeighborhood(source, focused));
+  }, [model, overview, focused]);
   const nodes = useMemo<EntryNode[]>(
     () =>
       graph.nodes.map(({ entry, ...node }) => ({
         ...node,
-        data: { entry, selected: node.id === selectedEntry, onSelect: onSelectEntry },
+        data: {
+          entry,
+          selected:
+            node.id === selectedEntry ||
+            Boolean(selectedEntry && entry.members?.includes(selectedEntry)),
+          onSelect: onSelectEntry,
+        },
       })),
     [graph.nodes, selectedEntry, onSelectEntry],
+  );
+  const entryCount = graph.nodes.reduce(
+    (total, { entry }) => total + (entry.members?.length ?? 1),
+    0,
+  );
+  const linkCount = graph.edges.reduce(
+    (total, edge) => total + Number((edge.data as { count?: number } | undefined)?.count ?? 1),
+    0,
   );
   if (!model.nodes.length)
     return <p className="text-sm text-muted-foreground">No entries to graph yet.</p>;
@@ -77,7 +96,7 @@ export function StudyGraph({
     <section aria-label="Study relationship graph" className="grid min-w-0 gap-2">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span>
-          {graph.nodes.length} entries, {graph.edges.length} recorded links
+          {entryCount} entries, {linkCount} recorded links
         </span>
         <Button
           aria-pressed={scope === 'all'}
@@ -97,12 +116,9 @@ export function StudyGraph({
           Selected and linked
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Arrows follow recorded relationships. Select an entry to inspect its record.
-      </p>
       <div
         ref={container}
-        className="h-[clamp(26rem,62vh,46rem)] min-w-0 overflow-hidden rounded-md border bg-background"
+        className="h-[max(26rem,calc(100dvh-14rem))] min-w-0 overflow-hidden rounded-md border bg-background"
       >
         <ReactFlow<EntryNode, Edge>
           key={focused ? `entry:${focused}` : 'study'}
@@ -155,7 +171,9 @@ function FitOnResize({ container }: { container: RefObject<HTMLDivElement | null
 
 function EntryCard({ data }: NodeProps<EntryNode>) {
   const { entry } = data;
-  const kind = ENTRY_TYPE_LABELS[entry.kind as keyof typeof ENTRY_TYPE_LABELS] ?? 'Entry';
+  const kind = entry.members
+    ? 'Observations'
+    : (ENTRY_TYPE_LABELS[entry.kind as keyof typeof ENTRY_TYPE_LABELS] ?? 'Entry');
   return (
     <div className="relative" style={{ width, height }}>
       <Handle
@@ -217,7 +235,8 @@ function layoutStudyGraph(model: StudyGraphModel): { nodes: PositionedEntry[]; e
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      label: edge.relation,
+      label: edge.count && edge.count > 1 ? `${edge.relation} (${edge.count})` : edge.relation,
+      data: { count: edge.count ?? 1 },
       type: 'smoothstep',
       markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--primary)', width: 18, height: 18 },
       style: { stroke: 'var(--primary)', strokeWidth: 1.5 },

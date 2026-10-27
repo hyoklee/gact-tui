@@ -2,10 +2,11 @@ import type { ScienceEntry, ScienceStudy, SubagentRun } from '@clio/core/v3';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ListIcon, NetworkIcon } from 'lucide-react';
+import { LayoutGridIcon, ListIcon, NetworkIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useOpenTaskHandle } from '@/hooks/use-flow-run';
+import { usePluginViews } from '@/hooks/use-plugin-views';
 import { useRepository } from '@/hooks/use-repository';
 import { useScienceLog } from '@/hooks/use-science-log';
 import { useLiveStore } from '@/store/live-store';
@@ -20,9 +21,10 @@ import {
 } from './science-log-model';
 import { ScienceLogPanel } from './science-log-panel';
 import type { ScienceFileReference } from './science-log-sources';
-import { PluginViewsSection } from './plugin-views-panel';
+import { PluginViewList } from './plugin-views-panel';
 import { StudyTree } from './study-tree';
 import { StudyGraph, type StudyGraphScope } from './study-graph';
+import { observationGroups } from './study-graph-model';
 import type { SubagentOpenTarget } from './subagent-card';
 
 export interface ScienceLogTabProps {
@@ -43,6 +45,7 @@ export function ScienceLogTab({
   const log = useScienceLog(sessionId);
   const openTask = useOpenTaskHandle(onOpenSubagent);
   const viewInTranscript = useTranscriptJump(sessionId, workspaceId);
+  const { views } = usePluginViews(sessionId);
   if (log.isPending) return <p className="p-4 text-sm text-muted-foreground">Loading the study…</p>;
   if (log.error)
     return (
@@ -65,7 +68,7 @@ export function ScienceLogTab({
       }
       sessionId={sessionId}
       study={log.data}
-      views={<PluginViewsSection sessionId={sessionId} />}
+      views={views.length ? <PluginViewList views={views} /> : undefined}
     />
   );
 }
@@ -111,7 +114,18 @@ export function ScienceLogView({
     : tree.branch;
   const [selectedBranch, setSelectedBranch] = useState(initial);
   const [focusedEntry, setFocusedEntry] = useState<string>();
-  const [studyView, setStudyView] = useState('list');
+  const [studyView, setStudyView] = useState<'views' | 'list' | 'graph'>('list');
+  // Views, the list and the graph each get the whole tab rather than sharing it.
+  const mode = studyView === 'views' && !views ? 'list' : studyView;
+  const groups = useMemo(() => observationGroups(study), [study]);
+  const [selectedGroup, setSelectedGroup] = useState<string>();
+  const groupEntries = useMemo(
+    () =>
+      (selectedGroup ? (groups.get(selectedGroup) ?? []) : [])
+        .map((id) => byId.get(id))
+        .filter((entry) => entry !== undefined),
+    [byId, groups, selectedGroup],
+  );
   const [graphScope, setGraphScope] = useState<StudyGraphScope>('linked');
   const selectedEntry = byId.get(focusedEntry || '') ?? byId.get(study.study) ?? study.entries[0];
   const selectEntry = useCallback(
@@ -119,16 +133,21 @@ export function ScienceLogView({
       const entry = byId.get(entryId);
       if (!entry) return;
       if (entry.branch) setSelectedBranch(entry.branch);
+      setSelectedGroup(undefined);
       setFocusedEntry(entryId);
     },
     [byId],
+  );
+  const selectGraphNode = useCallback(
+    (id: string) => (groups.has(id) ? setSelectedGroup(id) : selectEntry(id)),
+    [groups, selectEntry],
   );
   const selectNode = (node: StudyNode) => {
     setSelectedBranch(node.branch);
     setFocusedEntry(node.entry);
   };
   useEffect(() => {
-    if (!focusedEntry || studyView !== 'list') return;
+    if (!focusedEntry || mode !== 'list') return;
     // After the branch switch renders: bring the entry into view without animation.
     const frame = window.requestAnimationFrame(() => {
       const card = document.getElementById(scienceEntryDomId(focusedEntry));
@@ -136,25 +155,30 @@ export function ScienceLogView({
       card?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [focusedEntry, selectedBranch, studyView]);
+  }, [focusedEntry, selectedBranch, mode]);
   const entries = useMemo(
     () => branchEntries(study.entries, selectedBranch),
     [selectedBranch, study.entries],
   );
   return (
     <div className="@container/science-log flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-auto p-3 [&>*]:shrink-0">
-      {views}
       <ToggleGroup
         aria-label="Study view"
         type="single"
-        value={studyView}
+        value={mode}
         onValueChange={(value) => {
-          if (value) setStudyView(value);
+          if (value) setStudyView(value as typeof studyView);
         }}
         variant="outline"
         size="sm"
         spacing={0}
       >
+        {views ? (
+          <ToggleGroupItem value="views">
+            <LayoutGridIcon aria-hidden="true" />
+            Views
+          </ToggleGroupItem>
+        ) : null}
         <ToggleGroupItem value="list">
           <ListIcon aria-hidden="true" />
           List
@@ -164,16 +188,37 @@ export function ScienceLogView({
           Graph
         </ToggleGroupItem>
       </ToggleGroup>
-      {studyView === 'graph' ? (
+      {mode === 'views' ? (
+        <div className="min-w-0">{views}</div>
+      ) : mode === 'graph' ? (
         <div className="grid min-w-0 items-start gap-4 @min-[58rem]/science-log:grid-cols-[minmax(0,1fr)_21rem]">
           <StudyGraph
             study={study}
-            selectedEntry={selectedEntry?.id}
-            onSelectEntry={selectEntry}
+            selectedEntry={selectedGroup ?? selectedEntry?.id}
+            onSelectEntry={selectGraphNode}
             scope={graphScope}
             onScopeChange={setGraphScope}
           />
-          {selectedEntry ? (
+          {selectedGroup && groupEntries.length ? (
+            <aside
+              aria-label="Record inspector"
+              className="grid max-h-[46rem] min-w-0 gap-3 overflow-auto rounded-md border bg-card p-3"
+            >
+              <ScienceLogPanel
+                heading={`${groupEntries.length} observations`}
+                showSelection={false}
+                backlinks={cited}
+                branchTitle={titles.get(groupEntries[0].branch) || groupEntries[0].branch}
+                byId={byId}
+                entries={groupEntries}
+                onSelectEntry={selectEntry}
+                fileHref={fileHref}
+                onViewCall={onViewCall}
+                onViewInTranscript={onViewInTranscript}
+                titles={titles}
+              />
+            </aside>
+          ) : selectedEntry ? (
             <aside
               aria-label="Record inspector"
               className="grid min-w-0 gap-3 rounded-md border bg-card p-3"

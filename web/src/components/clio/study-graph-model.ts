@@ -14,6 +14,8 @@ export interface StudyGraphNode {
   branch: string;
   state: ScienceState;
   missing: boolean;
+  /** For a group node: the entries it stands for. */
+  members?: string[];
 }
 
 export interface StudyGraphEdge {
@@ -21,6 +23,8 @@ export interface StudyGraphEdge {
   source: string;
   target: string;
   relation: string;
+  /** How many recorded links this edge stands for (more than one into a group). */
+  count?: number;
 }
 
 export interface StudyGraphModel {
@@ -81,4 +85,57 @@ export function studyGraphNeighborhood(
     nodes: graph.nodes.filter((node) => ids.has(node.id)),
     edges: graph.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target)),
   };
+}
+
+/** Each experiment's observations (two or more), keyed by their group node id. */
+export function observationGroups(study: ScienceStudy): Map<string, string[]> {
+  const groups = new Map<string, string[]>();
+  for (const entry of study.entries) {
+    if (entry.type !== 'observation') continue;
+    const experiment = entry.links.find((link) => link.relation === 'experiment')?.to;
+    const key = `group:${experiment || entry.branch}`;
+    groups.set(key, [...(groups.get(key) ?? []), entry.id]);
+  }
+  for (const [key, ids] of groups) if (ids.length < 2) groups.delete(key);
+  return groups;
+}
+
+/** The whole study at a readable size: each experiment's observations drawn as one node. */
+export function studyGraphOverview(
+  study: ScienceStudy,
+  graph: StudyGraphModel = studyGraph(study),
+): StudyGraphModel {
+  const groups = observationGroups(study);
+  const groupOf = new Map<string, string>();
+  for (const [key, ids] of groups) for (const id of ids) groupOf.set(id, key);
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  const nodes = graph.nodes.filter((node) => !groupOf.has(node.id));
+  for (const [key, ids] of groups) {
+    const members = ids.map((id) => byId.get(id)).filter((node) => node !== undefined);
+    const labels = new Set(members.map((node) => node.state.label));
+    const branches = new Set(members.map((node) => node.branch));
+    const [first] = members;
+    nodes.push({
+      id: key,
+      kind: 'observations',
+      title: `${ids.length} observations`,
+      branch: branches.size === 1 ? (first?.branch ?? '') : `${branches.size} branches`,
+      state:
+        labels.size === 1 && first
+          ? { ...first.state, label: `all ${first.state.label}` }
+          : { label: 'mixed', tone: 'neutral' },
+      missing: false,
+      members: ids,
+    });
+  }
+  const edges = new Map<string, StudyGraphEdge>();
+  for (const edge of graph.edges) {
+    const source = groupOf.get(edge.source) ?? edge.source;
+    const target = groupOf.get(edge.target) ?? edge.target;
+    if (source === target) continue;
+    const id = JSON.stringify([source, target, edge.relation]);
+    const seen = edges.get(id);
+    edges.set(id, { ...edge, id, source, target, count: (seen?.count ?? 0) + (edge.count ?? 1) });
+  }
+  return { nodes, edges: [...edges.values()] };
 }
