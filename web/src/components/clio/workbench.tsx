@@ -11,6 +11,7 @@ import {
   BoxesIcon,
   BoxIcon,
   FileCode2Icon,
+  FlaskConicalIcon,
   FileDiffIcon,
   FolderIcon,
   Layers3Icon,
@@ -57,6 +58,7 @@ import { PresentationNavigation } from './presentation-navigation';
 import { workspaceFilePath } from '@/lib/workspace-file-path';
 import { useLiveStore } from '@/store/live-store';
 import { useWorkbenchTabVisibility } from './use-workbench-tab-visibility';
+import { scienceLogTab, useScienceLogTab } from './science-log-tab-state';
 
 export interface ClioWorkbenchProps {
   workspaceId: string;
@@ -89,6 +91,8 @@ export interface ClioWorkbenchProps {
   /** Finished child agents are not loaded yet (they sit behind Show completed work). */
   finishedWorkHidden?: boolean;
   requestedOpen?: { key: string; request: ClioWorkbenchOpenRequest };
+  /** The session belongs to a study (its science log read says so); unknown hides the tab. */
+  inStudy?: boolean;
 }
 
 export type ClioWorkbenchOpenRequest =
@@ -188,6 +192,7 @@ const canvasResourceTabs = {
   artifacts: artifactBrowserTab,
   agent: agentTab,
   resources: resourceBrowserTab,
+  'science-log': scienceLogTab,
 } satisfies Record<CanvasResourceKind, WorkbenchTab>;
 
 const workbenchTabIcons = {
@@ -198,6 +203,7 @@ const workbenchTabIcons = {
   artifacts: BoxIcon,
   agent: BotIcon,
   resources: PaperclipIcon,
+  'science-log': FlaskConicalIcon,
   'workspace-file': FileCode2Icon,
   diff: FileDiffIcon,
   artifact: BoxIcon,
@@ -241,6 +247,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
       subagents = [],
       finishedWorkHidden = false,
       requestedOpen,
+      inStudy,
     },
     ref,
   ) {
@@ -272,7 +279,8 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
       return () => onFilesViewActiveChange?.(false);
     }, [activeTabId, onFilesViewActiveChange]);
 
-    useWorkbenchTabVisibility(tabStripRef, activeTabRef, activeTabId, tabs, maximized);
+    const shown = useScienceLogTab(inStudy, sessionId, tabs, setTabs, activeTabId);
+    useWorkbenchTabVisibility(tabStripRef, activeTabRef, shown.activeTabId, shown.tabs, maximized);
 
     const openTab = useCallback((tab: WorkbenchTab) => {
       setTabs((current) =>
@@ -454,7 +462,11 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
           maximized && 'fixed inset-0 z-[80] bg-background shadow-2xl',
         )}
       >
-        <Tabs className="min-h-0 flex-1 gap-0" onValueChange={setActiveTabId} value={activeTabId}>
+        <Tabs
+          className="min-h-0 flex-1 gap-0"
+          onValueChange={setActiveTabId}
+          value={shown.activeTabId}
+        >
           <div
             className="flex h-10 shrink-0 items-center gap-1 border-b bg-background/80 px-1.5"
             data-slot="canvas-header"
@@ -468,11 +480,11 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
                 getItemValue={workbenchTabId}
                 onValueChange={setTabs}
                 strategy="horizontal"
-                value={tabs}
+                value={shown.tabs}
               >
                 <TabsList className="h-8 w-max justify-start gap-0.5 rounded-lg bg-transparent p-0.5">
-                  {tabs.map((tab) => {
-                    const active = tab.id === activeTabId;
+                  {shown.tabs.map((tab) => {
+                    const active = tab.id === shown.activeTabId;
                     return (
                       // The close button below is a SIBLING, not a child, of TabsTrigger: Radix's
                       // Tabs.Trigger renders a real <button role="tab">, whose content model
@@ -602,6 +614,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
               onOpenTerminal={onOpenTerminal}
               subagents={subagents}
               finishedWorkHidden={finishedWorkHidden}
+              scienceLog={inStudy === true}
             />
             <Button
               aria-label={maximized ? 'Restore canvas beside conversation' : 'Maximize canvas'}
@@ -624,7 +637,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
               )}
             </Button>
           </div>
-          {tabs.map((tab) => (
+          {shown.tabs.map((tab) => (
             <TabsContent className="m-0 min-h-0 overflow-hidden" key={tab.id} value={tab.id}>
               {canvasVisible ? (
                 <WorkbenchTabErrorBoundary label={tab.label} onClose={() => closeTab(tab.id)}>
@@ -691,7 +704,7 @@ export const ClioWorkbench = forwardRef<ClioWorkbenchHandle, ClioWorkbenchProps>
               ) : null}
             </TabsContent>
           ))}
-          {tabs.length === 0 ? (
+          {shown.tabs.length === 0 ? (
             <Empty className="h-full border-0">
               <EmptyHeader>
                 <EmptyMedia variant="icon">

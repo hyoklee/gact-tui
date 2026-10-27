@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { flowRunSchema, type FlowRun } from './flow-run-domain.js';
 import { MemoryRepository } from './memory-repository.js';
 import { TransportError } from './transport.js';
+import { readScienceLog, type ScienceLog } from './science-log.js';
 
 const coreReferenceSchema = z.object({
   session_id: z.string(),
@@ -94,6 +95,11 @@ export type SessionCoordinationRight = SessionCoordinationGrant['rights'][number
 
 /** Shared task controls use their original owner and report per-handle failures. */
 export class TaskRepository extends MemoryRepository {
+  /** The study a session belongs to (its branches and entries), or `in_study: false`. */
+  public scienceLog(sessionId: string, signal?: AbortSignal): Promise<ScienceLog> {
+    return readScienceLog(this.transport, sessionId, signal);
+  }
+
   /** One paginated Core snapshot of the authenticated human's work across sessions. */
   public queryTasks(
     options: {

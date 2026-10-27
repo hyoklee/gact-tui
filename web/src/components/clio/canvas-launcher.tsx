@@ -3,6 +3,7 @@ import {
   ActivityIcon,
   BotIcon,
   BoxIcon,
+  FlaskConicalIcon,
   FolderIcon,
   PaperclipIcon,
   TerminalSquareIcon,
@@ -22,7 +23,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ClioStatus } from './status';
 
-export type CanvasResourceKind = 'session' | 'work' | 'files' | 'resources' | 'artifacts' | 'agent';
+export type CanvasResourceKind =
+  | 'session'
+  | 'work'
+  | 'files'
+  | 'resources'
+  | 'artifacts'
+  | 'agent'
+  | 'science-log';
 
 /** Opens one peer canvas tab instead of nesting unrelated resource types. */
 export function CanvasLauncher({
@@ -31,6 +39,7 @@ export function CanvasLauncher({
   onOpenTerminal,
   subagents = [],
   finishedWorkHidden = false,
+  scienceLog = false,
 }: {
   onOpen: (kind: CanvasResourceKind) => void;
   /** Opens one child agent of this session as a canvas tab beside the conversation. */
@@ -39,6 +48,8 @@ export function CanvasLauncher({
   subagents?: readonly SubagentRun[];
   /** Finished children are not loaded yet, so an empty list does not mean none ran. */
   finishedWorkHidden?: boolean;
+  /** The session belongs to a study, so its Science log can open. */
+  scienceLog?: boolean;
 }) {
   const openableSubagents = subagents.filter((subagent) => subagent.child_session_id);
   return (
@@ -62,6 +73,11 @@ export function CanvasLauncher({
         <DropdownMenuItem onSelect={() => onOpen('work')}>
           <ActivityIcon aria-hidden="true" /> Work
         </DropdownMenuItem>
+        {scienceLog ? (
+          <DropdownMenuItem onSelect={() => onOpen('science-log')}>
+            <FlaskConicalIcon aria-hidden="true" /> Science log
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => onOpen('files')}>
           <FolderIcon aria-hidden="true" /> File explorer

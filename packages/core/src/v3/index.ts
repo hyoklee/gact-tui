@@ -12,6 +12,7 @@ export * from './work-state.js';
 export * from './interaction-domain.js';
 export * from './plugin-domain.js';
 export * from './flow-run-domain.js';
+export * from './science-log.js';
 export * from './capability-domain.js';
 export * from './memory-domain.js';
 export * from './prompt-domain.js';
