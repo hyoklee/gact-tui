@@ -130,6 +130,11 @@ describe('plugin views', () => {
     expect(spec).toContain('"branch":"Pendulum bench"');
     expect(spec).toContain('"branch":"Arm sweep"');
     expect(repository.pluginViewEvents).toHaveBeenCalledWith('sess_child', expect.anything());
+    // The faceted spec draws, with the renderer's selection on its plot unit.
+    expect(
+      await within(view).findAllByText('seconds per cycle', {}, { timeout: 10_000 }),
+    ).not.toHaveLength(0);
+    expect(within(view).queryByText(/Chart unavailable/u)).toBeNull();
   });
 
   it('reads only sessions whose catalogs include a plugin catalog', async () => {
