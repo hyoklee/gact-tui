@@ -34,6 +34,7 @@ mod menu;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod menu_spec;
 mod net_util;
+mod package_stamp;
 mod package_version;
 mod plugins;
 mod remote_lifecycle;
