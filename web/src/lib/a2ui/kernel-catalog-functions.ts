@@ -136,12 +136,10 @@ const openViewFunction = createFunctionImplementation(
     returnType: 'void',
     schema: z.object({
       view: z.string().regex(/^(e_[0-9a-f]{12}|artifact:\/\/artifact_[A-Za-z0-9_-]+)$/u),
+      // `key`, not `path`: an object with a `path` is a data binding A2UI would resolve.
       selection: z
         .object({
-          path: z
-            .string()
-            .max(256)
-            .regex(/^\/selection\/[^/]+$/u),
+          key: z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/u),
           field: z.string().min(1).max(128),
           values: z.array(z.string()).max(10_000),
         })
@@ -157,7 +155,14 @@ const openViewFunction = createFunctionImplementation(
       });
       return;
     }
-    runtime.openView(view, selection);
+    runtime.openView(
+      view,
+      selection && {
+        path: `/selection/${selection.key}`,
+        field: selection.field,
+        values: selection.values,
+      },
+    );
   },
 );
 
