@@ -1,5 +1,7 @@
 import { a2uiSurfaceSchema, type ScienceStudy, type ScienceView } from '@clio/core/v3';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useStudyViewFocus } from '@/lib/a2ui/open-view';
 import { useA2uiSessionRegistry } from '@/lib/a2ui/processor-store';
 import { ClioA2UISurface } from './a2ui-surface';
 import { branchTitle, studyViewDomId } from './science-log-model';
@@ -22,20 +24,45 @@ export function StudyViews({
   );
   // Each owner's catalogs resolve its surface, whichever session this tab belongs to.
   useA2uiSessionRegistry(study.views.map((view) => view.session_id));
+  // One view at a time: a study's dashboards are alternatives to read, not one page.
+  const [chosen, setChosen] = useState<string>();
+  const requested = useStudyViewFocus((state) => state.entry);
+  const request = useStudyViewFocus((state) => state.nonce);
+  const [answered, setAnswered] = useState<number>();
+  if (requested && request !== answered && study.views.some((view) => view.entry === requested)) {
+    setAnswered(request);
+    setChosen(requested);
+  }
+  const shown = study.views.find((view) => view.entry === chosen) ?? study.views[0];
+  const ownerOf = (view: ScienceView) =>
+    view.session_id === study.root_session_id
+      ? 'the study'
+      : titles.get(view.session_id) || view.session_id;
   return (
-    <div className="grid min-w-0 gap-6">
-      {study.views.map((view) => (
-        <StudyViewPanel
-          key={view.entry}
-          owner={
-            view.session_id === study.root_session_id
-              ? 'the study'
-              : titles.get(view.session_id) || view.session_id
-          }
-          readOnly={readOnly}
-          view={view}
-        />
-      ))}
+    <div className="grid min-w-0 gap-4">
+      {study.views.length > 1 ? (
+        <ToggleGroup
+          aria-label="Study views"
+          className="flex-wrap justify-start"
+          onValueChange={(value) => {
+            if (value) setChosen(value);
+          }}
+          size="sm"
+          spacing={1}
+          type="single"
+          value={shown?.entry ?? ''}
+          variant="outline"
+        >
+          {study.views.map((view) => (
+            <ToggleGroupItem key={view.entry} value={view.entry}>
+              {view.title || 'Untitled view'}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      ) : null}
+      {shown ? (
+        <StudyViewPanel key={shown.entry} owner={ownerOf(shown)} readOnly={readOnly} view={shown} />
+      ) : null}
     </div>
   );
 }

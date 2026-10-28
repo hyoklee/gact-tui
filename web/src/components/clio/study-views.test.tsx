@@ -1,5 +1,6 @@
 import { scienceLogSchema, type ScienceStudy } from '@clio/core/v3';
 import { cleanup, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { StudyViews } from './study-views';
 
@@ -50,21 +51,31 @@ const view = (entry: string, sessionId: string, extra: Record<string, unknown> =
 });
 
 describe('Study views', () => {
-  it("draws each attached view as its owner's surface, with its title, purpose and owner", () => {
+  it("shows one view at a time, as its owner's surface, and switches by title", async () => {
     render(<StudyViews study={study([view('e_v1', 'sess_root'), view('e_v2', 'sess_b')])} />);
-    const [overview, drill] = screen.getAllByRole('region');
-    expect(within(overview!).getByRole('heading', { name: 'Title e_v1' })).toBeVisible();
-    expect(within(overview!).getByText('Purpose e_v1')).toBeVisible();
-    expect(within(overview!).getByText('Attached by the study')).toBeVisible();
-    expect(within(overview!).getByText('surface surface_e_v1')).toBeVisible();
-    expect(within(drill!).getByText('Attached by Entropy branch')).toBeVisible();
-    expect(within(drill!).getByText('surface surface_e_v2')).toHaveAttribute(
+    const shown = screen.getByRole('region');
+    expect(within(shown).getByRole('heading', { name: 'Title e_v1' })).toBeVisible();
+    expect(within(shown).getByText('Purpose e_v1')).toBeVisible();
+    expect(within(shown).getByText('Attached by the study')).toBeVisible();
+    expect(within(shown).getByText('surface surface_e_v1')).toBeVisible();
+    expect(screen.queryByText('surface surface_e_v2')).toBeNull();
+    const switcher = screen.getByRole('radiogroup', { name: 'Study views' });
+    await userEvent.click(within(switcher).getByRole('radio', { name: 'Title e_v2' }));
+    const drill = screen.getByRole('region');
+    expect(within(drill).getByText('Attached by Entropy branch')).toBeVisible();
+    expect(within(drill).getByText('surface surface_e_v2')).toHaveAttribute(
       'data-read-only',
       'false',
     );
+    expect(screen.queryByText('surface surface_e_v1')).toBeNull();
   });
 
-  it('says in words when the owner deleted the surface, or it cannot be read', () => {
+  it('has no switcher for a single view', () => {
+    render(<StudyViews study={study([view('e_v1', 'sess_root')])} />);
+    expect(screen.queryByRole('radiogroup', { name: 'Study views' })).toBeNull();
+  });
+
+  it('says in words when the owner deleted the surface, or it cannot be read', async () => {
     render(
       <StudyViews
         readOnly
@@ -75,6 +86,7 @@ describe('Study views', () => {
       />,
     );
     expect(screen.getByText(/has since deleted its dashboard/u)).toBeVisible();
+    await userEvent.click(screen.getByRole('radio', { name: 'Title e_v2' }));
     expect(screen.getByRole('alert')).toHaveTextContent("This view's dashboard could not be read.");
   });
 });
