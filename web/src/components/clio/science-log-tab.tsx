@@ -162,10 +162,8 @@ export function ScienceLogView({
     [selectedBranch, study.entries],
   );
   const [openedView, setOpenedView] = useState<string>();
-  const openView = useCallback((entry: string) => {
-    setStudyView('views');
-    setOpenedView(entry);
-  }, []);
+  // The tree's links ask as any surface's `openView` does, so Views shows that view.
+  const openView = useCallback((entry: string) => useStudyViewFocus.getState().focus(entry), []);
   // `openView` from any surface asks for one of this study's views: shown once per ask.
   const requestedView = useStudyViewFocus((state) => state.entry);
   const request = useStudyViewFocus((state) => state.nonce);

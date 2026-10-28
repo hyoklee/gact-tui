@@ -90,3 +90,21 @@ describe('Study views', () => {
     expect(screen.getByRole('alert')).toHaveTextContent("This view's dashboard could not be read.");
   });
 });
+
+describe('Study tree view links', () => {
+  it("open Views on the view the link names, not the switcher's first", async () => {
+    const { ScienceLogView } = await import('./science-log-tab');
+    const user = userEvent.setup();
+    const viewed = study([view('e_v1', 'sess_root'), view('e_v2', 'sess_b')]);
+    render(
+      <ScienceLogView sessionId="sess_root" study={viewed} views={<StudyViews study={viewed} />} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Title e_v2' }));
+    const switcher = screen.getByRole('radiogroup', { name: 'Study views' });
+    expect(within(switcher).getByRole('radio', { name: 'Title e_v2' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(screen.getByText('surface surface_e_v2')).toBeVisible();
+  });
+});
