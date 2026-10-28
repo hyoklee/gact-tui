@@ -110,6 +110,7 @@
   "lm_config.auth.required": "auth: inicio Globus requerido",
   "lm_config.auth.ready": "auth: token Globus listo",
   "lm_config.auth.authenticate": "Autenticar",
+  "lm_config.auth.code": "código",
   "lm_config.auth.refresh": "Refrescar token",
   "lm_config.auth.launching": "Abriendo inicio...",
   "lm_config.auth.no_key": "auth: no requiere clave",

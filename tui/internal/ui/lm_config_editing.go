@@ -82,6 +82,10 @@ func (c *lmConfigComponent) handleBackspace() tea.Cmd {
 		if len(c.apiKey) > 0 {
 			c.apiKey = c.apiKey[:len(c.apiKey)-1]
 		}
+	case lmFieldAuthCode:
+		if len(c.authCode) > 0 {
+			c.authCode = c.authCode[:len(c.authCode)-1]
+		}
 	}
 	return nil
 }
@@ -103,6 +107,8 @@ func (c *lmConfigComponent) handleTextInput(text string) tea.Cmd {
 		c.selectFirstFilteredModel()
 	case lmFieldAPIKey:
 		c.apiKey += text
+	case lmFieldAuthCode:
+		c.authCode += text
 	}
 	return nil
 }
@@ -128,6 +134,8 @@ func (c *lmConfigComponent) handlePaste(content string) tea.Cmd {
 		c.selectFirstFilteredModel()
 	case lmFieldAPIKey:
 		c.apiKey += strings.ReplaceAll(text, "\n", "")
+	case lmFieldAuthCode:
+		c.authCode += strings.ReplaceAll(text, "\n", "")
 	}
 	return nil
 }

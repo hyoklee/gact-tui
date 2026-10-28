@@ -2,7 +2,11 @@ package ui
 
 // lm_config_input.go is the LM-config modal's keyboard and wheel router.
 
-import tea "charm.land/bubbletea/v2"
+import (
+	"strings"
+
+	tea "charm.land/bubbletea/v2"
+)
 
 // handleKey drives the modal while it's open.
 func (c *lmConfigComponent) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -18,6 +22,17 @@ func (c *lmConfigComponent) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return c.app, nil
 	case "ctrl+r":
 		return c.app, c.refresh()
+	case "ctrl+o":
+		// While a sign-in waits for its code, Ctrl+O shows the whole link
+		// outside the TUI for copying (the pane may be too short for it).
+		if c.authFlowPending() {
+			label := c.authFlowPreset
+			if p := c.currentPreset(); p != nil && p.Label != "" {
+				label = p.Label
+			}
+			return c.app, lmConfigShowAuthLinkCmd(c.authURL, label)
+		}
+		return c.app, nil
 	case "tab":
 		c.lmConfigStepSection(1)
 		return c.app, nil
@@ -44,6 +59,16 @@ func (c *lmConfigComponent) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return c.app, lmConfigAuthCmd(c.app.c, p.ID, force)
 			}
 			return c.app, nil
+		}
+		if c.field == lmFieldAuthCode {
+			code := strings.TrimSpace(c.authCode)
+			if !c.authFlowPending() || code == "" {
+				c.authMessage = "paste the authorization code Globus showed after sign-in"
+				return c.app, nil
+			}
+			c.authenticating = true
+			c.authMessage = "completing ALCF Globus sign-in..."
+			return c.app, lmConfigAuthCompleteCmd(c.app.c, c.authFlowPreset, c.authFlowID, code)
 		}
 		c.lmConfigStepSection(1)
 		return c.app, nil

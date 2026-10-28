@@ -110,6 +110,7 @@
   "lm_config.auth.required": "認証: Globus ログインが必要",
   "lm_config.auth.ready": "認証: Globus トークン準備完了",
   "lm_config.auth.authenticate": "認証",
+  "lm_config.auth.code": "コード",
   "lm_config.auth.refresh": "トークン更新",
   "lm_config.auth.launching": "ログインを起動中...",
   "lm_config.auth.no_key": "認証: キー不要",

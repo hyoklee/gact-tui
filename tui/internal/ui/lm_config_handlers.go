@@ -103,10 +103,13 @@ func (c *lmConfigComponent) handleAuthed(m lmConfigAuthedMsg) (tea.Model, tea.Cm
 	}
 	c.authenticating = false
 	if m.err != nil {
+		// A rejected code leaves the backend flow open, so a pending flow
+		// stays on screen and the user can paste again.
 		c.authMessage = "auth failed: " + operatorErrorMessage(m.err)
 		return c.app, nil
 	}
 	if m.resp.IsAuthenticated {
+		c.clearAuthFlow()
 		c.authMessage = "ALCF Globus token ready"
 		if c.info != nil {
 			for i := range c.info.Presets {
@@ -125,6 +128,20 @@ func (c *lmConfigComponent) handleAuthed(m lmConfigAuthedMsg) (tea.Model, tea.Cm
 		if p := c.currentPreset(); p != nil && p.ID == m.providerID {
 			c.lmConfigEnsureVisibleField()
 			return c.app, c.queueModelFetch(*p, c.apiBase)
+		}
+		return c.app, nil
+	}
+	if url := m.resp.AuthorizationURL(); url != "" && m.resp.FlowID != "" {
+		// Paste-code flow: show the link, copy it (native clipboard, else
+		// OSC52 so it also works over SSH), and focus the code box.
+		c.authFlowID = m.resp.FlowID
+		c.authFlowPreset = m.providerID
+		c.authURL = url
+		c.authCode = ""
+		c.authMessage = "Open the link, sign in, then paste the code above and press Enter." +
+			lmConfigCopyLinkNote(url)
+		if p := c.currentPreset(); p != nil && p.ID == m.providerID {
+			c.field = lmFieldAuthCode
 		}
 		return c.app, nil
 	}
@@ -196,4 +213,21 @@ func lmConfigProviderError(info *client.LMProviderInfo) string {
 		}
 	}
 	return "LM provider configuration failed"
+}
+
+// lmConfigCopyLinkNote copies a sign-in link and returns a one-line note
+// for the details pane. It stays short on purpose: copyTextToClipboard's
+// OSC52 fallback hint carries the full native-clipboard error, which would
+// push the code box out of the pane on a headless node.
+func lmConfigCopyLinkNote(url string) string {
+	if clipboardForcedFailure() {
+		return ""
+	}
+	if err := clipboardWrite(url); err == nil {
+		return " Link copied to the clipboard."
+	}
+	if err := osc52Write(url); err == nil {
+		return " Link sent to your terminal clipboard."
+	}
+	return ""
 }

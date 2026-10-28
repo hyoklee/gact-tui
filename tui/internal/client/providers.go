@@ -217,20 +217,46 @@ func (c *Client) ProviderHandshake(
 //     still valid.
 //   - APIKey carries a user-pasted API key for AuthMethodAPIKey
 //     providers; the backend persists it on the running process.
+//   - Action selects the step ("start" when empty, or "complete").
+//     A "complete" carries the FlowID from the start reply and the
+//     AuthorizationCode the user pasted back from the browser.
 type ProviderAuthRequest struct {
-	Force  bool   `json:"force,omitempty"`
-	APIKey string `json:"api_key,omitempty"`
+	Force             bool   `json:"force,omitempty"`
+	APIKey            string `json:"api_key,omitempty"`
+	Action            string `json:"action,omitempty"`
+	FlowID            string `json:"flow_id,omitempty"`
+	AuthorizationCode string `json:"authorization_code,omitempty"`
+}
+
+// ProviderAuthBrowser is the browser half of a paste-code sign-in
+// (ALCF Globus): the user opens AuthorizationURL, signs in, and pastes
+// the code Globus shows back into the TUI.
+type ProviderAuthBrowser struct {
+	AuthorizationURL string `json:"authorization_url"`
+	Loopback         bool   `json:"loopback"`
 }
 
 // ProviderAuthResponse is what the backend returns after an auth
 // attempt. RedirectURL is set when the backend wants the TUI to open
 // a browser tab; Instructions is a human-readable fallback when the
-// backend can only print to its own terminal.
+// backend can only print to its own terminal. A paste-code flow
+// instead returns FlowID + Browser and waits for a "complete" request.
 type ProviderAuthResponse struct {
-	IsAuthenticated bool   `json:"is_authenticated"`
-	ProviderID      string `json:"provider_id"`
-	RedirectURL     string `json:"redirect_url,omitempty"`
-	Instructions    string `json:"instructions,omitempty"`
+	IsAuthenticated bool                 `json:"is_authenticated"`
+	ProviderID      string               `json:"provider_id"`
+	RedirectURL     string               `json:"redirect_url,omitempty"`
+	Instructions    string               `json:"instructions,omitempty"`
+	FlowID          string               `json:"flow_id,omitempty"`
+	Browser         *ProviderAuthBrowser `json:"browser,omitempty"`
+}
+
+// AuthorizationURL is the sign-in link the user must open, from either
+// the paste-code Browser block or the legacy RedirectURL.
+func (r ProviderAuthResponse) AuthorizationURL() string {
+	if r.Browser != nil && r.Browser.AuthorizationURL != "" {
+		return r.Browser.AuthorizationURL
+	}
+	return r.RedirectURL
 }
 
 // AuthProvider drives POST /v1/providers/{id}/auth. The caller's

@@ -194,13 +194,29 @@ func (c *lmConfigComponent) snapModelToCatalog(p client.LMProviderPreset) {
 	if target == "" {
 		target = p.SuggestedModel
 	}
-	idx := 0
-	for i, model := range catalog {
-		if model.ID == target || model.ID == p.SuggestedModel {
-			idx = i
-			break
-		}
+	// The user's own choice wins over the preset's suggestion: matching
+	// either in one pass let a suggested model listed first replace the
+	// selection on every catalog reload.
+	idx := lmConfigModelPosition(catalog, target)
+	if idx < 0 {
+		idx = lmConfigModelPosition(catalog, p.SuggestedModel)
+	}
+	if idx < 0 {
+		idx = 0
 	}
 	c.modelIndex = idx
 	c.model = catalog[idx].ID
+}
+
+// lmConfigModelPosition is the index of the model with this id, or -1.
+func lmConfigModelPosition(catalog []gact.Model, id string) int {
+	if strings.TrimSpace(id) == "" {
+		return -1
+	}
+	for i, model := range catalog {
+		if model.ID == id {
+			return i
+		}
+	}
+	return -1
 }

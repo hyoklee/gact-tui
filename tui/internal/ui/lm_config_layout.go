@@ -123,6 +123,20 @@ func (c *lmConfigComponent) layout(innerW int, bodyRows int) lmConfigLayout {
 	providerRows := maxInt(1, topTotalRows-3)
 	modelRows := maxInt(1, bottomTotalRows-3)
 
+	// A provider waiting for sign-in has no model to pick and cannot be
+	// saved, yet its Authenticate row and code box live in the details box.
+	// When the half-height split leaves that box too short to show them
+	// (e.g. a 24-row terminal), give the whole body to the top row instead.
+	if need := c.signInRowsNeeded(); need > 0 && providerRows < need {
+		topBodyRows := maxInt(1, bodyRows-3)
+		return lmConfigLayout{
+			bodyRows:     bodyRows,
+			providerRows: topBodyRows,
+			selectedRows: topBodyRows,
+			compact:      true,
+		}
+	}
+
 	return lmConfigLayout{
 		bodyRows:     bodyRows,
 		providerRows: providerRows,
@@ -142,4 +156,24 @@ func lmConfigGridWidths(innerW int) (int, int) {
 
 func (c *lmConfigComponent) modalWidth() int {
 	return c.app.modals.modalWidth()
+}
+
+// signInRowsNeeded is how many details rows the selected provider's sign-in
+// takes (label, auth state, Authenticate, plus the code box, link and hint while a
+// paste-code flow is pending), or 0 when no sign-in is outstanding.
+func (c *lmConfigComponent) signInRowsNeeded() int {
+	if !c.open || !c.lmConfigSelectedUsesOAuth() {
+		return 0
+	}
+	p := c.currentPreset()
+	if p == nil {
+		return 0
+	}
+	if c.authFlowPending() {
+		return 6
+	}
+	if p.IsAuthenticated || p.Status == "ready" {
+		return 0
+	}
+	return 3
 }

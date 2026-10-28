@@ -110,6 +110,7 @@
   "lm_config.auth.required": "auth: απαιτείται σύνδεση Globus",
   "lm_config.auth.ready": "auth: το Globus token είναι έτοιμο",
   "lm_config.auth.authenticate": "Πιστοποίηση",
+  "lm_config.auth.code": "κωδικός",
   "lm_config.auth.refresh": "Ανανέωση token",
   "lm_config.auth.launching": "Εκκίνηση σύνδεσης...",
   "lm_config.auth.no_key": "auth: δεν απαιτείται κλειδί",

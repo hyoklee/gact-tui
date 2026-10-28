@@ -101,6 +101,7 @@ const (
 	msgLMConfigAuthRequired           messageID = "lm_config.auth.required"
 	msgLMConfigAuthReady              messageID = "lm_config.auth.ready"
 	msgLMConfigAuthenticate           messageID = "lm_config.auth.authenticate"
+	msgLMConfigAuthCode               messageID = "lm_config.auth.code"
 	msgLMConfigRefreshToken           messageID = "lm_config.auth.refresh"
 	msgLMConfigLaunchingLogin         messageID = "lm_config.auth.launching"
 	msgLMConfigNoKeyRequired          messageID = "lm_config.auth.no_key"

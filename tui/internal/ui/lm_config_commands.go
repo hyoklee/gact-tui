@@ -4,7 +4,10 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os/exec"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -102,6 +105,50 @@ func lmConfigAuthCmd(c *client.Client, providerID string, force bool) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		resp, err := c.AuthProvider(ctx, providerID, client.ProviderAuthRequest{Force: force})
+		return lmConfigAuthedMsg{providerID: providerID, resp: resp, err: err}
+	}
+}
+
+// lmConfigAuthLinkShownMsg reports that the full-screen link view closed.
+type lmConfigAuthLinkShownMsg struct{ err error }
+
+// lmConfigShowAuthLinkCmd hands the terminal back to the shell and prints
+// the whole sign-in link there as plain text, so it can be selected and
+// copied even when the terminal blocks OSC52 and the details pane is too
+// short to show it. Enter returns to the TUI with the flow still pending.
+// The URL is passed as an argument, never spliced into the script.
+func lmConfigShowAuthLinkCmd(url, provider string) tea.Cmd {
+	if runtime.GOOS == "windows" {
+		return func() tea.Msg {
+			return lmConfigAuthLinkShownMsg{err: errors.New("the full-link view needs a POSIX shell")}
+		}
+	}
+	return tea.ExecProcess(lmConfigAuthLinkExec(url, provider), func(err error) tea.Msg {
+		return lmConfigAuthLinkShownMsg{err: err}
+	})
+}
+
+// lmConfigAuthLinkExec is the shell step behind lmConfigShowAuthLinkCmd.
+func lmConfigAuthLinkExec(url, provider string) *exec.Cmd {
+	const script = `printf '\n\nSign in to %s: open this link in a browser.\n\n%s\n\n' "$2" "$1"
+printf 'Then return here, paste the code Globus shows into the code box, and press Enter.\n\n'
+printf 'Press Enter to return... '
+read -r _`
+	return exec.Command("sh", "-c", script, "clio-sign-in", url, provider)
+}
+
+// lmConfigAuthCompleteCmd finishes a paste-code sign-in: it hands the
+// started flow's id and the code the user pasted back to the backend.
+// The token exchange talks to Globus, so it gets a longer timeout.
+func lmConfigAuthCompleteCmd(c *client.Client, providerID, flowID, code string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		resp, err := c.AuthProvider(ctx, providerID, client.ProviderAuthRequest{
+			Action:            "complete",
+			FlowID:            flowID,
+			AuthorizationCode: code,
+		})
 		return lmConfigAuthedMsg{providerID: providerID, resp: resp, err: err}
 	}
 }

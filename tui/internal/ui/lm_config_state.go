@@ -17,6 +17,9 @@ func (s *lmConfigState) lmConfigVisibleFields() []lmConfigField {
 	}
 	if s.lmConfigSelectedUsesOAuth() {
 		out = append(out, lmFieldAuth)
+		if s.authFlowPending() {
+			out = append(out, lmFieldAuthCode)
+		}
 	}
 	if s.lmConfigSelectedCanEditAPIBase() {
 		out = append(out, lmFieldAPIBase)
@@ -40,7 +43,17 @@ func (s *lmConfigState) lmConfigSectionFields() []lmConfigField {
 	if s.lmConfigSelectedRequiresAPIKey() {
 		out = append(out, lmFieldAPIKey)
 	} else if s.lmConfigSelectedUsesOAuth() {
-		out = append(out, lmFieldAuth)
+		// Once signed in with models to pick, Tab goes straight from the
+		// provider to the model list: the "Refresh token" stop sits in a
+		// details box a short terminal cannot show, so stopping there left
+		// focus on an invisible row. The row stays clickable, and the stop
+		// returns whenever sign-in is needed again.
+		if !s.lmConfigSelectedSignedIn() || !s.lmConfigSelectedModelSelectable() {
+			out = append(out, lmFieldAuth)
+		}
+		if s.authFlowPending() {
+			out = append(out, lmFieldAuthCode)
+		}
 	} else if s.lmConfigSelectedCanEditAPIBase() {
 		out = append(out, lmFieldAPIBase)
 	}
@@ -160,4 +173,14 @@ func (s *lmConfigState) lmConfigEnsureVisibleField() {
 	if len(visible) > 0 {
 		s.field = visible[0]
 	}
+}
+
+// lmConfigSelectedSignedIn reports whether the selected OAuth provider has a
+// usable token and no paste-code sign-in waiting for its code.
+func (s *lmConfigState) lmConfigSelectedSignedIn() bool {
+	if s == nil || s.info == nil || s.selected < 0 || s.selected >= len(s.info.Presets) {
+		return false
+	}
+	p := s.info.Presets[s.selected]
+	return (p.IsAuthenticated || p.Status == "ready") && !s.authFlowPending()
 }

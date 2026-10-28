@@ -30,6 +30,7 @@ const (
 	lmFieldModel
 	lmFieldAPIKey
 	lmFieldAuth
+	lmFieldAuthCode
 	lmFieldTemperature
 	lmFieldMaxTokens
 	lmFieldContextLength
@@ -94,6 +95,27 @@ type lmConfigState struct {
 	saving         bool
 	authenticating bool
 	authMessage    string
+
+	// Paste-code sign-in (ALCF Globus): a started flow's id and the link
+	// the user must open, plus the code being typed back. authFlowID is
+	// empty when no flow is waiting for a code.
+	authFlowID     string
+	authFlowPreset string
+	authURL        string
+	authCode       string
+}
+
+// authFlowPending reports whether the selected preset has a started
+// paste-code sign-in still waiting for its authorization code.
+func (s *lmConfigState) authFlowPending() bool {
+	if s == nil || s.authFlowID == "" || s.info == nil || s.selected < 0 || s.selected >= len(s.info.Presets) {
+		return false
+	}
+	return s.info.Presets[s.selected].ID == s.authFlowPreset
+}
+
+func (s *lmConfigState) clearAuthFlow() {
+	s.authFlowID, s.authFlowPreset, s.authURL, s.authCode = "", "", "", ""
 }
 
 // lmConfigComponent owns the /v1/providers/lm config modal: its open flag, its

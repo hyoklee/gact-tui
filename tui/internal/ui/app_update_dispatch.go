@@ -29,6 +29,12 @@ func (a *App) dispatchUpdateMessage(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case lmConfigAuthedMsg:
 		return a.lmConfig.handleAuthed(m)
 
+	case lmConfigAuthLinkShownMsg:
+		if m.err != nil && a.lmConfig.open {
+			a.lmConfig.authMessage = "could not show the full link: " + m.err.Error()
+		}
+		return a, nil
+
 	case lmConfigSavedMsg:
 		return a.lmConfig.handleSaved(m)
 

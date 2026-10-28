@@ -9,6 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/JaimeCernuda/gact-tui/tui/internal/ui/textutil"
 	"github.com/JaimeCernuda/gact-tui/tui/internal/ui/valuefmt"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func (c *lmConfigComponent) renderProviderDetails(innerW int, visibleRows int) string {
@@ -111,9 +112,56 @@ func (c *lmConfigComponent) renderProviderDetailsRowsAndHits(innerW int, visible
 				},
 			})
 		}
-		if msg := strings.TrimSpace(c.authMessage); msg != "" {
+		pending := c.authFlowPending()
+		if msg := strings.TrimSpace(c.authMessage); msg != "" && !pending {
 			appendLines(textutil.WrapPlainRows(msg, bodyW, "  "),
 				lipgloss.NewStyle().Foreground(t.FgMuted), visibleRows)
+		}
+		if pending {
+			// Code box and clickable (OSC8) link come first so they stay
+			// visible in a short pane; the message and the full URL follow.
+			start := len(rows)
+			rows = append(rows, lmConfigField_render(c.app.localizer.t(msgLMConfigAuthCode, nil), c.authCode, false,
+				c.field == lmFieldAuthCode, t))
+			if h := visibleHitHeight(start); h > 0 {
+				hits = append(hits, modalCellHit{
+					id:     "lm-config:auth-code",
+					row:    start,
+					width:  innerW,
+					height: 1,
+					action: func(app *App) tea.Cmd {
+						if app.lmConfig.open {
+							app.lmConfig.field = lmFieldAuthCode
+						}
+						return nil
+					},
+				})
+			}
+			linkRow := len(rows)
+			rows = append(rows, "  link: "+ansi.SetHyperlink(c.authURL)+
+				lipgloss.NewStyle().Foreground(t.Secondary).Underline(true).Render("open Globus sign-in")+
+				ansi.ResetHyperlink())
+			rows = append(rows, lipgloss.NewStyle().Foreground(t.FgMuted).Render("  Ctrl+O: show full link to copy"))
+			if h := visibleHitHeight(linkRow); h > 0 {
+				hits = append(hits, modalCellHit{
+					id:     "lm-config:auth-link",
+					row:    linkRow,
+					width:  innerW,
+					height: valuefmt.MinInt(h, 2),
+					action: func(app *App) tea.Cmd {
+						if !app.lmConfig.open || !app.lmConfig.authFlowPending() {
+							return nil
+						}
+						_, cmd := app.lmConfig.handleKey(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
+						return cmd
+					},
+				})
+			}
+			if msg := strings.TrimSpace(c.authMessage); msg != "" {
+				appendLines(textutil.WrapPlainRows(msg, bodyW, "  "),
+					lipgloss.NewStyle().Foreground(t.FgMuted), visibleRows)
+			}
+			appendLines(lmConfigChunk(c.authURL, bodyW-2), lipgloss.NewStyle().Foreground(t.FgMuted), visibleRows)
 		}
 	} else {
 		rows = append(rows, lipgloss.NewStyle().Foreground(t.FgMuted).Render(c.app.localizer.t(msgLMConfigNoKeyRequired, nil)))
@@ -194,4 +242,18 @@ func (c *lmConfigComponent) providerDetailsRowCount() int {
 		rows++ // transport row
 	}
 	return rows
+}
+
+// lmConfigChunk splits s into rows of at most width bytes. Sign-in URLs
+// have no spaces, so word wrapping alone would overflow the pane.
+func lmConfigChunk(s string, width int) []string {
+	if width <= 0 || s == "" {
+		return nil
+	}
+	rows := make([]string, 0, len(s)/width+1)
+	for len(s) > width {
+		rows = append(rows, s[:width])
+		s = s[width:]
+	}
+	return append(rows, s)
 }
