@@ -184,6 +184,19 @@ export async function captureSessionReview(
           (body) => json(`/v1/artifacts/${encodeURIComponent(id)}/table-query`, body),
           {},
         );
+        // A dashboard's viewer can follow a table whose cells name files (a case per row,
+        // its mesh in a column): those files are named for the export too (#1823). The
+        // set grows while it is iterated, so they are captured in this same loop.
+        if (selectedSurfaces)
+          for (const values of Object.values(
+            (snapshot.tables[id] as { columns?: Record<string, unknown> }).columns ?? {},
+          ))
+            for (const value of Array.isArray(values) ? values : [])
+              if (
+                typeof value === 'string' &&
+                /^artifact:\/\/artifact_[A-Za-z0-9_-]+$/u.test(value)
+              )
+                references.add(value);
       } catch (error) {
         snapshot.failures.push({
           path: uri,
