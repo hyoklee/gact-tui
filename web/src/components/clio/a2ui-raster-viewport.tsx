@@ -62,9 +62,9 @@ function rangeForBox(extent: Extent, box: Box): Extent {
 
 /** Interactive registered-grid viewer with a bounded server sample per visible extent. */
 export function ClioRasterViewport({
-  rasterUri, componentId, title, variable, band = 1, colormap = 'viridis', unit = '', weight,
+  rasterUri, componentId, title, variable, band = 1, colormap = 'viridis', unit = '', weight, height,
 }: {
-  rasterUri: string; componentId?: string; title?: string; variable?: string; band?: number; colormap?: Colormap; unit?: string; weight?: number;
+  rasterUri: string; componentId?: string; title?: string; variable?: string; band?: number; colormap?: Colormap; unit?: string; weight?: number; height?: number;
 }) {
   const repository = useRepository();
   const { settings } = useConnectionSettings();
@@ -218,9 +218,9 @@ export function ClioRasterViewport({
     <SurfaceFullScreenHost fullscreen={fullscreen} headerExtra={controls(true)} onOpenChange={setFullscreen} title={heading}>
       <div className="relative" data-a2ui-component-id={componentId} data-slot="a2ui-raster-surface" ref={surfaceRef}>
         {sample.isError ? <p className="p-4 text-sm text-destructive">Raster unavailable: {sample.error instanceof Error ? sample.error.message : String(sample.error)}</p> : null}
-        <div className={fullscreen ? 'relative h-[calc(100dvh-8rem)] min-h-64 cursor-grab overflow-hidden bg-muted/30' : 'relative h-80 min-h-64 cursor-grab overflow-hidden bg-muted/30'}
+        <div className={fullscreen ? 'relative h-[calc(100dvh-8rem)] min-h-64 cursor-grab overflow-hidden bg-muted/30' : height ? 'relative cursor-grab overflow-hidden bg-muted/30' : 'relative h-80 min-h-64 cursor-grab overflow-hidden bg-muted/30'}
           onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={() => setHover(undefined)} onWheel={onWheel}
-          style={{ cursor: boxMode ? 'crosshair' : undefined }}>
+          style={{ cursor: boxMode ? 'crosshair' : undefined, ...(!fullscreen && height ? { height } : {}) }}>
           <canvas aria-label={`${heading} raster image`} className="size-full" ref={canvasRef} role="img" style={{ imageRendering: 'pixelated' }} />
           {overlay ? <div className="pointer-events-none absolute border-2 border-primary bg-primary/10" style={overlay} /> : null}
           {sample.isFetching ? <span className="absolute left-2 top-2 rounded bg-background/80 px-2 py-1 text-xs">Sampling…</span> : null}

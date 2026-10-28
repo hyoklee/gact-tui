@@ -19,6 +19,7 @@ export const rasterViewportSchema = z
     band: z.number().int().min(1).optional(),
     colormap: z.enum(['viridis', 'magma', 'plasma', 'cividis', 'turbo', 'grayscale']).optional(),
     unit: z.string().optional(),
+    height: z.number().int().min(160).max(2000).optional(),
     accessibility: CommonSchemas.AccessibilityAttributes.optional(),
     weight: z.number().optional(),
   })
@@ -30,7 +31,7 @@ export const ClioRasterViewportCatalogComponent = createComponentImplementation(
   ({ props, context }) =>
     createElement(
       ViewerFileGate,
-      { noun: 'raster view', files: [props.rasterUri] },
+      { noun: 'raster view', files: [props.rasterUri], height: props.height },
       createElement(
         Suspense,
         { fallback: createElement(Skeleton, { 'aria-busy': true, className: 'h-80' }) },

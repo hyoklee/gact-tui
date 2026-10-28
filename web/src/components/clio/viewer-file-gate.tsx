@@ -11,6 +11,8 @@ export interface ViewerFileGateProps {
   files: readonly (string | undefined)[];
   /** Tailwind height of the placeholder, matching the viewer's own frame. */
   heightClass?: string;
+  /** The producer's own height for the viewer, in CSS pixels; it wins over `heightClass`. */
+  height?: number;
   children?: ReactNode;
 }
 
@@ -25,6 +27,7 @@ export function ViewerFileGate({
   noun,
   files,
   heightClass = 'h-80',
+  height,
   children,
 }: ViewerFileGateProps) {
   const frame = useRef<HTMLDivElement>(null);
@@ -48,18 +51,19 @@ export function ViewerFileGate({
     (file) => file !== undefined && file !== '' && !VIEWER_ARTIFACT_URI.test(file),
   );
   const missing = files[0] === undefined || files[0] === '';
+  const size = { heightClass: height ? '' : heightClass, height };
   let body: ReactNode;
   if (invalid !== undefined)
     body = (
-      <Message heightClass={heightClass} role="alert">
+      <Message {...size} role="alert">
         This view&apos;s file is not a registered artifact: {invalid}
       </Message>
     );
   else if (missing)
-    body = <Message heightClass={heightClass}>Nothing is selected for this {noun} yet.</Message>;
+    body = <Message {...size}>Nothing is selected for this {noun} yet.</Message>;
   else if (lost)
     body = (
-      <Message heightClass={heightClass} role="alert">
+      <Message {...size} role="alert">
         <span>
           This {noun} lost its graphics context; the browser keeps only a few open at once.
         </span>
@@ -69,7 +73,7 @@ export function ViewerFileGate({
       </Message>
     );
   else if (!near)
-    body = <Message heightClass={heightClass}>The {noun} loads when it scrolls into view.</Message>;
+    body = <Message {...size}>The {noun} loads when it scrolls into view.</Message>;
   else body = <div key={mount}>{children}</div>;
   return (
     <div className="min-w-0" data-slot="viewer-file-gate" ref={frame}>
@@ -80,10 +84,12 @@ export function ViewerFileGate({
 
 function Message({
   heightClass,
+  height,
   role,
   children,
 }: {
   heightClass: string;
+  height?: number;
   role?: 'alert';
   children?: ReactNode;
 }) {
@@ -91,6 +97,7 @@ function Message({
     <div
       className={`${heightClass} flex flex-col items-center justify-center gap-2 rounded-lg border p-4 text-center text-sm text-muted-foreground`}
       role={role}
+      style={height ? { height } : undefined}
     >
       {children}
     </div>

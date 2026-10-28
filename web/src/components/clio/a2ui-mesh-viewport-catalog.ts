@@ -34,6 +34,7 @@ export const meshViewportSchema = z
       .regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/u)
       .optional(),
     upAxis: z.enum(['x', 'y', 'z']).optional(),
+    height: z.number().int().min(160).max(2000).optional(),
     accessibility: CommonSchemas.AccessibilityAttributes.optional(),
     weight: z.number().optional(),
   })
@@ -45,7 +46,7 @@ export const ClioMeshViewportCatalogComponent = createComponentImplementation(
   ({ props, context }) =>
     createElement(
       ViewerFileGate,
-      { noun: '3D view', files: [props.meshUri, props.materialUri] },
+      { noun: '3D view', files: [props.meshUri, props.materialUri], height: props.height },
       createElement(
         Suspense,
         { fallback: createElement(Skeleton, { 'aria-busy': true, className: 'h-80 rounded-lg' }) },
@@ -67,6 +68,7 @@ export const ClioMeshViewportCatalogComponent = createComponentImplementation(
           thresholdMin: props.thresholdMin,
           title: props.title,
           upAxis: props.upAxis,
+          height: props.height,
           weight: props.weight,
         }),
       ),

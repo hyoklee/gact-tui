@@ -79,6 +79,8 @@ function columnKey(column: ClioDataColumn): string {
 }
 
 export interface ClioSelectableDataTableProps {
+  /** Rows per page at first (the producer's `pageSize`). */
+  pageSize?: number;
   accessibility?: A2UIAccessibility;
   columns: ClioDataColumn[];
   rows: ClioDataRow[];
@@ -127,6 +129,7 @@ export function ClioSelectableDataTable({
   selectionField,
   server,
   setSelection,
+  pageSize,
 }: ClioSelectableDataTableProps) {
   const [localSelectedOnly, setLocalSelectedOnly] = useState(false);
   const [localSelection, setLocalSelection] = useState<SelectionState>();
@@ -340,6 +343,7 @@ export function ClioSelectableDataTable({
         state?.values.length && state.source && state.source !== componentId,
       )}
       server={server}
+      initialPageSize={pageSize}
       inlineFilters={server ? undefined : inlineFilters}
       onInlineFilterChange={server ? undefined : changeInlineFilter}
       inlineSort={server ? undefined : inlineSort}
@@ -349,6 +353,8 @@ export function ClioSelectableDataTable({
 }
 
 interface ClioDataTableArtifactSourceProps {
+  /** Rows per page at first (the producer's `pageSize`). */
+  pageSize?: number;
   accessibility?: A2UIAccessibility;
   action?: () => void;
   columns?: ClioDataColumn[];
@@ -402,6 +408,7 @@ function ClioDataTableArtifactSource({
   selection,
   selectionField,
   setSelection,
+  pageSize: initialPageSize,
 }: ClioDataTableArtifactSourceProps) {
   const autoSelection = useAutoDatasetSelection(dataUri);
   const effectiveSelectionField =
@@ -411,7 +418,7 @@ function ClioDataTableArtifactSource({
   const effectiveSetSelection = setSelection ?? autoSelection.setSelection;
   const repository = useRepository();
   const [pageIndex, setPageIndex] = useState(0);
-  const [pageSize, setPageSize] = useState(DEFAULT_DATA_TABLE_PAGE_SIZE);
+  const [pageSize, setPageSize] = useState(initialPageSize ?? DEFAULT_DATA_TABLE_PAGE_SIZE);
   const [selectedOnly, setSelectedOnly] = useState(false);
   const selectionState = useMemo(
     () => selectionForField(parseSelectionState(effectiveSelection), effectiveSelectionField),
@@ -700,6 +707,7 @@ const dataTableDataProperties = {
   // A dataset column name; required when `selection` is bound (mirrors the chart's selectionField).
   selectionField: fieldNameSchema.optional(),
   action: CommonSchemas.Action.optional(),
+  pageSize: z.union([z.literal(10), z.literal(25), z.literal(50), z.literal(100), z.literal(500)]).optional(),
   accessibility: CommonSchemas.AccessibilityAttributes.optional(),
   weight: z.number().optional(),
 };
@@ -757,6 +765,7 @@ export const ClioDataTableCatalogComponent = createComponentImplementation(
                 selection={props.selection}
                 selectionField={props.selectionField}
                 setSelection={setSelection}
+                pageSize={props.pageSize}
               />
             )}
           </BoundDataQuery>
@@ -770,6 +779,7 @@ export const ClioDataTableCatalogComponent = createComponentImplementation(
             selection={props.selection}
             selectionField={props.selectionField}
             setSelection={setSelection}
+            pageSize={props.pageSize}
           />
         )}
       </div>
