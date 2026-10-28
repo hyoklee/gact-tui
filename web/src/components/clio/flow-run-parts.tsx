@@ -11,7 +11,6 @@ import { copyText } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
 import { ContentMarkdown } from './content-markdown';
 import {
-  approvalDecisions,
   flowScriptJson,
   inputText,
   type FlowMember,
@@ -22,6 +21,9 @@ import {
 } from './flow-run-presentation';
 import { callModel } from '@/lib/flow-run-usage';
 import { FlowName } from './flow-name';
+import type { FlowQuestion } from './flow-run-edits';
+import { StepQuestions } from './flow-run-edit-list';
+import { StepFolder } from './node-folder';
 import type { FlowPick } from './flow-railroad';
 import { ClioStatus } from './status';
 
@@ -105,10 +107,13 @@ export function FlowPickDetails({
   elapsed,
   flows,
   usage,
+  questions = [],
   onOpenHandle,
   onClose,
 }: {
   pick: FlowPick;
+  /** The run's approval questions; a step shows those about it. */
+  questions?: readonly FlowQuestion[];
   elapsed: ReadonlyMap<string, number>;
   /** The run's usage, for the model each call's child runs on. */
   usage?: FlowRunUsage;
@@ -148,15 +153,17 @@ export function FlowPickDetails({
   return (
     <PickFrame
       badge={
-        step.kind === 'flow'
-          ? 'Flow'
-          : step.kind === 'editor'
-            ? 'Editor'
-            : step.addedBy
-              ? step.kind === 'proposal'
-                ? 'Proposed'
-                : 'Added'
-              : undefined
+        step.forkOf
+          ? 'Fork'
+          : step.kind === 'flow'
+            ? 'Flow'
+            : step.kind === 'editor'
+              ? 'Editor'
+              : step.addedBy
+                ? step.kind === 'proposal'
+                  ? 'Proposed'
+                  : 'Added'
+                : undefined
       }
       handle={step.handle}
       name={step.label ?? step.id}
@@ -185,7 +192,13 @@ export function FlowPickDetails({
         <Fact label="Model">{callModel(usage, step.handle)}</Fact>
       ) : null}
       {step.attempts > 1 ? <Fact label="Attempts">{step.attempts}</Fact> : null}
-      {step.addedBy ? (
+      {step.forkOf ? <Fact label="Fork of">{step.forkOf}</Fact> : null}
+      {step.alsoWaitsOn?.length ? (
+        <Fact label="Also waits on its forks">{step.alsoWaitsOn.join(', ')}</Fact>
+      ) : null}
+      {step.forkOf && step.note ? (
+        <Fact label="Fork note">{step.note}</Fact>
+      ) : step.addedBy ? (
         <Fact label={step.kind === 'proposal' ? 'Proposed by' : 'Added by'}>
           {step.addedBy}
           {step.note ? `: ${step.note}` : ''}
@@ -193,6 +206,10 @@ export function FlowPickDetails({
       ) : step.note ? (
         <Fact label="Description">{step.note}</Fact>
       ) : null}
+      <StepFolder handle={step.handle} name={step.label ?? step.id} />
+      <StepQuestions
+        questions={questions.filter((question) => question.step === (step.forkOf ?? step.id))}
+      />
       {step.kind !== 'action' && (!step.label || step.input !== undefined) ? (
         <Instructions input={step.input} />
       ) : null}
@@ -655,21 +672,5 @@ export function FlowApprovals({
         ) : null}
       </AlertDescription>
     </Alert>
-  );
-}
-
-/** What the person answered to each approval question, once answered. */
-export function FlowApprovalDecisions({ run }: { run: FlowRun }) {
-  const decisions = approvalDecisions(run);
-  if (!decisions.length) return null;
-  return (
-    <ul className="grid gap-1 text-xs text-muted-foreground" aria-label="Your approvals">
-      {decisions.map(({ step, approved }) => (
-        <li key={`${step}:${approved}`}>
-          You {approved ? 'approved' : 'declined'} adding the step{' '}
-          <span className="font-mono text-foreground">{step}</span>.
-        </li>
-      ))}
-    </ul>
   );
 }

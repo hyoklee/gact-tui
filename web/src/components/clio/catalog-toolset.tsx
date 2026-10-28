@@ -494,6 +494,7 @@ function clioDomainForName(name: string): string | undefined {
     [/^(create_a2ui|update_a2ui|a2ui_|raise_alert_card)/u, `${PROTOCOL.a2ui} surfaces`],
     [/^(provider_|refresh_provider)/u, 'Models'],
     [/^(run_flow|run_workflow|workflow_add_step|workflow_cancel_step)/u, 'Flows'],
+    [/^(log_entry|link|set_status|query_log|export_measurements)$/u, 'Science log'],
   ];
   return groups.find(([pattern]) => pattern.test(name))?.[1];
 }

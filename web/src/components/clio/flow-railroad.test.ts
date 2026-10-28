@@ -526,3 +526,72 @@ describe('recorded flow execution progress', () => {
     ]);
   });
 });
+
+describe('workflow forks', () => {
+  const steps = [
+    { id: 'draft', target: 'self', status: 'completed', handle: 't1' },
+    {
+      id: 'draft~1',
+      target: 'self',
+      status: 'running',
+      handle: 't1f',
+      fork_of: 'draft',
+      note: 'pursue H4 instead',
+    },
+    { id: 'review', target: 'self', after: ['draft'], status: 'pending' },
+  ];
+
+  it('draws a fork beside its step, marked in text, its note in its tooltip', () => {
+    const diagram = diagramOf(workflow(steps));
+    if (diagram?.kind !== 'railroad') throw new Error('expected a railroad');
+    expect(diagram.railroad.source).toContain(
+      'sequence(choice(terminal("draft"), terminal("draft~1 · fork of draft")), terminal("review"))',
+    );
+    const fork = diagram.railroad.marks.find((mark) => mark.key === 'draft~1')!;
+    expect(fork.fork).toBe(true);
+    expect(fork.title).toBe(
+      'draft~1 · fork of draft: Running. Runs this agent. Fork of draft: pursue H4 instead.',
+    );
+    // Whoever waited on the step also waits on its fork.
+    const review = diagram.railroad.marks.find((mark) => mark.key === 'review')!;
+    expect(review.title).toContain('Also waits on the fork draft~1.');
+    expect(review.pick).toMatchObject({
+      step: { after: ['draft', 'draft~1'], alsoWaitsOn: ['draft~1'] },
+    });
+  });
+
+  it('places a fork reported only in the view list beside its step', () => {
+    const run = workflow(
+      [steps[0]!, steps[2]!],
+      {},
+      {
+        forks: [
+          { id: 'draft~1', fork_of: 'draft', handle: 't1f', status: 'completed', note: 'try H4' },
+        ],
+      },
+    );
+    const listed = workflowSteps(run, 'clio/standard');
+    expect(listed.map((step) => step.id)).toEqual(['draft', 'draft~1', 'review']);
+    expect(listed[1]).toMatchObject({
+      forkOf: 'draft',
+      note: 'try H4',
+      status: { label: 'Completed' },
+    });
+    expect(listed[2]!.after).toEqual(['draft', 'draft~1']);
+  });
+
+  it('labels a drawn fork node for its state and kind', () => {
+    const diagram = diagramOf(workflow(steps));
+    if (diagram?.kind !== 'railroad') throw new Error('expected a railroad');
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    for (const _ of diagram.railroad.marks) {
+      const node = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      node.setAttribute('class', 'pele-node');
+      svg.append(node);
+    }
+    markRailroad(svg, diagram.railroad);
+    const fork = svg.querySelector('[data-key="draft~1"]')!;
+    expect(fork.classList.contains('is-fork')).toBe(true);
+    expect(fork.querySelector('title')?.textContent).toContain('pursue H4 instead');
+  });
+});

@@ -11,9 +11,16 @@ interface ArchiveFile {
 const PAGE_SIZE = 100;
 
 /** Keep large workspace snapshots navigable without rendering every file. */
-export function ArchiveFileList({ files }: { files: ArchiveFile[] }) {
+export function ArchiveFileList({
+  files,
+  initialSearch = '',
+}: {
+  files: ArchiveFile[];
+  /** Start filtered, for example to one folder's files. */
+  initialSearch?: string;
+}) {
   const searchId = useId();
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch);
   const [page, setPage] = useState(0);
   const matches = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();

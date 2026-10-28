@@ -896,6 +896,10 @@ html[data-clio-motion='reduced'] *::after {
 .clio-flow-diagram .is-chosen > :is(rect, polygon, path) {
   stroke-width: 3px;
 }
+/* A fork of a step, beside it; its name also says "fork of <step>". */
+.clio-flow-diagram .is-fork > :is(rect, polygon, path) {
+  stroke-dasharray: 2 2;
+}
 /* A flow a step runs, drawn inline: a box in its step's state, its name on the top edge. */
 .clio-flow-diagram .clio-flow-box {
   fill: color-mix(in oklab, var(--muted) 35%, transparent);

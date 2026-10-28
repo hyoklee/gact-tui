@@ -27,6 +27,12 @@ const workflowNode = z
     detail: z.string().optional(),
   })
   .strict();
+/**
+ * An inline node may carry an `action`, run when it is clicked (opening the view of
+ * the branch it stands for, say). The binder turns it into a callable; a node read
+ * from a file has none.
+ */
+const inlineWorkflowNode = workflowNode.extend({ action: CommonSchemas.Action.optional() });
 const workflowEdge = z
   .object({ source: z.string(), target: z.string(), label: z.string().optional() })
   .strict();
@@ -39,7 +45,7 @@ const workflowFileSchema = z
   })
   .strict();
 
-type WorkflowNode = z.infer<typeof workflowNode>;
+type WorkflowNode = z.infer<typeof workflowNode> & { action?: () => void };
 type WorkflowEdge = z.infer<typeof workflowEdge>;
 
 function mermaidLabel(value: string): string {
@@ -146,6 +152,9 @@ function ClioWorkflowDiagram({
   useThemeKey();
   const interactiveNodes = useMemo(() => nodes.map(({ id, label }) => ({ id, label })), [nodes]);
   const selectNode = (id: string, modifiers: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => {
+    // A plain click runs the node's own action; a modified click only extends the selection.
+    if (!modifiers.shiftKey && !modifiers.ctrlKey && !modifiers.metaKey)
+      void nodes.find((node) => node.id === id)?.action?.();
     setSelectedNodeIds((previous) => {
       if (modifiers.shiftKey || modifiers.ctrlKey || modifiers.metaKey) {
         return previous.includes(id) ? previous.filter((value) => value !== id) : [...previous, id];
@@ -259,10 +268,10 @@ function ClioWorkflowArtifactSource({
 }
 
 const workflowDataProperties = {
-  nodes: z.array(workflowNode).min(1).max(A2UI_WORKFLOW_NODES_MAX).optional(),
+  nodes: z.array(inlineWorkflowNode).min(1).max(A2UI_WORKFLOW_NODES_MAX).optional(),
   edges: z.array(workflowEdge).max(A2UI_WORKFLOW_EDGES_MAX).optional(),
   dataUri: z.string().regex(/^artifact:\/\/artifact_[A-Za-z0-9_-]+$/u).optional(),
-  selected: z.string().optional(),
+  selected: CommonSchemas.DynamicString.optional(),
   action: CommonSchemas.Action.optional(),
   accessibility: CommonSchemas.AccessibilityAttributes.optional(),
   weight: z.number().optional(),
@@ -304,7 +313,7 @@ export const ClioWorkflowCatalogComponent = createComponentImplementation(
         accessibility={props.accessibility}
         action={props.action ? () => void props.action?.() : undefined}
         edges={props.edges!}
-        nodes={props.nodes!}
+        nodes={props.nodes! as unknown as WorkflowNode[]}
         selected={props.selected}
       />
     ),

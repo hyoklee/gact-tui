@@ -22,6 +22,7 @@ export function markRailroad(svg: SVGElement, diagram: RailroadDiagram, selectab
     if (!mark) return;
     node.classList.add(`st-${mark.tone}`);
     if (mark.chosen) node.classList.add('is-chosen');
+    if (mark.fork) node.classList.add('is-fork');
     node.setAttribute('data-key', mark.key);
     const title = document.createElementNS(SVG_NS, 'title');
     title.textContent = mark.title;

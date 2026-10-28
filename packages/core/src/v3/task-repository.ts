@@ -1,7 +1,11 @@
 import { z } from 'zod';
-import { flowRunSchema, type FlowRun } from './flow-run-domain.js';
+import { flowQuestionsPath, flowRunSchema, type FlowRun } from './flow-run-domain.js';
 import { MemoryRepository } from './memory-repository.js';
 import { TransportError } from './transport.js';
+import { readScienceLog, type ScienceLog } from './science-log.js';
+import { readTransformRecord, type TransformRecord } from './transform-record.js';
+import type { PendingInteraction } from './interaction-domain.js';
+import { pendingInteractionListSchema } from './repository-decoders.js';
 
 const coreReferenceSchema = z.object({
   session_id: z.string(),
@@ -94,6 +98,30 @@ export type SessionCoordinationRight = SessionCoordinationGrant['rights'][number
 
 /** Shared task controls use their original owner and report per-handle failures. */
 export class TaskRepository extends MemoryRepository {
+  /** The study a session belongs to (its branches and entries), or `in_study: false`. */
+  public scienceLog(sessionId: string, signal?: AbortSignal): Promise<ScienceLog> {
+    return readScienceLog(this.transport, sessionId, signal);
+  }
+
+  /** What one tool call ran, in what environment, and the files it read and wrote. */
+  public transformRecord(callId: string, signal?: AbortSignal): Promise<TransformRecord> {
+    return readTransformRecord(this.transport, callId, signal);
+  }
+
+  /** The questions asked in a session and its descendants, answered ones included. */
+  public async flowQuestions(
+    sessionId: string,
+    signal?: AbortSignal,
+  ): Promise<PendingInteraction[]> {
+    const result = await this.transport.request({
+      method: 'GET',
+      path: flowQuestionsPath(sessionId),
+      decode: (value) => pendingInteractionListSchema.parse(value),
+      signal,
+    });
+    return result.interactions as PendingInteraction[];
+  }
+
   /** One paginated Core snapshot of the authenticated human's work across sessions. */
   public queryTasks(
     options: {

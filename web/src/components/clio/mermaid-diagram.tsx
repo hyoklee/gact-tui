@@ -111,7 +111,9 @@ export function ClioMermaidDiagram({
     }
   }, [source]);
   const validationError = diagram.error;
-  const folderLinks = navigation?.onOpenFolder ? diagram.folders : [];
+  const folderLinks = navigation?.onOpenFolder
+    ? diagram.folders.filter((folder) => navigation.folderAvailable?.(folder.path) ?? true)
+    : [];
   const openFolder = (id: string) => {
     const target = folderLinks.find((folder) => folder.id === id);
     if (target) navigation?.onOpenFolder?.(target.path);

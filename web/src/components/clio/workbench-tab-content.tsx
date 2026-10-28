@@ -20,6 +20,7 @@ import { WorkspaceResourceBrowser } from './workspace-resource-browser';
 import { ClioSubagentCanvasView } from './subagent-canvas-view';
 import { AgentCompositionView } from './agent-composition-view';
 import { FlowRunView } from './flow-run-view';
+import { ScienceLogTab } from './science-log-tab';
 import { ArtifactBrowser, FileBrowser } from './workbench-resource-browser';
 import { WorkspaceTerminalPanel } from './workspace-terminal-panel';
 const KnowledgeSourceView = lazy(() =>
@@ -121,6 +122,27 @@ export function WorkbenchTabContent({
       );
     case 'session':
       return sessionView;
+    case 'science-log':
+      return (
+        <ScienceLogTab
+          key={sessionId}
+          onOpenFolder={(path) =>
+            onOpenTab({
+              id: 'files',
+              kind: 'files',
+              label: 'Files',
+              workspaceId,
+              directory: workspaceFilePath(
+                path,
+                useLiveStore.getState().entities.workspaces[workspaceId]?.path,
+              ),
+            })
+          }
+          onOpenSubagent={onOpenSubagent}
+          sessionId={sessionId}
+          workspaceId={workspaceId}
+        />
+      );
     case 'files':
       return (
         <FileBrowser

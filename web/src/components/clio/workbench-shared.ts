@@ -20,6 +20,7 @@ export type WorkbenchTab =
   | { id: 'artifacts'; kind: 'artifacts'; label: 'Artifacts' }
   | { id: 'agent'; kind: 'agent'; label: 'Agent' }
   | { id: 'resources'; kind: 'resources'; label: 'Resources' }
+  | { id: 'science-log'; kind: 'science-log'; label: 'Science log' }
   | {
       id: string;
       kind: 'workspace-file';

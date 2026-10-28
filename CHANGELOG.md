@@ -6,6 +6,17 @@ UI aren't tracked.
 
 ## Unreleased
 
+### Changed
+
+- A study's Views are the dashboards its conversations attached to it. Each shows
+  its title, purpose and the branch that made it, and its charts and tables can
+  read the study's measurements, entries or plugin records live, updating as
+  entries arrive. Exports keep each view with the data it showed.
+
+### Removed
+
+- Plugin-declared views, and the Views canvas tab outside a study.
+
 ## [0.11.3-beta.11] - 2026-10-21
 
 ### Changed

@@ -71,6 +71,8 @@ export interface ClioMeshViewportProps {
   upAxis?: MeshUpAxis;
   /** Flex weight inside a Row/Column, as the Basic catalog components apply it. */
   weight?: number;
+  /** The viewport's height in CSS pixels; the default frame is 320. */
+  height?: number;
 }
 
 const STAGE_LABEL: Record<string, string> = {
@@ -110,6 +112,7 @@ export function ClioMeshViewport({
   title,
   upAxis = 'y',
   weight,
+  height,
 }: ClioMeshViewportProps) {
   const repository = useRepository();
   const { settings } = useConnectionSettings();
@@ -663,8 +666,11 @@ export function ClioMeshViewport({
                 className={
                   fullscreen
                     ? 'relative h-[calc(100dvh-6rem)] min-h-64 overflow-hidden'
-                    : 'relative h-80 min-h-64 overflow-hidden'
+                    : height
+                      ? 'relative overflow-hidden'
+                      : 'relative h-80 min-h-64 overflow-hidden'
                 }
+                style={!fullscreen && height ? { height } : undefined}
                 onPointerLeave={() => setProbe(undefined)}
                 onPointerMove={onPointerMove}
                 ref={canvasRef}
