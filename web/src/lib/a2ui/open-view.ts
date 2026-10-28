@@ -29,13 +29,15 @@ export function activeA2uiOpenViewRuntime(): A2uiOpenViewRuntime | undefined {
 }
 
 type SelectionListener = (selection: ViewSelection) => void;
-const pending = new Map<string, ViewSelection>();
+const opened = new Map<string, ViewSelection>();
 const listeners = new Map<string, Set<SelectionListener>>();
 const surfaceKey = (sessionId: string, surfaceId: string) => `${sessionId}\u0000${surfaceId}`;
 
 /**
  * Hands `selection` to the surface `surfaceId` of `sessionId`: applied at once when
- * that surface is shown, else when it next mounts.
+ * that surface is shown, and again whenever it mounts later (a remount, such as
+ * maximizing it, starts from the surface's own seeded data), until another view
+ * opens onto it.
  */
 export function requestViewSelection(
   sessionId: string,
@@ -43,9 +45,8 @@ export function requestViewSelection(
   selection: ViewSelection,
 ): void {
   const key = surfaceKey(sessionId, surfaceId);
-  const current = listeners.get(key);
-  if (current?.size) for (const listener of current) listener(selection);
-  else pending.set(key, selection);
+  opened.set(key, selection);
+  for (const listener of listeners.get(key) ?? []) listener(selection);
 }
 
 /** Subscribes a mounted surface to the selections opened onto it; returns the unsubscribe. */
@@ -58,11 +59,8 @@ export function subscribeViewSelection(
   const set = listeners.get(key) ?? new Set<SelectionListener>();
   set.add(listener);
   listeners.set(key, set);
-  const waiting = pending.get(key);
-  if (waiting) {
-    pending.delete(key);
-    listener(waiting);
-  }
+  const selection = opened.get(key);
+  if (selection) listener(selection);
   return () => {
     set.delete(listener);
     if (!set.size) listeners.delete(key);
